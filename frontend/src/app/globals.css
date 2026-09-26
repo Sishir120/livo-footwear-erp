@@ -1,11 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --bg-primary: #0f172a;
-  --bg-surface: #1e293b;
-  --bg-card: rgba(30, 41, 59, 0.7);
-  --bg-card-hover: rgba(30, 41, 59, 0.9);
-  --border-color: rgba(255, 255, 255, 0.08);
+  --bg-primary: #0b1120;
+  --bg-surface: #131d33;
+  --bg-card: rgba(19, 29, 51, 0.75);
+  --bg-card-hover: rgba(28, 41, 70, 0.9);
+  --border-color: rgba(255, 255, 255, 0.09);
+  --border-subtle: rgba(255, 255, 255, 0.05);
   
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
@@ -184,20 +185,159 @@ body {
   background: rgba(255, 255, 255, 0.02);
 }
 
+/* Enterprise High-Density Table System */
+.table-container-dense {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 580px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: rgba(11, 17, 32, 0.6);
+}
+
+.table-container-dense::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.table-container-dense::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+}
+.table-container-dense::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 3px;
+}
+.table-container-dense::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+}
+
+.table-dense {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.table-dense thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #0d1628;
+  color: #94a3b8;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 8px 12px;
+  border-bottom: 2px solid rgba(59, 130, 246, 0.35);
+  border-right: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.table-dense thead th:last-child {
+  border-right: none;
+}
+
+.table-dense tbody td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  white-space: nowrap;
+}
+
+.table-dense tbody td:last-child {
+  border-right: none;
+}
+
+.table-dense tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.table-dense tbody tr:hover td {
+  background: rgba(59, 130, 246, 0.08) !important;
+}
+
+/* Monospace & Tabular Numbers */
+.num-mono {
+  font-family: 'Fira Code', 'Roboto Mono', ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+}
+
+.num-mono-bold {
+  font-family: 'Fira Code', 'Roboto Mono', ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* Export Button */
+.btn-export {
+  background: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 8px 14px;
+  border-radius: 7px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-export:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: #34d399;
+  transform: translateY(-1px);
+}
+
+/* Vendor Bill Attachment Zone */
+.attachment-dropzone {
+  border: 2px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  background: rgba(15, 23, 42, 0.4);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.attachment-dropzone:hover {
+  border-color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.05);
+}
+
 /* Status Badges */
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
-.badge-success { background: rgba(16, 185, 129, 0.15); color: #34d399; }
-.badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
-.badge-danger { background: rgba(244, 63, 94, 0.15); color: #f87171; }
-.badge-info { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+.badge-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
+.badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); }
+.badge-danger { background: rgba(244, 63, 94, 0.15); color: #f87171; border: 1px solid rgba(244, 63, 94, 0.25); }
+.badge-info { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.25); }
+.badge-low-stock {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  animation: pulse-border 2s infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% { border-color: rgba(239, 68, 68, 0.4); }
+  50% { border-color: rgba(239, 68, 68, 0.8); }
+}
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
@@ -210,4 +350,8 @@ body {
   .main-wrapper {
     margin-left: 0;
   }
+  .table-dense {
+    font-size: 12px;
+  }
 }
+
