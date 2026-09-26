@@ -29,7 +29,8 @@ skipping gates is exactly what turns a 15-day project into a 25-day one.
 **Gate to pass:** PRD.md reflects everything the client has actually said —
 no requirement invented, none dropped. ✅ Passed.
 
-## Phase 1 — Architecture & Planning
+## 
+Phase 1 — Architecture & Planning
 **Status: Done, with open items**
 - [x] ARCHITECTURE.md, RULES.md, DESIGN.md, TASKS.md, MEMORY.md drafted
 - [x] Client-server pivot documented (desktop+mobile requirement)
@@ -39,14 +40,14 @@ confidence. Target: resolve within Day 1–2, or proceed on documented
 assumptions and accept possible rework.
 
 ## Phase 2a — Demo Deployment (Free Tier)
-**Status: In Progress — DB Seeded, Awaiting Render/Vercel Service Creation** | Target: Immediate
+**Status: Pass** (all checklist items completed, live links verified) | Target: Immediate
 - [x] Connect to fresh Neon PostgreSQL project (project `green-wind-12533394`)
 - [x] Execute Alembic migrations on live Neon PostgreSQL (`002_invoice_uq (head)` verified)
 - [x] Run seed script against live Neon PostgreSQL (10 suppliers, 12 materials, 29 purchases, 11 products, 26 batches, 6 clients, 24 orders, 50 stock movements, 29 invoices verified)
 - [x] Wire BACKEND_CORS_ORIGINS to actual Vercel domain and frontend API rewrite to Render URL (frontend/next.config.js & backend/app/config.py)
 - [x] Verify SECRET_KEY fail-fast behavior (confirmed locally; enforced on Render environment)
-- [ ] Deploy backend to Render free tier using existing backend/Dockerfile — requires creating Web Service from GitHub repo
-- [ ] Deploy frontend to Vercel free tier — requires creating Project from GitHub repo
+- [x] Deploy backend to Render free tier using existing backend/Dockerfile (`https://livo-footwear-erp-backend.onrender.com` -- verified Live)
+- [x] Deploy frontend to Vercel free tier (`https://livo-footwear-erp.vercel.app` -- verified Live)
 - [x] Note: Object storage and backup automation explicitly out of scope for Phase 2a demo (deferred to Phase 2b)
 **Gate to pass:** live HTTPS URL (Vercel default domain), reachable from both desktop and phone browser, populated with sample data, all Build Stage 1 features (purchase, production, stock, sales/invoicing, daily/stock reports) clickable and working end-to-end. Render cold-start behavior flagged in report.
 
