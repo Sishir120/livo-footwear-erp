@@ -1,0 +1,43 @@
+# Environment & Secrets (RULES.md §4)
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+backend/venv/
+backend/.pytest_cache/
+.pytest_cache/
+
+# Databases & Backups
+*.db
+*.sqlite3
+backend/*.db
+backend/pg_binaries.zip
+backend/backups/*.sql
+backend/backups/*.sql.gz
+backend/backups/*.db
+logs/
+backend/logs/
+
+# Node & Next.js
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+.next/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE & OS
+.agent/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

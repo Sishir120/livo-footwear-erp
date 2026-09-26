@@ -1,0 +1,12 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+venv
+.env
+.git
+backups/*.sql
+backups/*.db
+logs/*.log
+pg_binaries.zip
