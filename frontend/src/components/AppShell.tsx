@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { LegalModal } from "./LegalModal";
+import { useLocale } from "../context/LocaleContext";
 
 interface AppShellProps {
   activeTab: string;
@@ -28,6 +29,7 @@ interface AppShellProps {
 }
 
 export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: AppShellProps) {
+  const { locale, setLocale, t } = useLocale();
   const [dbStatus, setDbStatus] = useState<string>("checking...");
   const [appVersion, setAppVersion] = useState<string>("1.0.0");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -44,20 +46,18 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
   }, []);
 
   const navItems = [
-    { id: "daily", label: "Daily Report", icon: BarChart3 },
-    { id: "stock", label: "Stock Ledger", icon: Boxes },
-    { id: "sales", label: "Sales & Invoices", icon: ShoppingBag },
-    { id: "production", label: "Production", icon: Factory },
-    { id: "purchase", label: "Purchase Raw Mat", icon: FileText },
-    { id: "settings", label: "Settings & Diag", icon: SettingsIcon },
-    // NOTE: Tally Accounting removed from Phase 1 nav — not client-requested.
-    // Component archived at: frontend/_unscoped/tally-export/TallyPrimeView.tsx
+    { id: "daily", label: t("dashboard"), icon: BarChart3 },
+    { id: "stock", label: t("stock_ledger"), icon: Boxes },
+    { id: "sales", label: t("sales_invoicing"), icon: ShoppingBag },
+    { id: "production", label: t("production_batches"), icon: Factory },
+    { id: "purchase", label: t("purchase_raw_materials"), icon: FileText },
+    { id: "settings", label: t("settings_backups"), icon: SettingsIcon },
   ];
 
   return (
     <div className="app-container">
       {/* Sidebar */}
-      <aside className={`sidebar ${mobileOpen ? "open" : ""}`}>
+      <aside className={`sidebar ${mobileOpen ? "open" : ""}`} aria-label="Main Navigation">
         <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <Building2 size={24} color="#3b82f6" />
@@ -66,7 +66,7 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
               <div style={{ fontSize: "11px", color: "#94a3b8" }}>Footwear ERP</div>
             </div>
           </div>
-          <button onClick={() => setMobileOpen(false)} style={{ background: "none", border: "none", color: "#94a3b8", display: "none" }} className="mobile-close-btn">
+          <button onClick={() => setMobileOpen(false)} style={{ background: "none", border: "none", color: "#94a3b8", display: "none" }} className="mobile-close-btn" aria-label="Close navigation menu">
             <X size={20} />
           </button>
         </div>
@@ -78,14 +78,14 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
             <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px" }}>
               <span className={`badge ${user.role === "editor" ? "badge-success" : "badge-info"}`}>
                 <UserCheck size={12} style={{ marginRight: "4px" }} />
-                {user.role.toUpperCase()} ROLE
+                {user.role === "editor" ? t("role_editor") : t("role_viewer")}
               </span>
             </div>
           </div>
         )}
 
         {/* Navigation items */}
-        <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: "4px" }}>
+        <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: "4px" }} aria-label="Sidebar Menu">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -96,6 +96,7 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
                   setActiveTab(item.id);
                   setMobileOpen(false);
                 }}
+                aria-current={isActive ? "page" : undefined}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -152,7 +153,7 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
       <div className="main-wrapper">
         <header className="app-header">
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <button onClick={() => setMobileOpen(true)} className="mobile-menu-btn" style={{ background: "none", border: "none", color: "#f8fafc", cursor: "pointer" }}>
+            <button onClick={() => setMobileOpen(true)} className="mobile-menu-btn" style={{ background: "none", border: "none", color: "#f8fafc", cursor: "pointer" }} aria-label="Open mobile navigation menu">
               <Menu size={24} />
             </button>
             <h1 style={{ fontSize: "18px", fontWeight: "700", color: "#f8fafc" }}>
@@ -160,14 +161,64 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
             </h1>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <button onClick={onLogout} className="btn-secondary" style={{ padding: "6px 12px", fontSize: "13px" }}>
-              <LogOut size={14} /> Logout
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            {/* Bilingual Language Switcher (EN | नेपाली) */}
+            <div
+              role="group"
+              aria-label="Language selection / भाषा छनोट"
+              style={{
+                display: "inline-flex",
+                background: "rgba(15, 23, 42, 0.8)",
+                padding: "3px",
+                borderRadius: "6px",
+                border: "1px solid rgba(255, 255, 255, 0.12)"
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setLocale("en")}
+                aria-label="Switch to English"
+                style={{
+                  padding: "4px 10px",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  borderRadius: "4px",
+                  border: "none",
+                  cursor: "pointer",
+                  background: locale === "en" ? "#2563eb" : "transparent",
+                  color: locale === "en" ? "#ffffff" : "#94a3b8",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                onClick={() => setLocale("ne")}
+                aria-label="नेपाली भाषामा बदल्नुहोस्"
+                style={{
+                  padding: "4px 10px",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  borderRadius: "4px",
+                  border: "none",
+                  cursor: "pointer",
+                  background: locale === "ne" ? "#2563eb" : "transparent",
+                  color: locale === "ne" ? "#ffffff" : "#94a3b8",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                नेपाली
+              </button>
+            </div>
+
+            <button onClick={onLogout} className="btn-secondary" style={{ padding: "6px 12px", fontSize: "13px" }} aria-label={t("logout")}>
+              <LogOut size={14} /> {t("logout")}
             </button>
           </div>
         </header>
 
-        <main style={{ padding: "24px", flex: 1, overflowY: "auto" }}>
+        <main style={{ padding: "24px", flex: 1, overflowY: "auto" }} id="main-content">
           {children}
         </main>
       </div>

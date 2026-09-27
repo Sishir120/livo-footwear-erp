@@ -28,6 +28,7 @@ import {
   Cell
 } from "recharts";
 import { exportToCSV } from "../utils/csvExport";
+import { useLocale } from "../context/LocaleContext";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Boot: "#3b82f6",
@@ -38,6 +39,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export function StockReportView() {
+  const { t } = useLocale();
   const [stockItems, setStockItems] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -393,21 +395,21 @@ export function StockReportView() {
                         }}
                         className="num-mono-bold"
                       >
-                        {item.current_stock_pairs?.toLocaleString()} pairs
+                        {item.current_stock_pairs?.toLocaleString()} {t("pairs")}
                       </td>
                       <td style={{ textAlign: "right", fontWeight: "600" }} className="num-mono">
                         Rs. {item.estimated_value?.toLocaleString()}
                       </td>
                       <td style={{ textAlign: "center" }}>
                         {isDepleted ? (
-                          <span className="badge badge-danger">OUT OF STOCK</span>
+                          <span className="badge badge-danger">{t("out_of_stock")}</span>
                         ) : isLow ? (
                           <span className="badge badge-low-stock">
-                            <AlertTriangle size={11} style={{ marginRight: "4px" }} /> LOW (≤50)
+                            <AlertTriangle size={11} style={{ marginRight: "4px" }} /> {t("low_stock")} (≤50)
                           </span>
                         ) : (
                           <span className="badge badge-success">
-                            <CheckCircle size={11} style={{ marginRight: "4px" }} /> HEALTHY
+                            <CheckCircle size={11} style={{ marginRight: "4px" }} /> {t("healthy")}
                           </span>
                         )}
                       </td>

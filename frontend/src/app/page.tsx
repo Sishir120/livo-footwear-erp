@@ -7,6 +7,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SkeletonLoader } from "@/components/SkeletonLoader";
 import { Building2, Lock, UserCheck, ShieldAlert, Info, Shield, FileText } from "lucide-react";
 import { LegalModal } from "@/components/LegalModal";
+import { useLocale } from "@/context/LocaleContext";
 
 // Dynamic Code-Splitting: Defer heavy views (e.g. recharts) until authenticated navigation
 const DailyReportView = dynamic(
@@ -127,9 +128,11 @@ export default function Home() {
     }
   };
 
+  const { locale, setLocale, t } = useLocale();
+
   if (loading) {
     return (
-      <div style={{ display: "flex", height: "100vh", alignItems: "center", justifyContent: "center", background: "#0b1120", color: "#f8fafc" }}>
+      <div style={{ display: "flex", height: "100vh", alignItems: "center", justifyContent: "center", background: "#0b1120", color: "#f8fafc" }} role="status" aria-live="polite">
         <div style={{ textAlign: "center" }}>
           <Building2 size={48} color="#3b82f6" style={{ marginBottom: "16px" }} />
           <h2 style={{ fontSize: "16px", fontWeight: "600" }}>Initializing LIVO ERP System...</h2>
@@ -142,34 +145,91 @@ export default function Home() {
   if (!user) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#090d16", padding: "20px" }}>
-        <div className="glass-card" style={{ width: "100%", maxWidth: "440px", padding: "36px", borderRadius: "8px", background: "#0f172a", border: "1px solid rgba(255, 255, 255, 0.12)" }}>
+        <div className="glass-card" style={{ width: "100%", maxWidth: "440px", padding: "36px", borderRadius: "8px", background: "#0f172a", border: "1px solid rgba(255, 255, 255, 0.12)", position: "relative" }}>
+          
+          {/* Bilingual Language Switcher (EN | नेपाली) */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
+            <div
+              role="group"
+              aria-label="Language selection / भाषा छनोट"
+              style={{
+                display: "inline-flex",
+                background: "rgba(15, 23, 42, 0.8)",
+                padding: "3px",
+                borderRadius: "6px",
+                border: "1px solid rgba(255, 255, 255, 0.12)"
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setLocale("en")}
+                aria-label="Switch to English"
+                style={{
+                  padding: "3px 8px",
+                  fontSize: "11px",
+                  fontWeight: "600",
+                  borderRadius: "4px",
+                  border: "none",
+                  cursor: "pointer",
+                  background: locale === "en" ? "#2563eb" : "transparent",
+                  color: locale === "en" ? "#ffffff" : "#94a3b8",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                onClick={() => setLocale("ne")}
+                aria-label="नेपाली भाषामा बदल्नुहोस्"
+                style={{
+                  padding: "3px 8px",
+                  fontSize: "11px",
+                  fontWeight: "600",
+                  borderRadius: "4px",
+                  border: "none",
+                  cursor: "pointer",
+                  background: locale === "ne" ? "#2563eb" : "transparent",
+                  color: locale === "ne" ? "#ffffff" : "#94a3b8",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                नेपाली
+              </button>
+            </div>
+          </div>
+
           <div style={{ textAlign: "center", marginBottom: "28px" }}>
             <div style={{ width: "52px", height: "52px", background: "rgba(59, 130, 246, 0.12)", border: "1px solid rgba(59, 130, 246, 0.3)", borderRadius: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: "12px" }}>
               <Building2 size={28} color="#3b82f6" />
             </div>
-            <h1 style={{ fontSize: "20px", fontWeight: "700", color: "#f8fafc", letterSpacing: "0.02em" }}>LIVO GROUP OF INDUSTRIES</h1>
-            <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>Footwear Manufacturing & Enterprise Ledger</p>
+            <h1 style={{ fontSize: "20px", fontWeight: "700", color: "#f8fafc", letterSpacing: "0.02em" }}>{t("login_title")}</h1>
+            <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>{t("login_subtitle")}</p>
           </div>
 
           {loginError && (
-            <div style={{ background: "rgba(244, 63, 94, 0.15)", border: "1px solid rgba(244, 63, 94, 0.3)", padding: "10px 14px", borderRadius: "6px", color: "#f87171", fontSize: "13px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
+            <div
+              role="alert"
+              aria-live="polite"
+              style={{ background: "rgba(244, 63, 94, 0.15)", border: "1px solid rgba(244, 63, 94, 0.3)", padding: "10px 14px", borderRadius: "6px", color: "#f87171", fontSize: "13px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}
+            >
               <ShieldAlert size={16} /> {loginError}
             </div>
           )}
 
           <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             <div>
-              <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600", display: "block", marginBottom: "6px" }}>Username</label>
-              <input type="text" className="input-field" value={username} onChange={(e) => setUsername(e.target.value)} required />
+              <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600", display: "block", marginBottom: "6px" }}>{t("username")}</label>
+              <input type="text" className="input-field" value={username} onChange={(e) => setUsername(e.target.value)} required aria-label={t("username")} />
             </div>
 
             <div>
-              <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600", display: "block", marginBottom: "6px" }}>Password</label>
-              <input type="password" className="input-field" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600", display: "block", marginBottom: "6px" }}>{t("password")}</label>
+              <input type="password" className="input-field" value={password} onChange={(e) => setPassword(e.target.value)} required aria-label={t("password")} />
             </div>
 
             <button type="submit" className="btn-primary" style={{ width: "100%", justifyContent: "center", padding: "11px", marginTop: "8px", borderRadius: "6px" }} disabled={loginSubmitting}>
-              <Lock size={16} /> {loginSubmitting ? "Authenticating..." : "Sign In to ERP"}
+              <Lock size={16} /> {loginSubmitting ? "Authenticating..." : t("login_button")}
             </button>
           </form>
 

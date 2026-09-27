@@ -375,7 +375,7 @@ export function ProductionView({ userRole }: { userRole?: string }) {
             </table>
 
             {filteredBatches.length > ITEMS_PER_PAGE && (
-              <div className="pagination-bar">
+              <div className="pagination-bar" role="navigation" aria-label="Production batch pagination">
                 <span>
                   Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredBatches.length)} of {filteredBatches.length} production batches
                 </span>
@@ -384,6 +384,7 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                     className="pagination-btn"
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
+                    aria-label="Previous page of batches"
                   >
                     Previous
                   </button>
@@ -394,6 +395,7 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                     className="pagination-btn"
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
+                    aria-label="Next page of batches"
                   >
                     Next
                   </button>
@@ -406,16 +408,16 @@ export function ProductionView({ userRole }: { userRole?: string }) {
 
       {/* Modal Drawer Form with Sequential Keyboard Traversal */}
       {showModal && (
-        <div className="modal-overlay">
-          <div className="modal-drawer">
+        <div className="modal-overlay" role="presentation">
+          <div className="modal-drawer" role="dialog" aria-modal="true" aria-labelledby="production-drawer-title">
             <div className="modal-header">
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <Factory size={18} color="#10b981" />
-                <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#f8fafc" }}>
+                <h3 id="production-drawer-title" style={{ fontSize: "16px", fontWeight: "700", color: "#f8fafc" }}>
                   Record Finished Production Batch
                 </h3>
               </div>
-              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}>
+              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }} aria-label="Close production batch dialog">
                 <X size={18} />
               </button>
             </div>
@@ -424,7 +426,7 @@ export function ProductionView({ userRole }: { userRole?: string }) {
               <div className="modal-body">
                 {/* Success Feedback Alert for Continuous Entry */}
                 {successFeedback && (
-                  <div style={{ background: "rgba(16, 185, 129, 0.15)", border: "1px solid #10b981", borderRadius: "6px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", color: "#6ee7b7", fontSize: "13px", fontWeight: "600" }}>
+                  <div role="status" aria-live="polite" style={{ background: "rgba(16, 185, 129, 0.15)", border: "1px solid #10b981", borderRadius: "6px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", color: "#6ee7b7", fontSize: "13px", fontWeight: "600" }}>
                     <CheckCircle2 size={16} />
                     <span>{successFeedback}</span>
                   </div>

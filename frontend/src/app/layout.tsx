@@ -1,6 +1,7 @@
 import "./globals.css";
 import React from "react";
 import type { Metadata } from "next";
+import { LocaleProvider } from "../context/LocaleContext";
 
 export const metadata: Metadata = {
   title: "LIVO ERP | Production & Stock Ledger",
@@ -29,7 +30,11 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0b1120" />
       </head>
-      <body>{children}</body>
+      <body>
+        <LocaleProvider>
+          {children}
+        </LocaleProvider>
+      </body>
     </html>
   );
 }

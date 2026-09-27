@@ -465,6 +465,7 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
                     className="pagination-btn"
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
+                    aria-label="Next page of purchases"
                   >
                     Next
                   </button>
@@ -477,21 +478,21 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
 
       {/* New Purchase Modal Drawer with Keyboard Traversal & Bill Attachment */}
       {showModal && (
-        <div className="modal-overlay">
-          <div className="modal-drawer">
+        <div className="modal-overlay" role="presentation">
+          <div className="modal-drawer" role="dialog" aria-modal="true" aria-labelledby="purchase-drawer-title">
             <div className="modal-header">
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <Truck size={18} color="#3b82f6" />
-                <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#f8fafc" }}>Record Raw Material Purchase</h3>
+                <h3 id="purchase-drawer-title" style={{ fontSize: "16px", fontWeight: "700", color: "#f8fafc" }}>Record Raw Material Purchase</h3>
               </div>
-              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}>
+              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }} aria-label="Close raw material purchase dialog">
                 <X size={18} />
               </button>
             </div>
 
             {/* Success Feedback Alert for Continuous Entry */}
             {successFeedback && (
-              <div style={{ background: "rgba(59, 130, 246, 0.15)", border: "1px solid #3b82f6", borderRadius: "6px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", color: "#93c5fd", fontSize: "13px", fontWeight: "600" }}>
+              <div role="status" aria-live="polite" style={{ background: "rgba(59, 130, 246, 0.15)", border: "1px solid #3b82f6", borderRadius: "6px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", color: "#93c5fd", fontSize: "13px", fontWeight: "600" }}>
                 <CheckCircle2 size={16} />
                 <span>{successFeedback}</span>
               </div>

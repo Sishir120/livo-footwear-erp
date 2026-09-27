@@ -31,10 +31,12 @@ import {
   Cell
 } from "recharts";
 import { exportToCSV } from "../utils/csvExport";
+import { useLocale } from "../context/LocaleContext";
 
 const CHART_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4"];
 
 export function DailyReportView() {
+  const { t } = useLocale();
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split("T")[0]
   );
@@ -227,22 +229,22 @@ export function DailyReportView() {
             {/* KPI 1: Production */}
             <div className="glass-card" style={{ padding: "16px 18px", borderLeft: "3px solid #10b981" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em" }}>TOTAL PRODUCTION</span>
+                <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em" }}>{t("production_output").toUpperCase()}</span>
                 <Factory size={18} color="#10b981" />
               </div>
               <div style={{ fontSize: "26px", fontWeight: "700", color: "#f8fafc" }} className="num-mono-bold">
                 {reportData.production.total_pairs_produced.toLocaleString()}{" "}
-                <span style={{ fontSize: "13px", fontWeight: "400", color: "#94a3b8" }}>pairs</span>
+                <span style={{ fontSize: "13px", fontWeight: "400", color: "#94a3b8" }}>{t("pairs")}</span>
               </div>
               <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
-                <Users size={12} /> {reportData.production.worker_count} factory workers | {reportData.production.batch_count} batches
+                <Users size={12} /> {reportData.production.worker_count} {t("active_workers")} | {reportData.production.batch_count} {t("production_batches")}
               </div>
             </div>
 
             {/* KPI 2: Sales Revenue */}
             <div className="glass-card" style={{ padding: "16px 18px", borderLeft: "3px solid #3b82f6" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em" }}>SALES REVENUE</span>
+                <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em" }}>{t("gross_sales").toUpperCase()}</span>
                 <ShoppingBag size={18} color="#3b82f6" />
               </div>
               <div style={{ fontSize: "24px", fontWeight: "700", color: "#f8fafc" }} className="num-mono-bold">
@@ -256,14 +258,14 @@ export function DailyReportView() {
             {/* KPI 3: Cash Realization */}
             <div className="glass-card" style={{ padding: "16px 18px", borderLeft: "3px solid #f59e0b" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em" }}>CASH RECEIVED</span>
+                <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em" }}>{t("cash_received").toUpperCase()}</span>
                 <CreditCard size={18} color="#f59e0b" />
               </div>
               <div style={{ fontSize: "24px", fontWeight: "700", color: "#10b981" }} className="num-mono-bold">
                 Rs. {reportData.sales.total_received_amount.toLocaleString()}
               </div>
               <div style={{ fontSize: "12px", color: reportData.sales.total_receivable_amount > 0 ? "#f87171" : "#64748b", marginTop: "4px" }}>
-                Receivable: Rs. {reportData.sales.total_receivable_amount.toLocaleString()}
+                {t("accounts_receivable")}: Rs. {reportData.sales.total_receivable_amount.toLocaleString()}
               </div>
             </div>
 

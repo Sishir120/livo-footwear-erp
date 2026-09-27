@@ -642,6 +642,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                       className="pagination-btn"
                       onClick={() => setOrderPage((p) => Math.min(totalOrderPages, p + 1))}
                       disabled={orderPage === totalOrderPages}
+                      aria-label="Next page of sales orders"
                     >
                       Next
                     </button>
@@ -655,16 +656,16 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
 
       {/* Record Sale Modal Drawer with Sequential Keyboard Navigation */}
       {showOrderModal && (
-        <div className="modal-overlay">
-          <div className="modal-drawer">
+        <div className="modal-overlay" role="presentation">
+          <div className="modal-drawer" role="dialog" aria-modal="true" aria-labelledby="sales-drawer-title">
             <div className="modal-header">
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <ShoppingBag size={18} color="#3b82f6" />
-                <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#f8fafc" }}>
+                <h3 id="sales-drawer-title" style={{ fontSize: "16px", fontWeight: "700", color: "#f8fafc" }}>
                   Record Footwear Sale & Issue Invoice
                 </h3>
               </div>
-              <button onClick={() => setShowOrderModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}>
+              <button onClick={() => setShowOrderModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }} aria-label="Close sales order dialog">
                 <X size={18} />
               </button>
             </div>
@@ -673,7 +674,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
               <div className="modal-body">
                 {/* Success Feedback Toast for Continuous Entry */}
                 {successFeedback && (
-                  <div style={{ background: "rgba(59, 130, 246, 0.15)", border: "1px solid #3b82f6", borderRadius: "6px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", color: "#93c5fd", fontSize: "13px", fontWeight: "600" }}>
+                  <div role="status" aria-live="polite" style={{ background: "rgba(59, 130, 246, 0.15)", border: "1px solid #3b82f6", borderRadius: "6px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", color: "#93c5fd", fontSize: "13px", fontWeight: "600" }}>
                     <CheckCircle2 size={16} />
                     <span>{successFeedback}</span>
                   </div>

@@ -181,4 +181,20 @@ genuinely grow past this scale.
 - **Client Demonstration Guide:** Authored `docs/UAT_WALKTHROUGH.md` covering 4 real-world factory operational scenarios (Raw Material Inward, Production Size Runs, Wholesale Tax Invoicing with Nepal VAT, and Executive Summaries with Excel Portability).
 - **Role Boundary Smoke Check:** Verified `viewer_user` has all mutation buttons and shortcuts visually blocked and hidden, while `editor_admin` retains full ledger execution rights.
 
+## Phase 5 Ergonomics, Accessibility & Nepali Localization (2026-09-27)
+- **Bilingual Localization Provider (`frontend/src/context/LocaleContext.tsx`):**
+  - Zero-dependency client-side translation provider with persistent state in `localStorage` (`livo_locale`), defaulting to English with instant 1-click toggle to नेपाली.
+  - Accessible toggle switch (`EN | नेपाली`) integrated into the top navigation bar of `AppShell.tsx` and login card of `page.tsx`.
+  - Domain-specific translations for factory operations: दैनिक प्रतिवेदन (Daily Report), स्टक खाता / मौज्दात (Stock Ledger), उत्पादन ब्याच (Production Batches), कच्चा पदार्थ खरिद (Purchase / Raw Materials), बिक्री तथा बिलिङ (Sales & Invoicing), कर बिजक (भ्याट) (Tax Invoice VAT), and tri-state status badges (सम्पन्न / पर्याप्त, न्यून मौज्दात, स्टक समाप्त).
+- **Accessibility (a11y) & WCAG 2.1 AA Compliance:**
+  - High-contrast `:focus-visible` dual-ring outline (`2px solid #3b82f6`, `2px offset`) across all interactive inputs, selects, and buttons.
+  - Modal drawers configured with `role="dialog"`, `aria-modal="true"`, and `aria-labelledby`.
+  - Screen reader status feedback configured with `role="status" aria-live="polite"` on all success/error toasts.
+  - Descriptive `aria-label` applied to all icon-only buttons (search, modal close, print, void, pagination, mobile menu).
+- **Mobile PWA & Touch Compatibility:**
+  - Minimum 44x44px touch targets enforced on mobile viewports for all buttons, pagination triggers, and drawer controls.
+  - Mobile virtual keyboard protection: pinned `.modal-footer` with `env(safe-area-inset-bottom)`.
+  - `manifest.json` updated with standalone display mode, maskable icons, and `#0b1120` theme color for native home-screen installation on Android and iOS.
+
+
 
