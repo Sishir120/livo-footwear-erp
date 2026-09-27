@@ -1,12 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --bg-primary: #0b1120;
-  --bg-surface: #131d33;
-  --bg-card: rgba(19, 29, 51, 0.75);
-  --bg-card-hover: rgba(28, 41, 70, 0.9);
-  --border-color: rgba(255, 255, 255, 0.09);
-  --border-subtle: rgba(255, 255, 255, 0.05);
+  --bg-primary: #090d16;
+  --bg-surface: #0f172a;
+  --bg-card: #0f172a;
+  --bg-card-hover: #162036;
+  --border-color: #1e293b;
+  --border-subtle: #1e293b;
   
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
@@ -18,7 +18,7 @@
   --accent-emerald: #10b981;
   --accent-rose: #f43f5e;
   
-  --sidebar-width: 260px;
+  --sidebar-width: 250px;
 }
 
 * {
@@ -28,7 +28,7 @@
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-main);
   min-height: 100vh;
@@ -36,19 +36,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Industrial enterprise card utility */
+/* Industrial enterprise card utility - Crisp 1px border, 4-6px radius, no soft shadows */
 .glass-card {
   background: var(--bg-card);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  transition: background 0.15s ease, border-color 0.15s ease;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  transition: border-color 0.12s ease;
 }
 
 .glass-card:hover {
-  background: var(--bg-card-hover);
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: #334155;
 }
 
 /* App Shell Layout */
@@ -59,8 +57,8 @@ body {
 
 .sidebar {
   width: var(--sidebar-width);
-  background: #090d16;
-  border-right: 1px solid var(--border-color);
+  background: #070a12;
+  border-right: 1px solid #1e293b;
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -68,7 +66,7 @@ body {
   bottom: 0;
   left: 0;
   z-index: 50;
-  transition: transform 0.25s ease;
+  transition: transform 0.2s ease;
 }
 
 .main-wrapper {
@@ -79,34 +77,35 @@ body {
   min-width: 0;
 }
 
-/* Header */
+/* Header - Compact 48px industrial bar with sticky positioning */
 .app-header {
-  height: 56px;
-  background: rgba(15, 23, 42, 0.95);
-  border-bottom: 1px solid var(--border-color);
+  height: 50px;
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid #1e293b;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 20px;
   position: sticky;
   top: 0;
   z-index: 40;
 }
 
-/* Standard Enterprise Buttons (Crisp 6px Radius, No Flashy Gradients) */
+/* Standard Enterprise Buttons - Crisp 4px-6px Radius, Functional Borders */
 .btn-primary {
   background: #2563eb;
   color: #ffffff;
   border: 1px solid #1d4ed8;
-  padding: 8px 16px;
-  border-radius: 6px;
+  padding: 6px 14px;
+  border-radius: 4px;
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 13px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  gap: 6px;
+  transition: background 0.12s ease, border-color 0.12s ease;
 }
 
 .btn-primary:hover {
@@ -115,81 +114,119 @@ body {
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.04);
+  background: #162036;
   color: var(--text-main);
-  border: 1px solid var(--border-color);
-  padding: 8px 16px;
-  border-radius: 6px;
+  border: 1px solid #1e293b;
+  padding: 6px 14px;
+  border-radius: 4px;
   font-weight: 500;
-  font-size: 13.5px;
+  font-size: 13px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  gap: 6px;
+  transition: background 0.12s ease, border-color 0.12s ease;
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: #1e293b;
+  border-color: #334155;
 }
 
-/* Inputs & Form */
+/* Form Inputs - Compact, Crisp 4px Radius, Monospace-capable */
 .input-field {
   width: 100%;
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 8px 12px;
+  background: #090d16;
+  border: 1px solid #1e293b;
+  border-radius: 4px;
+  padding: 6px 10px;
   color: var(--text-main);
   font-size: 13px;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.12s ease;
 }
 
 .input-field:focus {
   border-color: var(--accent-blue);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.4);
 }
 
-/* Table */
+/* Enforce Monospace & Tabular Numbers globally on numbers/dates */
+input[type="number"],
+input[type="date"],
+.num-mono,
+.num-mono-bold {
+  font-family: 'Fira Code', 'Roboto Mono', ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.num-mono {
+  font-size: 12.5px;
+}
+
+.num-mono-bold {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* Keyboard hint badge */
+.kbd-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+/* Table - High-Density Enterprise Layout */
 .data-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .data-table th {
-  background: rgba(15, 23, 42, 0.5);
+  background: #0f172a;
   color: var(--text-muted);
-  font-weight: 600;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-color);
+  font-weight: 700;
+  padding: 8px 12px;
+  border-bottom: 1px solid #1e293b;
   text-transform: uppercase;
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.05em;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .data-table td {
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border-color);
+  padding: 8px 12px;
+  border-bottom: 1px solid #1e293b;
   color: var(--text-main);
+  height: 38px;
 }
 
 .data-table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(37, 99, 235, 0.04);
 }
 
-/* Enterprise High-Density Table System */
+/* Enterprise High-Density Table Container */
 .table-container-dense {
   width: 100%;
   overflow-x: auto;
   overflow-y: auto;
-  max-height: 580px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: rgba(11, 17, 32, 0.6);
+  max-height: 600px;
+  border: 1px solid #1e293b;
+  border-radius: 4px;
+  background: #090d16;
 }
 
 .table-container-dense::-webkit-scrollbar {
@@ -197,14 +234,14 @@ body {
   height: 6px;
 }
 .table-container-dense::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.5);
+  background: #090d16;
 }
 .table-container-dense::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.25);
+  background: #334155;
   border-radius: 3px;
 }
 .table-container-dense::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.45);
+  background: #475569;
 }
 
 .table-dense {
@@ -212,23 +249,23 @@ body {
   border-collapse: separate;
   border-spacing: 0;
   text-align: left;
-  font-size: 13px;
+  font-size: 12.5px;
   line-height: 1.35;
 }
 
 .table-dense thead th {
   position: sticky;
   top: 0;
-  z-index: 10;
-  background: #0d1628;
+  z-index: 20;
+  background: #0f172a;
   color: #94a3b8;
   font-weight: 700;
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 8px 12px;
-  border-bottom: 2px solid rgba(59, 130, 246, 0.35);
-  border-right: 1px solid var(--border-subtle);
+  letter-spacing: 0.05em;
+  padding: 8px 10px;
+  border-bottom: 2px solid #334155;
+  border-right: 1px solid #1e293b;
   white-space: nowrap;
 }
 
@@ -237,11 +274,12 @@ body {
 }
 
 .table-dense tbody td {
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--border-subtle);
-  border-right: 1px solid var(--border-subtle);
+  padding: 7px 10px;
+  border-bottom: 1px solid #1e293b;
+  border-right: 1px solid #1e293b;
   color: var(--text-main);
   white-space: nowrap;
+  height: 38px;
 }
 
 .table-dense tbody td:last-child {
@@ -253,21 +291,49 @@ body {
 }
 
 .table-dense tbody tr:hover td {
-  background: rgba(59, 130, 246, 0.08) !important;
+  background: rgba(37, 99, 235, 0.08) !important;
 }
 
-/* Monospace & Tabular Numbers */
-.num-mono {
-  font-family: 'Fira Code', 'Roboto Mono', ui-monospace, SFMono-Regular, monospace;
-  font-variant-numeric: tabular-nums;
-  font-size: 12.5px;
+/* Sticky Column Utilities for High-Density Grids */
+.sticky-col-left-1 {
+  position: sticky;
+  left: 0;
+  z-index: 15;
+  background: #0f172a !important;
 }
 
-.num-mono-bold {
-  font-family: 'Fira Code', 'Roboto Mono', ui-monospace, SFMono-Regular, monospace;
+.sticky-col-left-2 {
+  position: sticky;
+  left: 90px;
+  z-index: 15;
+  background: #0f172a !important;
+}
+
+.sticky-col-right {
+  position: sticky;
+  right: 0;
+  z-index: 15;
+  background: #0f172a !important;
+}
+
+/* Sizing Matrix Pill Grid */
+.matrix-cell {
+  text-align: center;
+  font-family: 'Fira Code', monospace;
   font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  min-width: 38px;
+  padding: 4px 6px !important;
+}
+
+.matrix-cell.has-stock {
   font-weight: 700;
-  font-size: 13px;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.08) !important;
+}
+
+.matrix-cell.zero-stock {
+  color: #475569;
 }
 
 /* Export Button */
@@ -337,12 +403,12 @@ textarea:focus-visible {
   outline-offset: 1px !important;
 }
 
-/* Enterprise Modal & High-Density Drawer */
+/* Enterprise Modal & High-Density Drawer - Crisp 4px Radius, 1px Border */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -352,19 +418,19 @@ textarea:focus-visible {
 
 .modal-drawer {
   width: 100%;
-  max-width: 540px;
-  max-height: 90vh;
+  max-width: 560px;
+  max-height: 92vh;
   overflow-y: auto;
   background: #0f172a;
-  border: 1px solid #1e293b;
-  border-radius: 8px;
+  border: 1px solid #334155;
+  border-radius: 4px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
 }
 
 .modal-header {
-  padding: 16px 20px;
+  padding: 12px 16px;
   border-bottom: 1px solid #1e293b;
   display: flex;
   align-items: center;
@@ -376,17 +442,17 @@ textarea:focus-visible {
 }
 
 .modal-body {
-  padding: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   flex: 1;
 }
 
 .modal-footer {
-  padding: 14px 20px;
+  padding: 12px 16px;
   border-top: 1px solid #1e293b;
-  background: #0b1120;
+  background: #090d16;
   position: sticky;
   bottom: 0;
   z-index: 10;
@@ -394,7 +460,7 @@ textarea:focus-visible {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 /* High-Density Pagination Controls */

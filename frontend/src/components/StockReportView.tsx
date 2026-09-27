@@ -38,6 +38,8 @@ const CATEGORY_COLORS: Record<string, string> = {
   Other: "#64748b"
 };
 
+const PARIS_POINTS = [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43];
+
 export function StockReportView() {
   const { t } = useLocale();
   const [stockItems, setStockItems] = useState<any[]>([]);
@@ -45,6 +47,7 @@ export function StockReportView() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [viewMode, setViewMode] = useState<"matrix" | "detailed">("matrix");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -90,6 +93,48 @@ export function StockReportView() {
     });
   }, [stockItems, searchQuery, statusFilter]);
 
+  // High-Density Sizing Matrix Aggregation (Paris Points 32-43)
+  const matrixRows = useMemo(() => {
+    const map = new Map<string, {
+      key: string;
+      modelName: string;
+      codePrefix: string;
+      category: string;
+      color: string;
+      unit_price: number;
+      sizes: Record<number, number>;
+      totalPairs: number;
+      totalValuation: number;
+    }>();
+
+    for (const item of filteredItems) {
+      const modelKey = `${item.name}__${item.category}__${item.color || ""}`;
+      let row = map.get(modelKey);
+      if (!row) {
+        row = {
+          key: modelKey,
+          modelName: item.name,
+          codePrefix: item.code.includes("-") ? item.code.split("-").slice(0, 2).join("-") : item.code,
+          category: item.category || "-",
+          color: item.color || "-",
+          unit_price: item.unit_price || 0,
+          sizes: {},
+          totalPairs: 0,
+          totalValuation: 0
+        };
+        map.set(modelKey, row);
+      }
+      const sz = Number(item.size);
+      if (!isNaN(sz)) {
+        row.sizes[sz] = (row.sizes[sz] || 0) + (item.current_stock_pairs || 0);
+      }
+      row.totalPairs += item.current_stock_pairs || 0;
+      row.totalValuation += item.estimated_value || 0;
+    }
+
+    return Array.from(map.values());
+  }, [filteredItems]);
+
   // Low stock count
   const lowStockItems = useMemo(() => {
     return stockItems.filter((item) => item.current_stock_pairs <= 50);
@@ -112,11 +157,11 @@ export function StockReportView() {
     }));
   }, [stockItems]);
 
-  // Chart 2: Size Breakdown
+  // Chart 2: Size Breakdown with safe mobile label spacing
   const sizeChartData = useMemo(() => {
     const map = new Map<string, number>();
     for (const item of stockItems) {
-      const sz = item.size ? `Size ${item.size}` : "N/A";
+      const sz = item.size ? `Sz ${item.size}` : "N/A";
       map.set(sz, (map.get(sz) || 0) + (item.current_stock_pairs || 0));
     }
     return Array.from(map.entries())
@@ -250,110 +295,222 @@ export function StockReportView() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={sizeChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="size" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                <XAxis dataKey="size" stroke="#94a3b8" fontSize={10} tickLine={false} interval="preserveStartEnd" />
                 <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
                 <Tooltip
-                  contentStyle={{ background: "#0f172a", borderColor: "rgba(255,255,255,0.15)", borderRadius: "8px", fontSize: "12px" }}
+                  contentStyle={{ background: "#0f172a", borderColor: "rgba(255,255,255,0.15)", borderRadius: "4px", fontSize: "12px" }}
                   formatter={(val: any) => [`${val} pairs`, "In Stock"]}
                 />
-                <Bar dataKey="pairs" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="pairs" fill="#10b981" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      {/* Filter and Quick Search Bar */}
-      <div className="glass-card" style={{ padding: "14px 20px", display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: "220px", background: "rgba(15, 23, 42, 0.6)", padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--border-color)" }}>
-          <Search size={16} color="#94a3b8" />
+      {/* Filter, Quick Search and View Mode Switcher */}
+      <div className="glass-card" style={{ padding: "12px 16px", display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: "220px", background: "#090d16", padding: "6px 10px", borderRadius: "4px", border: "1px solid #1e293b" }}>
+          <Search size={15} color="#94a3b8" />
           <input
             type="text"
-            placeholder="Quick search code, shoe model, color, or size..."
+            placeholder="Search SKU, shoe model, color, or batch code..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ background: "none", border: "none", color: "#f8fafc", fontSize: "13px", outline: "none", width: "100%" }}
+            style={{ background: "none", border: "none", color: "#f8fafc", fontSize: "12.5px", outline: "none", width: "100%" }}
           />
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          {/* Category Filter */}
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Category:</span>
-            <select
-              className="input-field"
-              style={{ width: "135px", padding: "6px 10px", fontSize: "12px", cursor: "pointer" }}
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+          {/* View Mode Toggle */}
+          <div style={{ display: "inline-flex", background: "#090d16", padding: "2px", borderRadius: "4px", border: "1px solid #1e293b" }}>
+            <button
+              type="button"
+              onClick={() => setViewMode("matrix")}
+              style={{
+                padding: "4px 10px",
+                fontSize: "12px",
+                fontWeight: "600",
+                borderRadius: "3px",
+                border: "none",
+                cursor: "pointer",
+                background: viewMode === "matrix" ? "#2563eb" : "transparent",
+                color: viewMode === "matrix" ? "#ffffff" : "#94a3b8"
+              }}
             >
-              <option value="all">All Categories</option>
-              <option value="Boot">Boot</option>
-              <option value="Shoe">Shoe</option>
-              <option value="Slipper">Slipper</option>
-              <option value="Sandal">Sandal</option>
-            </select>
+              Sizing Matrix (32–43)
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("detailed")}
+              style={{
+                padding: "4px 10px",
+                fontSize: "12px",
+                fontWeight: "600",
+                borderRadius: "3px",
+                border: "none",
+                cursor: "pointer",
+                background: viewMode === "detailed" ? "#2563eb" : "transparent",
+                color: viewMode === "detailed" ? "#ffffff" : "#94a3b8"
+              }}
+            >
+              Detailed SKU Ledger
+            </button>
           </div>
 
+          {/* Category Filter */}
+          <select
+            className="input-field"
+            style={{ width: "130px", padding: "5px 8px", fontSize: "12px", cursor: "pointer" }}
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+          >
+            <option value="all">All Categories</option>
+            <option value="Boot">Boot</option>
+            <option value="Shoe">Shoe</option>
+            <option value="Slipper">Slipper</option>
+            <option value="Sandal">Sandal</option>
+          </select>
+
           {/* Status Filter */}
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Status:</span>
-            <select
-              className="input-field"
-              style={{ width: "125px", padding: "6px 10px", fontSize: "12px", cursor: "pointer" }}
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="all">All Status</option>
-              <option value="in_stock">In Stock (&gt;50)</option>
-              <option value="low_stock">Low Stock (≤50)</option>
-              <option value="out_of_stock">Depleted (0)</option>
-            </select>
-          </div>
+          <select
+            className="input-field"
+            style={{ width: "125px", padding: "5px 8px", fontSize: "12px", cursor: "pointer" }}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">All Status</option>
+            <option value="in_stock">In Stock (&gt;50)</option>
+            <option value="low_stock">Low Stock (≤50)</option>
+            <option value="out_of_stock">Depleted (0)</option>
+          </select>
 
           {/* CSV Export Button */}
           <button onClick={handleExportCSV} className="btn-export" disabled={!filteredItems.length}>
-            <Download size={14} /> Export to Excel / CSV
+            <Download size={13} /> Export CSV
           </button>
         </div>
       </div>
 
       {/* Main High-Density Stock Table */}
-      <div className="glass-card" style={{ padding: "18px 20px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+      <div className="glass-card" style={{ padding: "14px 16px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <Boxes size={18} color="#3b82f6" />
-            <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#f8fafc" }}>
-              Warehouse Stock Ledger ({filteredItems.length} SKUs Listed)
+            <Boxes size={16} color="#3b82f6" />
+            <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#f8fafc" }}>
+              {viewMode === "matrix"
+                ? `Finished Footwear Sizing Matrix (${matrixRows.length} Product Models)`
+                : `Warehouse Stock Ledger (${filteredItems.length} SKUs Listed)`}
             </h3>
           </div>
           <div style={{ fontSize: "11px", color: "#64748b", display: "flex", alignItems: "center", gap: "4px" }}>
-            <Info size={12} /> Stock levels are calculated exclusively from append-only movement logs
+            <Info size={11} /> Paris Points 32–43 • Append-only ledger math
           </div>
         </div>
 
         {loading ? (
           <div style={{ padding: "50px", textAlign: "center", color: "#94a3b8" }}>
-            <RefreshCw size={24} className="animate-spin" style={{ margin: "0 auto 12px" }} />
+            <RefreshCw size={22} className="animate-spin" style={{ margin: "0 auto 10px" }} />
             <div>Reconciling real-time inventory ledger...</div>
           </div>
         ) : filteredItems.length === 0 ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
+          <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
             No product inventory records match the selected filter criteria.
           </div>
+        ) : viewMode === "matrix" ? (
+          /* SIZING MATRIX GRID (Paris Points 32-43) */
+          <div className="table-container-dense">
+            <table className="table-dense">
+              <thead>
+                <tr>
+                  <th className="sticky-col-left-1" style={{ width: "90px" }}>SKU</th>
+                  <th className="sticky-col-left-2" style={{ minWidth: "160px" }}>Model Name</th>
+                  <th style={{ width: "80px" }}>Category</th>
+                  <th style={{ width: "80px" }}>Color</th>
+                  {PARIS_POINTS.map((sz) => (
+                    <th key={sz} style={{ width: "42px", textAlign: "center", background: "#0b1324" }}>
+                      {sz}
+                    </th>
+                  ))}
+                  <th style={{ textAlign: "right", width: "100px" }}>Rate</th>
+                  <th style={{ textAlign: "right", width: "110px" }}>Total Pairs</th>
+                  <th style={{ textAlign: "right", width: "120px" }}>Valuation</th>
+                  <th style={{ width: "95px", textAlign: "center" }}>Health</th>
+                </tr>
+              </thead>
+              <tbody>
+                {matrixRows.map((row) => {
+                  const isDepleted = row.totalPairs <= 0;
+                  const isLow = row.totalPairs > 0 && row.totalPairs <= 50;
+                  return (
+                    <tr key={row.key}>
+                      <td className="sticky-col-left-1 num-mono" style={{ fontWeight: "700", color: "#3b82f6" }}>
+                        {row.codePrefix}
+                      </td>
+                      <td className="sticky-col-left-2" style={{ fontWeight: "600", color: "#f8fafc" }}>
+                        {row.modelName}
+                      </td>
+                      <td>
+                        <span style={{ fontSize: "11px", color: "#94a3b8" }}>{row.category}</span>
+                      </td>
+                      <td style={{ color: "#94a3b8", fontSize: "11px" }}>{row.color}</td>
+                      {PARIS_POINTS.map((sz) => {
+                        const count = row.sizes[sz] || 0;
+                        return (
+                          <td
+                            key={sz}
+                            className={`matrix-cell ${count > 0 ? "has-stock" : "zero-stock"}`}
+                          >
+                            {count > 0 ? count : "-"}
+                          </td>
+                        );
+                      })}
+                      <td style={{ textAlign: "right" }} className="num-mono">
+                        Rs. {row.unit_price?.toLocaleString()}
+                      </td>
+                      <td
+                        style={{
+                          textAlign: "right",
+                          fontWeight: "700",
+                          color: isDepleted ? "#f43f5e" : isLow ? "#fbbf24" : "#10b981"
+                        }}
+                        className="num-mono-bold"
+                      >
+                        {row.totalPairs.toLocaleString()}
+                      </td>
+                      <td style={{ textAlign: "right", fontWeight: "600" }} className="num-mono">
+                        Rs. {row.totalValuation.toLocaleString()}
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        {isDepleted ? (
+                          <span className="badge badge-danger">Out</span>
+                        ) : isLow ? (
+                          <span className="badge badge-warning">Low</span>
+                        ) : (
+                          <span className="badge badge-success">OK</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         ) : (
+          /* DETAILED SKU LEDGER */
           <div className="table-container-dense">
             <table className="table-dense">
               <thead>
                 <tr>
                   <th style={{ width: "100px" }}>SKU Code</th>
                   <th>Footwear Description</th>
-                  <th style={{ width: "110px" }}>Category</th>
-                  <th style={{ width: "70px", textAlign: "center" }}>Size</th>
-                  <th style={{ width: "100px" }}>Color</th>
-                  <th style={{ textAlign: "right", width: "120px" }}>Unit Price</th>
-                  <th style={{ textAlign: "right", width: "130px" }}>Current Stock</th>
-                  <th style={{ textAlign: "right", width: "140px" }}>Total Valuation</th>
-                  <th style={{ width: "120px", textAlign: "center" }}>Stock Health</th>
+                  <th style={{ width: "90px" }}>Category</th>
+                  <th style={{ width: "60px", textAlign: "center" }}>Size</th>
+                  <th style={{ width: "90px" }}>Color</th>
+                  <th style={{ textAlign: "right", width: "110px" }}>Unit Price</th>
+                  <th style={{ textAlign: "right", width: "120px" }}>Current Stock</th>
+                  <th style={{ textAlign: "right", width: "130px" }}>Valuation</th>
+                  <th style={{ width: "110px", textAlign: "center" }}>Stock Health</th>
                 </tr>
               </thead>
               <tbody>
@@ -367,23 +524,12 @@ export function StockReportView() {
                       </td>
                       <td style={{ fontWeight: "600" }}>{item.name}</td>
                       <td>
-                        <span
-                          style={{
-                            display: "inline-block",
-                            padding: "2px 8px",
-                            borderRadius: "4px",
-                            background: "rgba(255,255,255,0.04)",
-                            fontSize: "11px",
-                            fontWeight: "500"
-                          }}
-                        >
-                          {item.category || "-"}
-                        </span>
+                        <span style={{ fontSize: "11px", color: "#94a3b8" }}>{item.category || "-"}</span>
                       </td>
                       <td style={{ textAlign: "center" }} className="num-mono">
                         {item.size || "-"}
                       </td>
-                      <td style={{ color: "#94a3b8" }}>{item.color || "-"}</td>
+                      <td style={{ color: "#94a3b8", fontSize: "11px" }}>{item.color || "-"}</td>
                       <td style={{ textAlign: "right" }} className="num-mono">
                         Rs. {item.unit_price?.toLocaleString()}
                       </td>
@@ -405,11 +551,11 @@ export function StockReportView() {
                           <span className="badge badge-danger">{t("out_of_stock")}</span>
                         ) : isLow ? (
                           <span className="badge badge-low-stock">
-                            <AlertTriangle size={11} style={{ marginRight: "4px" }} /> {t("low_stock")} (≤50)
+                            <AlertTriangle size={11} style={{ marginRight: "3px" }} /> {t("low_stock")}
                           </span>
                         ) : (
                           <span className="badge badge-success">
-                            <CheckCircle size={11} style={{ marginRight: "4px" }} /> {t("healthy")}
+                            <CheckCircle size={11} style={{ marginRight: "3px" }} /> {t("healthy")}
                           </span>
                         )}
                       </td>

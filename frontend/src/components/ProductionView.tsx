@@ -315,16 +315,16 @@ export function ProductionView({ userRole }: { userRole?: string }) {
             <table className="table-dense">
               <thead>
                 <tr>
-                  <th style={{ width: "130px" }}>Batch Number</th>
-                  <th style={{ width: "140px" }}>Date (AD / BS)</th>
-                  <th>Footwear Model</th>
-                  <th style={{ width: "70px", textAlign: "center" }}>Size</th>
-                  <th style={{ width: "90px" }}>Color</th>
-                  <th style={{ textAlign: "right", width: "110px" }}>Target</th>
-                  <th style={{ textAlign: "right", width: "130px" }}>Produced</th>
-                  <th style={{ textAlign: "right", width: "90px" }}>Workers</th>
-                  <th style={{ width: "120px", textAlign: "center" }}>Stock Impact</th>
-                  <th style={{ width: "100px", textAlign: "center" }}>Status</th>
+                  <th className="sticky-col-left-1" style={{ width: "120px" }}>Batch Number</th>
+                  <th className="sticky-col-left-2" style={{ minWidth: "160px" }}>Footwear Model</th>
+                  <th style={{ width: "130px" }}>Date (AD / BS)</th>
+                  <th style={{ width: "65px", textAlign: "center" }}>Size</th>
+                  <th style={{ width: "80px" }}>Color</th>
+                  <th style={{ textAlign: "right", width: "95px" }}>Target</th>
+                  <th style={{ textAlign: "right", width: "115px" }}>Produced</th>
+                  <th style={{ textAlign: "right", width: "75px" }}>Workers</th>
+                  <th style={{ width: "125px", textAlign: "center" }}>Stock Impact</th>
+                  <th style={{ width: "95px", textAlign: "center" }}>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -332,13 +332,10 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                   const p = getProduct(b.product_id);
                   return (
                     <tr key={b.id}>
-                      <td style={{ fontWeight: "700", color: "#3b82f6" }} className="num-mono">
+                      <td className="sticky-col-left-1 num-mono" style={{ fontWeight: "700", color: "#3b82f6" }}>
                         {b.batch_number}
                       </td>
-                      <td style={{ fontSize: "12px", color: "#94a3b8" }}>
-                        {b.date_ad} <span style={{ fontSize: "11px", color: "#64748b" }}>({b.date_bs} BS)</span>
-                      </td>
-                      <td style={{ fontWeight: "600" }}>
+                      <td className="sticky-col-left-2" style={{ fontWeight: "600", color: "#f8fafc" }}>
                         {p ? (
                           <>
                             {p.code} - {p.name}
@@ -347,10 +344,15 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                           `Product #${b.product_id}`
                         )}
                       </td>
-                      <td style={{ textAlign: "center" }} className="num-mono">
-                        {p?.size || "-"}
+                      <td style={{ fontSize: "12px", color: "#94a3b8" }}>
+                        {b.date_ad} <span style={{ fontSize: "11px", color: "#64748b" }}>({b.date_bs})</span>
                       </td>
-                      <td style={{ color: "#94a3b8" }}>{p?.color || "-"}</td>
+                      <td style={{ textAlign: "center" }} className="num-mono">
+                        <span style={{ padding: "2px 6px", background: "rgba(37,99,235,0.12)", color: "#60a5fa", borderRadius: "3px", fontWeight: "600", fontSize: "11px" }}>
+                          {p?.size || "-"}
+                        </span>
+                      </td>
+                      <td style={{ color: "#94a3b8", fontSize: "11px" }}>{p?.color || "-"}</td>
                       <td style={{ textAlign: "right" }} className="num-mono">
                         {b.target_quantity} prs
                       </td>
@@ -412,14 +414,20 @@ export function ProductionView({ userRole }: { userRole?: string }) {
           <div className="modal-drawer" role="dialog" aria-modal="true" aria-labelledby="production-drawer-title">
             <div className="modal-header">
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Factory size={18} color="#10b981" />
-                <h3 id="production-drawer-title" style={{ fontSize: "16px", fontWeight: "700", color: "#f8fafc" }}>
+                <Factory size={16} color="#10b981" />
+                <h3 id="production-drawer-title" style={{ fontSize: "15px", fontWeight: "700", color: "#f8fafc" }}>
                   Record Finished Production Batch
                 </h3>
               </div>
-              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }} aria-label="Close production batch dialog">
-                <X size={18} />
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ display: "flex", gap: "4px" }}>
+                  <span className="kbd-hint">Ctrl+Enter ↵</span>
+                  <span className="kbd-hint">Esc</span>
+                </div>
+                <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", marginLeft: "4px" }} aria-label="Close production batch dialog">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             <form onSubmit={(e) => handleCreateBatch(e, false)} onKeyDown={handleFormKeyDown} style={{ display: "flex", flexDirection: "column", flex: 1 }}>

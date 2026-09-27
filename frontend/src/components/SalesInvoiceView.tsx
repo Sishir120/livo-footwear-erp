@@ -449,8 +449,8 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
               <table className="table-dense">
                 <thead>
                   <tr>
-                    <th style={{ width: "130px" }}>Invoice No.</th>
-                    <th>Billed Customer</th>
+                    <th className="sticky-col-left-1" style={{ width: "130px" }}>Invoice No.</th>
+                    <th className="sticky-col-left-2" style={{ minWidth: "160px" }}>Billed Customer</th>
                     <th style={{ width: "140px" }}>Date (AD / BS)</th>
                     <th style={{ textAlign: "right", width: "130px" }}>Invoice Total</th>
                     <th style={{ textAlign: "right", width: "120px" }}>Cash Received</th>
@@ -463,7 +463,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     const client = getClientByOrderId(inv.sales_order_id);
                     return (
                       <tr key={inv.id} style={{ opacity: inv.is_void ? 0.75 : 1 }}>
-                        <td style={{ fontWeight: "700", color: inv.is_void ? "#94a3b8" : "#3b82f6", textDecoration: inv.is_void ? "line-through" : "none" }} className="num-mono">
+                        <td className="sticky-col-left-1 num-mono" style={{ fontWeight: "700", color: inv.is_void ? "#94a3b8" : "#3b82f6", textDecoration: inv.is_void ? "line-through" : "none" }}>
                           {inv.invoice_number}
                           {inv.is_void && (
                             <span style={{ marginLeft: "6px", fontSize: "10px", color: "#f43f5e", background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: "3px", padding: "1px 4px", textDecoration: "none", display: "inline-block" }}>
@@ -471,7 +471,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                             </span>
                           )}
                         </td>
-                        <td style={{ fontWeight: "600" }}>
+                        <td className="sticky-col-left-2" style={{ fontWeight: "600", color: "#f8fafc" }}>
                           {client ? (
                             <>
                               {client.name} <span style={{ fontSize: "11px", color: "#94a3b8" }}>({client.code})</span>
@@ -481,7 +481,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                           )}
                         </td>
                         <td style={{ fontSize: "12px", color: "#94a3b8" }}>
-                          {inv.date_ad} <span style={{ fontSize: "11px", color: "#64748b" }}>({inv.date_bs} BS)</span>
+                          {inv.date_ad} <span style={{ fontSize: "11px", color: "#64748b" }}>({inv.date_bs})</span>
                         </td>
                         <td style={{ textAlign: "right", fontWeight: "700" }} className="num-mono-bold">
                           Rs. {inv.total_amount?.toLocaleString()}
@@ -660,27 +660,33 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
           <div className="modal-drawer" role="dialog" aria-modal="true" aria-labelledby="sales-drawer-title">
             <div className="modal-header">
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <ShoppingBag size={18} color="#3b82f6" />
-                <h3 id="sales-drawer-title" style={{ fontSize: "16px", fontWeight: "700", color: "#f8fafc" }}>
+                <ShoppingBag size={16} color="#3b82f6" />
+                <h3 id="sales-drawer-title" style={{ fontSize: "15px", fontWeight: "700", color: "#f8fafc" }}>
                   Record Footwear Sale & Issue Invoice
                 </h3>
               </div>
-              <button onClick={() => setShowOrderModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }} aria-label="Close sales order dialog">
-                <X size={18} />
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ display: "flex", gap: "4px" }}>
+                  <span className="kbd-hint">Ctrl+Enter ↵</span>
+                  <span className="kbd-hint">Esc</span>
+                </div>
+                <button onClick={() => setShowOrderModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", marginLeft: "4px" }} aria-label="Close sales order dialog">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             <form onSubmit={(e) => handleCreateOrder(e, false)} onKeyDown={handleFormKeyDown} style={{ display: "flex", flexDirection: "column", flex: 1 }}>
               <div className="modal-body">
                 {/* Success Feedback Toast for Continuous Entry */}
                 {successFeedback && (
-                  <div role="status" aria-live="polite" style={{ background: "rgba(59, 130, 246, 0.15)", border: "1px solid #3b82f6", borderRadius: "6px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", color: "#93c5fd", fontSize: "13px", fontWeight: "600" }}>
-                    <CheckCircle2 size={16} />
+                  <div role="status" aria-live="polite" style={{ background: "rgba(37, 99, 235, 0.15)", border: "1px solid #2563eb", borderRadius: "4px", padding: "8px 12px", display: "flex", alignItems: "center", gap: "8px", color: "#93c5fd", fontSize: "12.5px", fontWeight: "600" }}>
+                    <CheckCircle2 size={15} />
                     <span>{successFeedback}</span>
                   </div>
                 )}
 
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px", background: "rgba(15, 23, 42, 0.5)", padding: "10px 12px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", background: "#090d16", padding: "8px 10px", borderRadius: "4px", border: "1px solid #1e293b" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#e2e8f0", cursor: "pointer", userSelect: "none" }}>
                       <input
@@ -689,28 +695,28 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                         onChange={(e) => setContinuousMode(e.target.checked)}
                         style={{ accentColor: "#3b82f6", cursor: "pointer" }}
                       />
-                      <span>Continuous Rapid Entry Mode</span>
+                      <span style={{ fontWeight: "600" }}>Continuous Rapid Entry Mode</span>
                     </label>
                     <span style={{ fontSize: "11px", color: "#64748b" }}>
-                      Hands-free rapid sales logging
+                      Hands-free line entry
                     </span>
                   </div>
 
                   {continuousMode && (
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "#94a3b8", cursor: "pointer", userSelect: "none", marginLeft: "22px" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#94a3b8", cursor: "pointer", userSelect: "none", marginLeft: "22px" }}>
                       <input
                         type="checkbox"
                         checked={keepClient}
                         onChange={(e) => setKeepClient(e.target.checked)}
                         style={{ accentColor: "#3b82f6", cursor: "pointer" }}
                       />
-                      <span>Retain selected client for multiple item orders</span>
+                      <span>Retain selected client for multiple lines</span>
                     </label>
                   )}
                 </div>
 
                 <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Client / Customer</label>
+                  <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#94a3b8", fontWeight: "700" }}>Client / Customer</label>
                   <select
                     ref={clientRef}
                     className="input-field"
@@ -729,7 +735,22 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                 </div>
 
                 <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Footwear SKU</label>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#94a3b8", fontWeight: "700" }}>Footwear SKU</label>
+                    {productId && (() => {
+                      const p = products.find((x) => String(x.id) === productId);
+                      return p ? (
+                        <div style={{ display: "flex", gap: "6px", fontSize: "11px" }}>
+                          <span style={{ padding: "1px 6px", background: "rgba(37,99,235,0.15)", color: "#60a5fa", borderRadius: "3px", fontWeight: "600" }}>
+                            Sz {p.size || "Std"}
+                          </span>
+                          <span style={{ padding: "1px 6px", background: "#1e293b", color: "#cbd5e1", borderRadius: "3px" }}>
+                            {p.color || "Black"}
+                          </span>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
                   <select
                     ref={productRef}
                     className="input-field"
@@ -741,15 +762,15 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     <option value="">-- Select Product Item --</option>
                     {products.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.code} - {p.name} (Wholesale: Rs. {p.unit_price})
+                        {p.code} - {p.name} (Wholesale: Rs. {p.unit_price?.toLocaleString()})
                       </option>
                     ))}
                   </select>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                   <div>
-                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Quantity (Pairs)</label>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#94a3b8", fontWeight: "700" }}>Quantity (Pairs)</label>
                     <input
                       ref={quantityRef}
                       type="number"
@@ -761,7 +782,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Wholesale Unit Rate (Rs.)</label>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#94a3b8", fontWeight: "700" }}>Wholesale Unit Rate (Rs.)</label>
                     <input
                       ref={unitPriceRef}
                       type="number"
@@ -774,8 +795,39 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                   </div>
                 </div>
 
+                {/* Inline Nepal VAT & Financial Calculations Strip */}
+                {(() => {
+                  const q = parseFloat(quantity) || 0;
+                  const r = parseFloat(unitPrice) || 0;
+                  const subtotal = q * r;
+                  const vat = subtotal * 0.13;
+                  const total = subtotal + vat;
+                  const rcv = parseFloat(receivedAmount) || 0;
+                  const due = Math.max(0, total - rcv);
+                  return (
+                    <div style={{ background: "#090d16", border: "1px solid #1e293b", borderRadius: "4px", padding: "8px 12px", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", textAlign: "center" }}>
+                      <div>
+                        <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Subtotal</div>
+                        <div className="num-mono-bold" style={{ fontSize: "12px", color: "#f8fafc" }}>Rs. {subtotal.toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>13% Nepal VAT</div>
+                        <div className="num-mono" style={{ fontSize: "12px", color: "#94a3b8" }}>Rs. {vat.toFixed(0)}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Grand Total</div>
+                        <div className="num-mono-bold" style={{ fontSize: "12px", color: "#60a5fa" }}>Rs. {total.toFixed(0)}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Receivable Due</div>
+                        <div className="num-mono-bold" style={{ fontSize: "12px", color: due > 0 ? "#f87171" : "#10b981" }}>Rs. {due.toFixed(0)}</div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Initial Cash Received (Rs.)</label>
+                  <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#94a3b8", fontWeight: "700" }}>Initial Cash Received (Rs.)</label>
                   <input
                     ref={receivedAmountRef}
                     type="number"
@@ -787,9 +839,9 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                   />
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                   <div>
-                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Order Date (AD)</label>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#94a3b8", fontWeight: "700" }}>Order Date (AD)</label>
                     <input
                       ref={orderDateAdRef}
                       type="date"
@@ -801,7 +853,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Order Date (BS)</label>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#94a3b8", fontWeight: "700" }}>Order Date (BS)</label>
                     <input
                       ref={orderDateBsRef}
                       type="text"
@@ -817,10 +869,10 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
 
               <div className="modal-footer">
                 <span style={{ fontSize: "11px", color: "#64748b" }}>
-                  <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "2px 5px", borderRadius: "3px" }}>Esc</kbd> close • <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "2px 5px", borderRadius: "3px" }}>Ctrl+Enter</kbd> quick commit
+                  <span className="kbd-hint">Esc</span> close • <span className="kbd-hint">Ctrl+Enter</span> commit • <span className="kbd-hint">Enter</span> next
                 </span>
 
-                <div style={{ display: "flex", gap: "10px" }}>
+                <div style={{ display: "flex", gap: "8px" }}>
                   <button type="button" className="btn-secondary" onClick={() => setShowOrderModal(false)}>
                     Close
                   </button>
@@ -830,7 +882,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     </button>
                   )}
                   <button ref={submitButtonRef} type="submit" className="btn-primary" disabled={submitting}>
-                    {submitting ? "Writing to Ledger..." : continuousMode ? "Save & Next Sale ↵" : "Save & Issue Invoice"}
+                    {submitting ? "Writing to Ledger..." : continuousMode ? "Commit & Next Sale ↵" : "Commit Sale & Issue Invoice"}
                   </button>
                 </div>
               </div>

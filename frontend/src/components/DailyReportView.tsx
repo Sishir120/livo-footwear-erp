@@ -224,85 +224,150 @@ export function DailyReportView() {
         </div>
       ) : reportData ? (
         <>
-          {/* Executive KPI Grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px" }}>
-            {/* KPI 1: Production */}
-            <div className="glass-card" style={{ padding: "16px 18px", borderLeft: "3px solid #10b981" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em" }}>{t("production_output").toUpperCase()}</span>
-                <Factory size={18} color="#10b981" />
+          {/* Executive Industrial Strip */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
+            {/* Panel 1: Pairs Produced vs Dispatched */}
+            <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "3px solid #10b981", display: "flex", flexDirection: "column", gap: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Factory size={15} color="#10b981" />
+                  <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "#94a3b8" }}>
+                    Factory Floor Velocity
+                  </span>
+                </div>
+                <span className="badge badge-info num-mono" style={{ fontSize: "10px" }}>
+                  {reportData.production.batch_count} Batches
+                </span>
               </div>
-              <div style={{ fontSize: "26px", fontWeight: "700", color: "#f8fafc" }} className="num-mono-bold">
-                {reportData.production.total_pairs_produced.toLocaleString()}{" "}
-                <span style={{ fontSize: "13px", fontWeight: "400", color: "#94a3b8" }}>{t("pairs")}</span>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", alignItems: "baseline" }}>
+                <div>
+                  <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Produced Today</div>
+                  <div className="num-mono-bold" style={{ fontSize: "22px", color: "#10b981" }}>
+                    {reportData.production.total_pairs_produced.toLocaleString()}{" "}
+                    <span style={{ fontSize: "11px", fontWeight: "400", color: "#94a3b8" }}>prs</span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Dispatched Today</div>
+                  <div className="num-mono-bold" style={{ fontSize: "22px", color: "#f43f5e" }}>
+                    {reportData.stock_movement_summary.total_stock_out_pairs.toLocaleString()}{" "}
+                    <span style={{ fontSize: "11px", fontWeight: "400", color: "#94a3b8" }}>prs</span>
+                  </div>
+                </div>
               </div>
-              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
-                <Users size={12} /> {reportData.production.worker_count} {t("active_workers")} | {reportData.production.batch_count} {t("production_batches")}
+
+              {/* Ratio Bar */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#94a3b8", marginBottom: "4px" }}>
+                  <span>Net Inventory Delta</span>
+                  <span className="num-mono-bold" style={{ color: reportData.stock_movement_summary.net_change_pairs >= 0 ? "#10b981" : "#f43f5e" }}>
+                    {reportData.stock_movement_summary.net_change_pairs >= 0 ? `+${reportData.stock_movement_summary.net_change_pairs}` : reportData.stock_movement_summary.net_change_pairs} pairs
+                  </span>
+                </div>
+                <div style={{ height: "6px", width: "100%", background: "#1e293b", borderRadius: "3px", overflow: "hidden", display: "flex" }}>
+                  <div style={{ width: `${Math.min(100, Math.max(15, (reportData.production.total_pairs_produced / (reportData.production.total_pairs_produced + reportData.stock_movement_summary.total_stock_out_pairs || 1)) * 100))}%`, background: "#10b981" }} />
+                  <div style={{ flex: 1, background: "#f43f5e" }} />
+                </div>
               </div>
             </div>
 
-            {/* KPI 2: Sales Revenue */}
-            <div className="glass-card" style={{ padding: "16px 18px", borderLeft: "3px solid #3b82f6" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em" }}>{t("gross_sales").toUpperCase()}</span>
-                <ShoppingBag size={18} color="#3b82f6" />
+            {/* Panel 2: Realized Cash Ratio */}
+            <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "3px solid #3b82f6", display: "flex", flexDirection: "column", gap: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <CreditCard size={15} color="#3b82f6" />
+                  <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "#94a3b8" }}>
+                    Realized Cash Ratio
+                  </span>
+                </div>
+                <span className="num-mono-bold" style={{ fontSize: "12px", color: "#60a5fa" }}>
+                  {reportData.sales.total_sales_amount > 0
+                    ? `${Math.round((reportData.sales.total_received_amount / reportData.sales.total_sales_amount) * 100)}% Collected`
+                    : "100% Settled"}
+                </span>
               </div>
-              <div style={{ fontSize: "24px", fontWeight: "700", color: "#f8fafc" }} className="num-mono-bold">
-                Rs. {reportData.sales.total_sales_amount.toLocaleString()}
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", alignItems: "baseline" }}>
+                <div>
+                  <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Immediate Cash</div>
+                  <div className="num-mono-bold" style={{ fontSize: "20px", color: "#10b981" }}>
+                    Rs. {reportData.sales.total_received_amount.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Receivable Due</div>
+                  <div className="num-mono-bold" style={{ fontSize: "20px", color: reportData.sales.total_receivable_amount > 0 ? "#f87171" : "#94a3b8" }}>
+                    Rs. {reportData.sales.total_receivable_amount.toLocaleString()}
+                  </div>
+                </div>
               </div>
-              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>
-                {reportData.sales.order_count} client orders booked
+
+              {/* Ratio Bar */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#94a3b8", marginBottom: "4px" }}>
+                  <span>Gross Invoiced Today</span>
+                  <span className="num-mono-bold" style={{ color: "#f8fafc" }}>
+                    Rs. {reportData.sales.total_sales_amount.toLocaleString()}
+                  </span>
+                </div>
+                <div style={{ height: "6px", width: "100%", background: "#1e293b", borderRadius: "3px", overflow: "hidden", display: "flex" }}>
+                  <div
+                    style={{
+                      width: `${Math.min(100, (reportData.sales.total_received_amount / (reportData.sales.total_sales_amount || 1)) * 100)}%`,
+                      background: "#10b981"
+                    }}
+                  />
+                  <div style={{ flex: 1, background: "#f87171" }} />
+                </div>
               </div>
             </div>
 
-            {/* KPI 3: Cash Realization */}
-            <div className="glass-card" style={{ padding: "16px 18px", borderLeft: "3px solid #f59e0b" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em" }}>{t("cash_received").toUpperCase()}</span>
-                <CreditCard size={18} color="#f59e0b" />
+            {/* Panel 3: Factory Operations & Worker Productivity */}
+            <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "3px solid #f59e0b", display: "flex", flexDirection: "column", gap: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Users size={15} color="#f59e0b" />
+                  <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "#94a3b8" }}>
+                    Line Efficiency & Orders
+                  </span>
+                </div>
+                <span className="badge badge-warning num-mono" style={{ fontSize: "10px" }}>
+                  {reportData.sales.order_count} Orders Booked
+                </span>
               </div>
-              <div style={{ fontSize: "24px", fontWeight: "700", color: "#10b981" }} className="num-mono-bold">
-                Rs. {reportData.sales.total_received_amount.toLocaleString()}
-              </div>
-              <div style={{ fontSize: "12px", color: reportData.sales.total_receivable_amount > 0 ? "#f87171" : "#64748b", marginTop: "4px" }}>
-                {t("accounts_receivable")}: Rs. {reportData.sales.total_receivable_amount.toLocaleString()}
-              </div>
-            </div>
 
-            {/* KPI 4: Net Stock Movement */}
-            <div className="glass-card" style={{ padding: "16px 18px", borderLeft: reportData.stock_movement_summary.net_change_pairs >= 0 ? "3px solid #10b981" : "3px solid #f43f5e" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em" }}>NET STOCK DELTA</span>
-                {reportData.stock_movement_summary.net_change_pairs >= 0 ? (
-                  <ArrowUpRight size={18} color="#10b981" />
-                ) : (
-                  <ArrowDownLeft size={18} color="#f43f5e" />
-                )}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", alignItems: "baseline" }}>
+                <div>
+                  <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Active Workers</div>
+                  <div className="num-mono-bold" style={{ fontSize: "20px", color: "#f8fafc" }}>
+                    {reportData.production.worker_count}{" "}
+                    <span style={{ fontSize: "11px", fontWeight: "400", color: "#94a3b8" }}>on line</span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Yield / Worker</div>
+                  <div className="num-mono-bold" style={{ fontSize: "20px", color: "#fbbf24" }}>
+                    {reportData.production.worker_count > 0
+                      ? (reportData.production.total_pairs_produced / reportData.production.worker_count).toFixed(1)
+                      : "0"}{" "}
+                    <span style={{ fontSize: "11px", fontWeight: "400", color: "#94a3b8" }}>prs</span>
+                  </div>
+                </div>
               </div>
-              <div
-                style={{
-                  fontSize: "26px",
-                  fontWeight: "700",
-                  color: reportData.stock_movement_summary.net_change_pairs >= 0 ? "#10b981" : "#f87171"
-                }}
-                className="num-mono-bold"
-              >
-                {reportData.stock_movement_summary.net_change_pairs > 0
-                  ? `+${reportData.stock_movement_summary.net_change_pairs}`
-                  : reportData.stock_movement_summary.net_change_pairs}{" "}
-                <span style={{ fontSize: "13px", fontWeight: "400", color: "#94a3b8" }}>pairs</span>
-              </div>
-              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }} className="num-mono">
-                +In: {reportData.stock_movement_summary.total_stock_in_pairs} | -Out: {reportData.stock_movement_summary.total_stock_out_pairs}
+
+              <div style={{ fontSize: "11px", color: "#64748b", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "4px" }}>
+                <span>Append-only ledger math</span>
+                <span className="num-mono">{reportData.stock_movement_summary.movement_count} txns</span>
               </div>
             </div>
           </div>
 
           {/* Visual Analytics Row */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "16px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "14px" }}>
             {/* Chart 1: Production by Model */}
-            <div className="glass-card" style={{ padding: "18px 20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+            <div className="glass-card" style={{ padding: "16px 18px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <BarChart2 size={16} color="#3b82f6" />
                   <span style={{ fontSize: "13px", fontWeight: "700", color: "#f8fafc", textTransform: "uppercase", letterSpacing: "0.04em" }}>
@@ -321,13 +386,13 @@ export function DailyReportView() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={productionChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                      <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                      <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} interval="preserveStartEnd" />
                       <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
                       <Tooltip
-                        contentStyle={{ background: "#0f172a", borderColor: "rgba(255,255,255,0.15)", borderRadius: "8px", fontSize: "12px" }}
+                        contentStyle={{ background: "#0f172a", borderColor: "rgba(255,255,255,0.15)", borderRadius: "4px", fontSize: "12px" }}
                         formatter={(val: any) => [`${val} pairs`, "Output"]}
                       />
-                      <Bar dataKey="pairs" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="pairs" fill="#3b82f6" radius={[3, 3, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -335,12 +400,12 @@ export function DailyReportView() {
             </div>
 
             {/* Chart 2: Daily Volume Comparison */}
-            <div className="glass-card" style={{ padding: "18px 20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+            <div className="glass-card" style={{ padding: "16px 18px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <TrendingUp size={16} color="#10b981" />
                   <span style={{ fontSize: "13px", fontWeight: "700", color: "#f8fafc", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                    Produced vs Dispatched
+                    Pairs Produced vs Dispatched
                   </span>
                 </div>
                 <span style={{ fontSize: "11px", color: "#94a3b8" }}>Daily Pairs</span>
@@ -350,22 +415,22 @@ export function DailyReportView() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={volumeComparisonData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                    <XAxis dataKey="metric" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                    <XAxis dataKey="metric" stroke="#94a3b8" fontSize={10} tickLine={false} />
                     <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
                     <Tooltip
-                      contentStyle={{ background: "#0f172a", borderColor: "rgba(255,255,255,0.15)", borderRadius: "8px", fontSize: "12px" }}
+                      contentStyle={{ background: "#0f172a", borderColor: "rgba(255,255,255,0.15)", borderRadius: "4px", fontSize: "12px" }}
                     />
                     <Legend wrapperStyle={{ fontSize: "11px" }} />
-                    <Bar dataKey="Produced" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Dispatched" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Produced" fill="#10b981" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="Dispatched" fill="#f43f5e" radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
             {/* Chart 3: Cash Realization Ratio */}
-            <div className="glass-card" style={{ padding: "18px 20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+            <div className="glass-card" style={{ padding: "16px 18px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <PieIcon size={16} color="#f59e0b" />
                   <span style={{ fontSize: "13px", fontWeight: "700", color: "#f8fafc", textTransform: "uppercase", letterSpacing: "0.04em" }}>
@@ -387,9 +452,9 @@ export function DailyReportView() {
                         data={financialBreakdownData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={50}
-                        outerRadius={75}
-                        paddingAngle={5}
+                        innerRadius={48}
+                        outerRadius={72}
+                        paddingAngle={4}
                         dataKey="value"
                       >
                         {financialBreakdownData.map((entry, index) => (
@@ -397,7 +462,7 @@ export function DailyReportView() {
                         ))}
                       </Pie>
                       <Tooltip
-                        contentStyle={{ background: "#0f172a", borderColor: "rgba(255,255,255,0.15)", borderRadius: "8px", fontSize: "12px" }}
+                        contentStyle={{ background: "#0f172a", borderColor: "rgba(255,255,255,0.15)", borderRadius: "4px", fontSize: "12px" }}
                         formatter={(val: any) => [`Rs. ${Number(val).toLocaleString()}`, "Amount"]}
                       />
                       <Legend wrapperStyle={{ fontSize: "11px" }} />
