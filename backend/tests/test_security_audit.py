@@ -345,3 +345,126 @@ def test_rate_limiter_threshold_protection():
 
         # BasicRateLimitMiddleware limits to 30 requests per minute
         assert 429 in status_codes, f"Rate limiter failed to trigger 429: {status_codes}"
+
+
+def test_cross_tenant_reference_idor_rejection(setup_audit_env):
+    """
+    Verifies that an editor from Tenant 2 cannot reference entities (Suppliers,
+    Materials, Products, Clients) belonging to Tenant 1 in purchase, production,
+    or sales mutating payloads.
+    """
+    t1_token = setup_audit_env["tokens"]["t1_editor"]
+    t2_token = setup_audit_env["tokens"]["t2_editor"]
+
+    # Step 1: Create master records in Tenant 1
+    with TestClient(app, cookies={COOKIE_NAME: t1_token}) as client1:
+        sup_res = client1.post("/api/v1/purchase/suppliers", json={"code": "T1-SUP-REF", "name": "T1 Leather Supplier"})
+        assert sup_res.status_code == 200
+        t1_sup_id = sup_res.json()["id"]
+
+        mat_res = client1.post("/api/v1/purchase/raw-materials", json={"code": "T1-RM-REF", "name": "T1 Buffalo Leather"})
+        assert mat_res.status_code == 200
+        t1_mat_id = mat_res.json()["id"]
+
+        prod_res = client1.post("/api/v1/production/products", json={"code": "T1-PRD-REF", "name": "T1 Oxford Shoe"})
+        assert prod_res.status_code == 200
+        t1_prod_id = prod_res.json()["id"]
+
+        cli_res = client1.post("/api/v1/sales/clients", json={"code": "T1-CLI-REF", "name": "T1 Wholesale Emporium"})
+        assert cli_res.status_code == 200
+        t1_cli_id = cli_res.json()["id"]
+
+    # Step 2: Tenant 2 attempts to use Tenant 1 IDs
+    with TestClient(app, cookies={COOKIE_NAME: t2_token}) as client2:
+        # Cross-tenant purchase attempt
+        bad_purchase = client2.post("/api/v1/purchase/purchases", json={
+            "supplier_id": t1_sup_id,
+            "raw_material_id": t1_mat_id,
+            "quantity": 50.0,
+            "unit_price": 200.0,
+            "purchase_date_ad": "2026-10-05",
+            "purchase_date_bs": "2083-06-19"
+        })
+        assert bad_purchase.status_code == 404, f"Expected 404 on cross-tenant purchase, got {bad_purchase.status_code}"
+
+        # Cross-tenant production batch attempt
+        bad_batch = client2.post("/api/v1/production/batches", json={
+            "batch_number": "T2-BATCH-IDOR",
+            "product_id": t1_prod_id,
+            "target_quantity": 20.0,
+            "produced_quantity": 20.0,
+            "worker_count": 2,
+            "date_ad": "2026-10-05",
+            "date_bs": "2083-06-19"
+        })
+        assert bad_batch.status_code == 404, f"Expected 404 on cross-tenant batch, got {bad_batch.status_code}"
+
+        # Cross-tenant sales order attempt
+        bad_order = client2.post("/api/v1/sales/orders", json={
+            "order_number": "T2-ORD-IDOR",
+            "client_id": t1_cli_id,
+            "order_date_ad": "2026-10-05",
+            "order_date_bs": "2083-06-19",
+            "items": [{"product_id": t1_prod_id, "quantity": 5.0, "unit_price": 1000.0}]
+        })
+        assert bad_order.status_code == 404, f"Expected 404 on cross-tenant sales order, got {bad_order.status_code}"
+
+
+def test_boundary_integers_and_negative_quantities(setup_audit_env):
+    """
+    Verifies that Pydantic input validation strictly rejects boundary integers,
+    negative quantities, negative rates, and out-of-range VAT percentages with
+    HTTP 422 Unprocessable Entity.
+    """
+    t1_token = setup_audit_env["tokens"]["t1_editor"]
+
+    with TestClient(app, cookies={COOKIE_NAME: t1_token}) as client:
+        # Negative purchase quantity
+        res1 = client.post("/api/v1/purchase/purchases", json={
+            "supplier_id": 1,
+            "raw_material_id": 1,
+            "quantity": -15.0,
+            "unit_price": 100.0,
+            "purchase_date_ad": "2026-10-05",
+            "purchase_date_bs": "2083-06-19"
+        })
+        assert res1.status_code == 422
+
+        # Negative batch quantity
+        res2 = client.post("/api/v1/production/batches", json={
+            "batch_number": "BATCH-NEG",
+            "product_id": 1,
+            "target_quantity": -5.0,
+            "produced_quantity": -5.0,
+            "worker_count": 0,  # Invalid worker count (must be >= 1)
+            "date_ad": "2026-10-05",
+            "date_bs": "2083-06-19"
+        })
+        assert res2.status_code == 422
+
+        # Negative sales item quantity & unit rate
+        res3 = client.post("/api/v1/sales/orders", json={
+            "order_number": "ORD-NEG",
+            "client_id": 1,
+            "order_date_ad": "2026-10-05",
+            "order_date_bs": "2083-06-19",
+            "items": [{"product_id": 1, "quantity": -2.0, "unit_price": -500.0}]
+        })
+        assert res3.status_code == 422
+
+        # Invalid VAT rate > 100%
+        res4 = client.post("/api/v1/invoices", json={
+            "sales_order_id": 1,
+            "vat_enabled": True,
+            "vat_rate": 150.0  # Invalid VAT rate
+        })
+        assert res4.status_code == 422
+
+        # String length overflow rejected by min/max_length validation
+        res5 = client.post("/api/v1/production/products", json={
+            "code": "A" * 60,  # Exceeds max 50 chars
+            "name": "B" * 200,  # Exceeds max 150 chars
+            "unit_price": 500.0
+        })
+        assert res5.status_code == 422
+

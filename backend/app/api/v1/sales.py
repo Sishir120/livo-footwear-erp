@@ -1,45 +1,45 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.api.deps import get_db, get_current_user, require_editor
 from app.models.user import User
 from app.models.sales import Client, SalesOrder, SalesItem, Payment
-from app.models.stock import StockMovement
+from app.models.stock import Product, StockMovement
 from app.db.repository import TenantRepository
 
 router = APIRouter(prefix="/sales", tags=["Sales & Invoicing"])
 
 class ClientCreate(BaseModel):
-    code: str
-    name: str
-    contact_person: Optional[str] = None
-    phone: Optional[str] = None
-    address: Optional[str] = None
-    credit_limit: float = 0.0
+    code: str = Field(..., min_length=1, max_length=50)
+    name: str = Field(..., min_length=1, max_length=150)
+    contact_person: Optional[str] = Field(None, max_length=150)
+    phone: Optional[str] = Field(None, max_length=50)
+    address: Optional[str] = Field(None, max_length=255)
+    credit_limit: float = Field(0.0, ge=0.0)
 
 class SalesItemCreate(BaseModel):
-    product_id: int
-    quantity: float
-    unit_price: float
+    product_id: int = Field(..., gt=0)
+    quantity: float = Field(..., gt=0)
+    unit_price: float = Field(..., ge=0.0)
 
 class SalesOrderCreate(BaseModel):
-    order_number: str
-    client_id: int
-    order_date_ad: str
-    order_date_bs: str
-    received_amount: float = 0.0
-    items: List[SalesItemCreate]
+    order_number: str = Field(..., min_length=1, max_length=50)
+    client_id: int = Field(..., gt=0)
+    order_date_ad: str = Field(..., max_length=20)
+    order_date_bs: str = Field(..., max_length=20)
+    received_amount: float = Field(0.0, ge=0.0)
+    items: List[SalesItemCreate] = Field(..., min_length=1)
     delivered: bool = True
 
 class PaymentCreate(BaseModel):
-    sales_order_id: int
-    client_id: int
-    amount: float
-    payment_date_ad: str
-    payment_date_bs: str
-    payment_method: str = "cash"
-    notes: Optional[str] = None
+    sales_order_id: int = Field(..., gt=0)
+    client_id: int = Field(..., gt=0)
+    amount: float = Field(..., gt=0)
+    payment_date_ad: str = Field(..., max_length=20)
+    payment_date_bs: str = Field(..., max_length=20)
+    payment_method: str = Field("cash", max_length=30)
+    notes: Optional[str] = Field(None, max_length=500)
 
 # Clients
 @router.get("/clients")
@@ -79,6 +79,17 @@ def list_orders(current_user: User = Depends(get_current_user), db: Session = De
 
 @router.post("/orders")
 def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(require_editor), db: Session = Depends(get_db)):
+    # Defensive check: ensure client belongs strictly to caller's company (Tenant Isolation / IDOR prevention)
+    client_repo = TenantRepository(Client, db, current_user.company_id)
+    if not client_repo.get_by_id(data.client_id):
+        raise HTTPException(status_code=404, detail="Client not found in current company")
+
+    # Defensive check: ensure each product belongs strictly to caller's company
+    product_repo = TenantRepository(Product, db, current_user.company_id)
+    for item in data.items:
+        if not product_repo.get_by_id(item.product_id):
+            raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found in current company")
+
     order_repo = TenantRepository(SalesOrder, db, current_user.company_id)
     item_repo = TenantRepository(SalesItem, db, current_user.company_id)
     movement_repo = TenantRepository(StockMovement, db, current_user.company_id)
@@ -129,12 +140,19 @@ def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(requ
 # Payments
 @router.post("/payments")
 def record_payment(data: PaymentCreate, current_user: User = Depends(require_editor), db: Session = Depends(get_db)):
-    payment_repo = TenantRepository(Payment, db, current_user.company_id)
     order_repo = TenantRepository(SalesOrder, db, current_user.company_id)
+    client_repo = TenantRepository(Client, db, current_user.company_id)
+    payment_repo = TenantRepository(Payment, db, current_user.company_id)
 
     order = order_repo.get_by_id(data.sales_order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Sales order not found")
+
+    if not client_repo.get_by_id(data.client_id):
+        raise HTTPException(status_code=404, detail="Client not found in current company")
+
+    if order.client_id != data.client_id:
+        raise HTTPException(status_code=400, detail="Client ID does not match sales order client")
 
     payment = payment_repo.create(**data.model_dump())
     

@@ -154,12 +154,12 @@ genuinely grow past this scale.
 ## Phase 4 Automated Security Audit, Dynamic Bundling & Stitch Ergonomics (2026-09-27)
 - **Verified Production Commit:** `d0e8254` ("feat(sec,perf): automated security audit suite, dynamic code-splitting, and high-density modal ergonomics").
 - **Security Audit & Defensive Hardening (`backend/tests/test_security_audit.py`):**
-  - All 25/25 unit, regression, and vulnerability tests pass cleanly (`pytest tests -v --tb=short`).
+  - All 27/27 unit, regression, and vulnerability tests pass cleanly (`pytest tests -v --tb=short`).
   - **RBAC Enforcement:** Viewer role strictly denied (`403 Forbidden`) on all mutating endpoints (`POST`, `PUT`, `PATCH`, `DELETE`) across purchases, production, stock movements, and sales.
   - **Unauthenticated Access:** Business routes reject requests without valid JWT (`401 Unauthorized`).
-  - **Tenant Isolation & IDOR Defense:** Verified Tenant 2 cannot access, mutate, or void records belonging to Tenant 1. `TenantRepository` isolates all operations strictly to `company_id`.
+  - **Tenant Isolation & IDOR Defense (Remediated):** Verified and patched mutating endpoints (`/purchase/purchases`, `/production/batches`, `/sales/orders`, `/sales/payments`) to ensure referenced foreign keys (`supplier_id`, `raw_material_id`, `product_id`, `client_id`) are verified to exist strictly within the authenticated caller's company. Cross-tenant references now return HTTP 404.
+  - **Boundary Integers & Fuzzing (Remediated):** Enforced Pydantic `Field(..., gt=0)` and `Field(..., ge=0)` on quantities, unit prices, worker counts, and VAT rates (0-100%). Negative quantities and rates strictly return HTTP 422 Unprocessable Entity. Added string length constraints to prevent memory exhaustion DoS.
   - **SQL Injection Defense:** SQLAlchemy parameterized bindings prevent `' OR '1'='1` and nested statement injection payloads.
-  - **Fuzz Testing:** Handles 50,000 character buffer overflow strings, type mismatches, and malformed JSON payloads gracefully (HTTP 422).
   - **Session & Transport:** Auth cookies retain `HttpOnly`, `SameSite=lax`. Sliding window rate limiter enforces HTTP 429 when threshold (30 rapid attempts) is exceeded.
   - **Nepal VAT Cancellation:** Authored statutory `POST /api/v1/invoices/{invoice_id}/cancel` endpoint (requires editor; sets `is_void = True` without deleting the row).
 - **Frontend Bundle Optimization:**

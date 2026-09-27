@@ -3,8 +3,8 @@ from typing import Optional
 from datetime import datetime
 
 class LoginRequest(BaseModel):
-    username: str = Field(..., json_schema_extra={"example": "editor_admin"})
-    password: str = Field(..., json_schema_extra={"example": "password123"})
+    username: str = Field(..., min_length=1, max_length=100, json_schema_extra={"example": "editor_admin"})
+    password: str = Field(..., min_length=1, max_length=100, json_schema_extra={"example": "password123"})
 
 class UserResponse(BaseModel):
     id: int

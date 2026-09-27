@@ -78,7 +78,7 @@ feature work on infrastructure that hasn't proven it works end-to-end.
 
 ## Phase 4 — Internal QA (before the client sees anything)
 **Status: In progress (Security Audit & Dynamic Splitting Complete)** | Target: Day 9–10
-- [x] Unit & Regression tests green: stock-movement math, sequential invoice numbering per company, RBAC rejection, tenant isolation / IDOR, SQL injection, negative fuzz testing, cookie flags & rate limiter (25/25 passing in `backend/tests/`)
+- [x] Unit & Regression tests green: stock-movement math, sequential invoice numbering per company, RBAC rejection, tenant isolation & foreign key IDOR cross-reference defense, SQL injection, boundary integers / negative quantities, negative fuzz testing, cookie flags & rate limiter (27/27 passing in `backend/tests/`)
 - [x] Frontend performance optimized: dynamic imports with skeleton states (`next/dynamic`), First Load JS reduced to 98.1 kB (Route size down to 10.6 kB)
 - [x] Enterprise UX ergonomics: high-density modal drawers (`modal-drawer`), focus ring accessibility (`:focus-visible`), and pagination for large datasets
 - [ ] Error boundaries confirmed working (force a screen to throw, verify the rest of the app survives)

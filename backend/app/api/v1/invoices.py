@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.api.deps import get_db, get_current_user, require_editor
 from app.models.user import User
 from app.models.company import Company
@@ -14,9 +14,9 @@ from app.db.repository import TenantRepository
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
 
 class InvoiceCreate(BaseModel):
-    sales_order_id: int
+    sales_order_id: int = Field(..., gt=0)
     vat_enabled: bool = False
-    vat_rate: float = 13.0
+    vat_rate: float = Field(13.0, ge=0.0, le=100.0)
 
 @router.get("")
 def list_invoices(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
