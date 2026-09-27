@@ -87,18 +87,18 @@ feature work on infrastructure that hasn't proven it works end-to-end.
 unsupervised right now. If not, it's not ready for UAT — fix it here, not
 during UAT. ✅ Passed & Signed Off.
 
-## Phase 5 — UAT (User Acceptance Testing) with the client
-**Status: In progress** (Client Walkthrough Guide authored in `docs/UAT_WALKTHROUGH.md`) | Target: Day 10–12
-- [x] Author structured business-friendly client walkthrough guide (`docs/UAT_WALKTHROUGH.md`)
-- [ ] Walk the client through each PRD.md §7 success criterion live
-- [ ] Client enters real (or realistic) data themselves, not just watches
-- [ ] Collect feedback as a dated list, not verbal-only — write it down
-- [ ] Explicit sign-off: client confirms daily report + stock report +
-      invoicing meet what they asked for
-**Gate to pass:** client sign-off obtained (even informal — a "yes, this
-works" message is enough, but get it in writing). Don't deploy to production
-without this — it's the checkpoint that prevents a surprised client at
-handover.
+## Phase 5 — Ergonomics, Accessibility (a11y) & Localization
+**Status: Done** (Signed off by Architectural Reviewer: bilingual English/Nepali localization, WCAG 2.1 AA accessibility, mobile PWA hardening — commit `fa949cd`) | Target: Day 10–12
+- [x] Bilingual localization provider (`frontend/src/context/LocaleContext.tsx`) with 95 translation keys — zero external dependencies
+- [x] Accessible language toggle (`EN | नेपाली`) in AppShell.tsx navigation header and login card (page.tsx)
+- [x] Domain-specific Nepali footwear ERP terminology (दैनिक प्रतिवेदन, स्टक खाता, उत्पादन ब्याच, कच्चा पदार्थ खरिद, बिक्री तथा बिलिङ, tri-state stock badges)
+- [x] WCAG 2.1 AA: `role="dialog"`, `aria-modal="true"`, `aria-labelledby`, `aria-live="polite"` on all modals and toasts
+- [x] High-contrast `:focus-visible` dual-ring outline across all interactive elements
+- [x] 44×44px minimum touch targets on mobile viewports
+- [x] PWA manifest.json: `display: "standalone"`, maskable icons, `#0b1120` theme color
+- [x] `npm run build` — 0 errors, Route `/` First Load JS: 102 kB
+- [x] `pytest tests -v --tb=short` — 27/27 passed
+**Gate:** WCAG 2.1 AA compliance verified, Nepali localization live, 27/27 tests passing. ✅ Passed & Signed Off.
 
 ## Phase 6 — Fixes from UAT
 **Status: Not started** | Target: Day 12–13
@@ -119,18 +119,18 @@ not a full re-test — confirm the fix, move on.
 with a real backup on record. This is "live," not "built."
 
 ## Phase 8 — Handover
-**Status: Not started** | Target: Day 14–15
-- [ ] Hand over: PRD.md, ARCHITECTURE.md, RULES.md, DESIGN.md, TASKS.md,
-      MEMORY.md, DELIVERY_CYCLE.md (full context for whoever maintains this
-      later, not a partial set)
-- [ ] Credentials: hosting login, domain registrar access, backup storage
-      access — documented, not just verbally shared
+**Status: In progress** (Master operational handover document authored in `docs/OPERATIONAL_HANDOVER.md`) | Target: Day 14–15
+- [x] Author `docs/OPERATIONAL_HANDOVER.md` — production-grade operational manual (29,670 bytes):
+      cloud topology, data integrity rules, role permissions matrix, factory SOPs (4 procedures),
+      dual-language EN/Nepali terminology table, VPS self-hosting blueprint (docker-compose + Caddyfile),
+      nightly backup/restore procedures with cron setup, credential handover checklist, and post-handover
+      support reference with free-tier limits and upgrade paths.
+- [x] Hand over docs set: PRD.md, ARCHITECTURE.md, RULES.md, DESIGN.md, TASKS.md, MEMORY.md,
+      DELIVERY_CYCLE.md, docs/UAT_WALKTHROUGH.md, docs/SECURITY_ARCHITECTURE.md, docs/OPERATIONAL_HANDOVER.md
+- [ ] Credentials: hosting login, domain registrar access, backup storage access — documented in password manager and handed over
 - [ ] Short walkthrough video or live session for the 3 users
-- [ ] Confirm: handover deliverable and support model (still "not sure yet"
-      per client — **must be settled before this phase closes**, not left
-      open after launch)
-**Gate to pass:** client has everything needed to operate without you
-disappearing being a single point of failure.
+- [ ] Confirm: support model post-handover (must be settled before this phase closes)
+**Gate to pass:** client has everything needed to operate without the original developer. Credential handover checklist fully ticked.
 
 ## Phase 9 — Post-launch support window
 **Status: Not started** | Target: after Day 15

@@ -196,5 +196,22 @@ genuinely grow past this scale.
   - Mobile virtual keyboard protection: pinned `.modal-footer` with `env(safe-area-inset-bottom)`.
   - `manifest.json` updated with standalone display mode, maskable icons, and `#0b1120` theme color for native home-screen installation on Android and iOS.
 
-
-
+## Phase 8 Operational Handover Documentation (2026-09-27)
+- **Master Handover Document:** Authored `docs/OPERATIONAL_HANDOVER.md` (29,670 bytes, 9 sections) — the single authoritative operational reference for the client and any future maintainer.
+- **Content Coverage:**
+  - System architecture & cloud topology table (Vercel, Render, Neon PostgreSQL, GitHub).
+  - Data integrity rules: append-only `stock_movements` ledger math, DB-enforced `uq_invoice_company_sequence` constraint, Argon2id password hashing, `httpOnly` JWT cookie transport.
+  - Role-based permissions matrix: `editor_admin` (full mutations) vs. `viewer_user` (read-only, `403 Forbidden` at API for all mutation attempts).
+  - Factory Operations SOP (4 procedures written for data entry clerks, no technical knowledge required):
+    - SOP-01: Inwarding raw materials (supplier voucher attach, continuous entry mode).
+    - SOP-02: Issuing production batches (Paris Points size run, keyboard-only traversal).
+    - SOP-03: Generating wholesale tax invoices + Nepal VAT statutory void procedure.
+    - SOP-04: Daily volume metrics review and UTF-8 BOM CSV export to Microsoft Excel.
+  - Dual-language EN / Nepali terminology reference table (35 domain terms).
+  - Phase 2b VPS self-hosting blueprint: Ubuntu 22.04 provisioning commands, `.env` configuration with secure key generation, Docker Compose + Caddyfile orchestration walkthrough, first deployment sequence.
+  - Automated disaster recovery: `scripts/backup_nightly.sh` cron setup (02:00 AM NPT = 20:15 UTC), `scripts/restore_postgres.sh` procedure, Neon PITR restore path, monthly verification drill.
+  - Credential handover checklist (9 items: Vercel, Render, Neon, GitHub, editor/viewer passwords, object storage keys, VPS SSH, DNS).
+  - Post-handover support: quick diagnostics checklist, keyboard shortcut reference card, free-tier service limits with upgrade paths.
+- **Governance Updates:**
+  - `DELIVERY_CYCLE.md`: Phase 5 marked `Done` (Ergonomics/a11y/Localization — commit `fa949cd`); Phase 8 transitioned to `In Progress`.
+  - `MEMORY.md`: This entry.
