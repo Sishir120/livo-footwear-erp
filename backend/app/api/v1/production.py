@@ -27,7 +27,7 @@ class ProductionBatchCreate(BaseModel):
     batch_number: str = Field(..., min_length=1, max_length=50)
     product_id: int = Field(..., gt=0)
     target_quantity: float = Field(..., gt=0)
-    produced_quantity: float = Field(..., ge=0)
+    produced_quantity: float = Field(..., gt=0)  # [M-01 FIX] Must be > 0; zero-pair batches are semantically invalid
     worker_count: int = Field(1, ge=1)
     date_ad: str = Field(..., max_length=20)
     date_bs: str = Field(..., max_length=20)

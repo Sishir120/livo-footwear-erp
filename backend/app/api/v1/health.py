@@ -21,7 +21,7 @@ def health_check(db: Session = Depends(get_db)):
         db_status = f"unhealthy: {str(e)}"
 
     return {
-        "status": "ok" if db_status == "healthy" else "degraded",
+        "status": "healthy" if db_status == "healthy" else "degraded",  # [L-03 FIX] Harmonized to 'healthy'
         "version": settings.VERSION,
         "database": db_status,
         "app_name": settings.PROJECT_NAME

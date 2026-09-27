@@ -179,7 +179,7 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
                 onClick={() => setLocale("en")}
                 aria-label="Switch to English"
                 style={{
-                  padding: "4px 10px",
+                  padding: "8px 14px",
                   fontSize: "12px",
                   fontWeight: "600",
                   borderRadius: "4px",
@@ -197,7 +197,7 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
                 onClick={() => setLocale("ne")}
                 aria-label="नेपाली भाषामा बदल्नुहोस्"
                 style={{
-                  padding: "4px 10px",
+                  padding: "8px 14px",
                   fontSize: "12px",
                   fontWeight: "600",
                   borderRadius: "4px",

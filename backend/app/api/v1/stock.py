@@ -29,22 +29,35 @@ def get_stock_balance(
     """
     Returns current stock balance per product derived from SUM(direction * quantity)
     in the stock_movements ledger as mandated by RULES.md §1.
+    [H-01 FIX] Uses a single GROUP BY aggregation instead of N+1 per-product queries.
     """
+    from sqlalchemy import case
+
     product_repo = TenantRepository(Product, db, current_user.company_id)
     products = product_repo.get_all()
-    
+
     if category:
         products = [p for p in products if p.category and p.category.lower() == category.lower()]
 
+    if not products:
+        return []
+
+    product_ids = [p.id for p in products]
+
+    # Single GROUP BY query replaces the previous N+1 loop
+    balance_rows = db.query(
+        StockMovement.product_id,
+        func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), 0.0).label("balance")
+    ).filter(
+        StockMovement.company_id == current_user.company_id,
+        StockMovement.product_id.in_(product_ids)
+    ).group_by(StockMovement.product_id).all()
+
+    balance_map = {row.product_id: float(row.balance) for row in balance_rows}
+
     balance_results = []
     for prod in products:
-        qty = db.query(
-            func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), 0.0)
-        ).filter(
-            StockMovement.company_id == current_user.company_id,
-            StockMovement.product_id == prod.id
-        ).scalar()
-
+        qty = balance_map.get(prod.id, 0.0)
         balance_results.append({
             "product_id": prod.id,
             "code": prod.code,
@@ -53,8 +66,9 @@ def get_stock_balance(
             "size": prod.size,
             "color": prod.color,
             "unit_price": prod.unit_price,
-            "current_stock_pairs": float(qty),
-            "pending_stock": float(qty) if float(qty) > 0 else 0.0
+            "current_stock_pairs": qty,
+            "pending_stock": qty if qty > 0 else 0.0
         })
 
     return balance_results
+
