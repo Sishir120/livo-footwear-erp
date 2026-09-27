@@ -13,7 +13,8 @@ import {
   CreditCard,
   DollarSign,
   AlertTriangle,
-  Receipt
+  Receipt,
+  Ban
 } from "lucide-react";
 import { exportToCSV } from "../utils/csvExport";
 
@@ -269,6 +270,23 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
     return filteredOrders.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredOrders, orderPage]);
 
+  // Nepal VAT Statutory Void Action
+  const handleCancelInvoice = async (invoiceId: number) => {
+    if (!confirm("Are you sure you want to void this invoice under Nepal VAT statutory rules? This action cannot be undone.")) return;
+    try {
+      const res = await fetch(`/api/v1/invoices/${invoiceId}/cancel`, { method: "POST" });
+      if (res.ok) {
+        alert("Invoice marked as VOID successfully.");
+        loadData();
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Failed to cancel invoice");
+      }
+    } catch (e) {
+      alert("Network error cancelling invoice");
+    }
+  };
+
   // CSV Exporters
   const handleExportInvoices = () => {
     if (!filteredInvoices.length) return;
@@ -444,9 +462,14 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                   {paginatedInvoices.map((inv) => {
                     const client = getClientByOrderId(inv.sales_order_id);
                     return (
-                      <tr key={inv.id}>
-                        <td style={{ fontWeight: "700", color: "#3b82f6" }} className="num-mono">
+                      <tr key={inv.id} style={{ opacity: inv.is_void ? 0.75 : 1 }}>
+                        <td style={{ fontWeight: "700", color: inv.is_void ? "#94a3b8" : "#3b82f6", textDecoration: inv.is_void ? "line-through" : "none" }} className="num-mono">
                           {inv.invoice_number}
+                          {inv.is_void && (
+                            <span style={{ marginLeft: "6px", fontSize: "10px", color: "#f43f5e", background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: "3px", padding: "1px 4px", textDecoration: "none", display: "inline-block" }}>
+                              VOID
+                            </span>
+                          )}
                         </td>
                         <td style={{ fontWeight: "600" }}>
                           {client ? (
@@ -477,14 +500,26 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                           Rs. {inv.receivable_amount?.toLocaleString()}
                         </td>
                         <td style={{ textAlign: "center" }}>
-                          <button
-                            className="btn-secondary"
-                            style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px" }}
-                            onClick={() => openPrintableInvoice(inv.id)}
-                            title="Open printable tax invoice"
-                          >
-                            <Printer size={12} /> Tax Invoice
-                          </button>
+                          <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
+                            <button
+                              className="btn-secondary"
+                              style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px" }}
+                              onClick={() => openPrintableInvoice(inv.id)}
+                              title="Open printable tax invoice"
+                            >
+                              <Printer size={12} /> Tax Invoice
+                            </button>
+                            {userRole === "editor" && !inv.is_void && (
+                              <button
+                                className="btn-secondary"
+                                style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px", color: "#f43f5e", borderColor: "rgba(244,63,94,0.3)" }}
+                                onClick={() => handleCancelInvoice(inv.id)}
+                                title="Void invoice per Nepal statutory VAT rules"
+                              >
+                                <Ban size={12} /> Void
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );

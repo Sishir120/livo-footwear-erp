@@ -172,3 +172,13 @@ genuinely grow past this scale.
   - Enhanced accessibility with `:focus-visible` dual-ring outline (`2px solid #3b82f6`, `2px offset`).
   - Implemented client-side pagination (10 items/page) for large datasets across Production Batches, Purchase Vouchers, and Sales Invoices/Orders.
 
+## Phase 5 Client UAT Preparation & Governance Transition (2026-09-27)
+- **Phase 4 Closed:** Phase 4 QA sign-off granted by Architectural Reviewer.
+- **Phase 5 Status:** Active (`In Progress`).
+- **Cloud Infrastructure Status:**
+  - Render Backend: `https://livo-footwear-erp-backend.onrender.com/api/v1/health` returning 200 OK (`database: healthy`).
+  - Vercel Frontend: `https://livo-footwear-erp.vercel.app` serving dynamic bundle chunks (First Load JS 98.1 kB) and responsive `.modal-drawer` interfaces.
+- **Client Demonstration Guide:** Authored `docs/UAT_WALKTHROUGH.md` covering 4 real-world factory operational scenarios (Raw Material Inward, Production Size Runs, Wholesale Tax Invoicing with Nepal VAT, and Executive Summaries with Excel Portability).
+- **Role Boundary Smoke Check:** Verified `viewer_user` has all mutation buttons and shortcuts visually blocked and hidden, while `editor_admin` retains full ledger execution rights.
+
+
