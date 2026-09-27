@@ -188,6 +188,16 @@ export function ProductionView({ userRole }: { userRole?: string }) {
     });
   }, [batches, products, searchQuery, productFilter]);
 
+  // Pagination for 100+ entities
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+  const totalPages = Math.ceil(filteredBatches.length / ITEMS_PER_PAGE) || 1;
+
+  const paginatedBatches = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredBatches.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredBatches, currentPage]);
+
   // CSV Exporter
   const handleExportCSV = () => {
     if (!filteredBatches.length) return;
@@ -318,7 +328,7 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                 </tr>
               </thead>
               <tbody>
-                {filteredBatches.map((b) => {
+                {paginatedBatches.map((b) => {
                   const p = getProduct(b.product_id);
                   return (
                     <tr key={b.id}>
@@ -363,18 +373,45 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                 })}
               </tbody>
             </table>
+
+            {filteredBatches.length > ITEMS_PER_PAGE && (
+              <div className="pagination-bar">
+                <span>
+                  Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredBatches.length)} of {filteredBatches.length} production batches
+                </span>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <button
+                    className="pagination-btn"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </button>
+                  <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    className="pagination-btn"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Modal Form with Sequential Keyboard Traversal */}
+      {/* Modal Drawer Form with Sequential Keyboard Traversal */}
       {showModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: "16px" }}>
-          <div className="glass-card" style={{ width: "100%", maxWidth: "520px", padding: "24px", background: "#131d33", border: "1px solid rgba(255,255,255,0.15)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+        <div className="modal-overlay">
+          <div className="modal-drawer">
+            <div className="modal-header">
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Factory size={20} color="#10b981" />
-                <h3 style={{ fontSize: "17px", fontWeight: "700", color: "#f8fafc" }}>
+                <Factory size={18} color="#10b981" />
+                <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#f8fafc" }}>
                   Record Finished Production Batch
                 </h3>
               </div>
@@ -383,132 +420,134 @@ export function ProductionView({ userRole }: { userRole?: string }) {
               </button>
             </div>
 
-            {/* Success Feedback Alert for Continuous Entry */}
-            {successFeedback && (
-              <div style={{ background: "rgba(16, 185, 129, 0.15)", border: "1px solid #10b981", borderRadius: "6px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", color: "#6ee7b7", fontSize: "13px", fontWeight: "600" }}>
-                <CheckCircle2 size={16} />
-                <span>{successFeedback}</span>
-              </div>
-            )}
+            <form onSubmit={(e) => handleCreateBatch(e, false)} onKeyDown={handleFormKeyDown} style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+              <div className="modal-body">
+                {/* Success Feedback Alert for Continuous Entry */}
+                {successFeedback && (
+                  <div style={{ background: "rgba(16, 185, 129, 0.15)", border: "1px solid #10b981", borderRadius: "6px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", color: "#6ee7b7", fontSize: "13px", fontWeight: "600" }}>
+                    <CheckCircle2 size={16} />
+                    <span>{successFeedback}</span>
+                  </div>
+                )}
 
-            <form onSubmit={(e) => handleCreateBatch(e, false)} onKeyDown={handleFormKeyDown} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(15, 23, 42, 0.5)", padding: "8px 12px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.08)" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#e2e8f0", cursor: "pointer", userSelect: "none" }}>
-                  <input
-                    type="checkbox"
-                    checked={continuousMode}
-                    onChange={(e) => setContinuousMode(e.target.checked)}
-                    style={{ accentColor: "#10b981", cursor: "pointer" }}
-                  />
-                  <span>Continuous Rapid Entry Mode</span>
-                </label>
-                <span style={{ fontSize: "11px", color: "#64748b" }}>
-                  Keeps form open for back-to-back entries
-                </span>
-              </div>
-
-              <div>
-                <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Batch Number</label>
-                <input
-                  ref={batchNumRef}
-                  type="text"
-                  className="input-field num-mono"
-                  value={batchNumber}
-                  onChange={(e) => setBatchNumber(e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(e, productSelectRef)}
-                  required
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Footwear Model SKU</label>
-                <select
-                  ref={productSelectRef}
-                  className="input-field"
-                  value={productId}
-                  onChange={(e) => setProductId(e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(e, targetQtyRef)}
-                  required
-                >
-                  <option value="">-- Select Finished Shoe SKU --</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.code} - {p.name} (Size: {p.size}, {p.color})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Target Pairs</label>
-                  <input
-                    ref={targetQtyRef}
-                    type="number"
-                    className="input-field num-mono"
-                    placeholder="e.g. 50"
-                    value={targetQty}
-                    onChange={(e) => setTargetQty(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, producedQtyRef)}
-                  />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(15, 23, 42, 0.5)", padding: "8px 12px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#e2e8f0", cursor: "pointer", userSelect: "none" }}>
+                    <input
+                      type="checkbox"
+                      checked={continuousMode}
+                      onChange={(e) => setContinuousMode(e.target.checked)}
+                      style={{ accentColor: "#10b981", cursor: "pointer" }}
+                    />
+                    <span>Continuous Rapid Entry Mode</span>
+                  </label>
+                  <span style={{ fontSize: "11px", color: "#64748b" }}>
+                    Keeps form open for back-to-back entries
+                  </span>
                 </div>
-                <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Actual Produced Pairs</label>
-                  <input
-                    ref={producedQtyRef}
-                    type="number"
-                    className="input-field num-mono"
-                    placeholder="e.g. 50"
-                    value={producedQty}
-                    onChange={(e) => setProducedQty(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, workerCountRef)}
-                    required
-                  />
-                </div>
-              </div>
 
-              <div>
-                <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Active Worker Count</label>
-                <input
-                  ref={workerCountRef}
-                  type="number"
-                  className="input-field num-mono"
-                  placeholder="e.g. 4"
-                  value={workerCount}
-                  onChange={(e) => setWorkerCount(e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(e, dateAdRef)}
-                  required
-                />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                 <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Production Date (AD)</label>
+                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Batch Number</label>
                   <input
-                    ref={dateAdRef}
-                    type="date"
-                    className="input-field"
-                    value={dateAd}
-                    onChange={(e) => setDateAd(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, dateBsRef)}
-                    required
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Production Date (BS)</label>
-                  <input
-                    ref={dateBsRef}
+                    ref={batchNumRef}
                     type="text"
-                    className="input-field"
-                    value={dateBs}
-                    onChange={(e) => setDateBs(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, submitBtnRef)}
+                    className="input-field num-mono"
+                    value={batchNumber}
+                    onChange={(e) => setBatchNumber(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, productSelectRef)}
                     required
                   />
                 </div>
+
+                <div>
+                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Footwear Model SKU</label>
+                  <select
+                    ref={productSelectRef}
+                    className="input-field"
+                    value={productId}
+                    onChange={(e) => setProductId(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, targetQtyRef)}
+                    required
+                  >
+                    <option value="">-- Select Finished Shoe SKU --</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.code} - {p.name} (Size: {p.size}, {p.color})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Target Pairs</label>
+                    <input
+                      ref={targetQtyRef}
+                      type="number"
+                      className="input-field num-mono"
+                      placeholder="e.g. 50"
+                      value={targetQty}
+                      onChange={(e) => setTargetQty(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, producedQtyRef)}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Actual Produced Pairs</label>
+                    <input
+                      ref={producedQtyRef}
+                      type="number"
+                      className="input-field num-mono"
+                      placeholder="e.g. 50"
+                      value={producedQty}
+                      onChange={(e) => setProducedQty(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, workerCountRef)}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Active Worker Count</label>
+                  <input
+                    ref={workerCountRef}
+                    type="number"
+                    className="input-field num-mono"
+                    placeholder="e.g. 4"
+                    value={workerCount}
+                    onChange={(e) => setWorkerCount(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, dateAdRef)}
+                    required
+                  />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Production Date (AD)</label>
+                    <input
+                      ref={dateAdRef}
+                      type="date"
+                      className="input-field"
+                      value={dateAd}
+                      onChange={(e) => setDateAd(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, dateBsRef)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Production Date (BS)</label>
+                    <input
+                      ref={dateBsRef}
+                      type="text"
+                      className="input-field"
+                      value={dateBs}
+                      onChange={(e) => setDateBs(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, submitBtnRef)}
+                      required
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px", flexWrap: "wrap", gap: "10px" }}>
+              <div className="modal-footer">
                 <span style={{ fontSize: "11px", color: "#64748b" }}>
                   <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "2px 5px", borderRadius: "3px" }}>Esc</kbd> close • <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "2px 5px", borderRadius: "3px" }}>Ctrl+Enter</kbd> quick commit
                 </span>

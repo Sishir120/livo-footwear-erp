@@ -237,6 +237,16 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
     });
   }, [purchases, suppliers, materials, searchQuery, supplierFilter]);
 
+  // Pagination for large dataset (~100+ entities)
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+  const totalPages = Math.ceil(filteredPurchases.length / ITEMS_PER_PAGE) || 1;
+
+  const paginatedPurchases = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredPurchases.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredPurchases, currentPage]);
+
   // CSV Exporter
   const handleExportCSV = () => {
     if (!filteredPurchases.length) return;
@@ -360,7 +370,7 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
                 </tr>
               </thead>
               <tbody>
-                {filteredPurchases.map((p) => {
+                {paginatedPurchases.map((p) => {
                   const sup = getSupplier(p.supplier_id);
                   const mat = getMaterial(p.raw_material_id);
                   const hasBill = p.notes && p.notes.includes("Attached Bill:");
@@ -434,18 +444,45 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
                 })}
               </tbody>
             </table>
+
+            {filteredPurchases.length > ITEMS_PER_PAGE && (
+              <div className="pagination-bar">
+                <span>
+                  Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredPurchases.length)} of {filteredPurchases.length} purchases
+                </span>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <button
+                    className="pagination-btn"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </button>
+                  <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    className="pagination-btn"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* New Purchase Modal with Keyboard Traversal & Bill Attachment */}
+      {/* New Purchase Modal Drawer with Keyboard Traversal & Bill Attachment */}
       {showModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: "16px" }}>
-          <div className="glass-card" style={{ width: "100%", maxWidth: "540px", padding: "24px", background: "#131d33", border: "1px solid rgba(255,255,255,0.15)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+        <div className="modal-overlay">
+          <div className="modal-drawer">
+            <div className="modal-header">
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Truck size={20} color="#3b82f6" />
-                <h3 style={{ fontSize: "17px", fontWeight: "700", color: "#f8fafc" }}>Record Raw Material Purchase</h3>
+                <Truck size={18} color="#3b82f6" />
+                <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#f8fafc" }}>Record Raw Material Purchase</h3>
               </div>
               <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}>
                 <X size={18} />
@@ -460,202 +497,204 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
               </div>
             )}
 
-            <form onSubmit={(e) => handleCreatePurchase(e, false)} onKeyDown={handleFormKeyDown} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px", background: "rgba(15, 23, 42, 0.5)", padding: "10px 12px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.08)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#e2e8f0", cursor: "pointer", userSelect: "none" }}>
-                    <input
-                      type="checkbox"
-                      checked={continuousMode}
-                      onChange={(e) => setContinuousMode(e.target.checked)}
-                      style={{ accentColor: "#3b82f6", cursor: "pointer" }}
-                    />
-                    <span>Continuous Rapid Inward Mode</span>
-                  </label>
-                  <span style={{ fontSize: "11px", color: "#64748b" }}>
-                    Rapid material procurement entry
-                  </span>
-                </div>
-
-                {continuousMode && (
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "#94a3b8", cursor: "pointer", userSelect: "none", marginLeft: "22px" }}>
-                    <input
-                      type="checkbox"
-                      checked={keepSupplier}
-                      onChange={(e) => setKeepSupplier(e.target.checked)}
-                      style={{ accentColor: "#3b82f6", cursor: "pointer" }}
-                    />
-                    <span>Retain selected supplier for multi-material shipment</span>
-                  </label>
-                )}
-              </div>
-
-              <div>
-                <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Supplier / Vendor</label>
-                <select
-                  ref={supplierRef}
-                  className="input-field"
-                  value={supplierId}
-                  onChange={(e) => setSupplierId(e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(e, materialRef)}
-                  required
-                >
-                  <option value="">-- Select Supplier --</option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.code}) - {s.category || "Supplier"}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Raw Material Item</label>
-                <select
-                  ref={materialRef}
-                  className="input-field"
-                  value={materialId}
-                  onChange={(e) => setMaterialId(e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(e, quantityRef)}
-                  required
-                >
-                  <option value="">-- Select Raw Material --</option>
-                  {materials.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} ({m.unit})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Quantity</label>
-                  <input
-                    ref={quantityRef}
-                    type="number"
-                    step="0.1"
-                    className="input-field num-mono"
-                    placeholder="e.g. 100"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, unitPriceRef)}
-                    required
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Unit Rate (Rs.)</label>
-                  <input
-                    ref={unitPriceRef}
-                    type="number"
-                    step="0.1"
-                    className="input-field num-mono"
-                    placeholder="e.g. 450"
-                    value={unitPrice}
-                    onChange={(e) => setUnitPrice(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, dateAdRef)}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Purchase Date (AD)</label>
-                  <input
-                    ref={dateAdRef}
-                    type="date"
-                    className="input-field"
-                    value={dateAd}
-                    onChange={(e) => setDateAd(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, dateBsRef)}
-                    required
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Purchase Date (BS)</label>
-                  <input
-                    ref={dateBsRef}
-                    type="text"
-                    className="input-field"
-                    value={dateBs}
-                    onChange={(e) => setDateBs(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, submitButtonRef)}
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Vendor Bill / Receipt Attachment Component */}
-              <div>
-                <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <Paperclip size={13} /> Supplier Physical Bill / Receipt (Photo or PDF)
-                </label>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileUpload}
-                  accept="image/*,.pdf"
-                  style={{ display: "none" }}
-                />
-
-                {!attachedFile ? (
-                  <div
-                    className="attachment-dropzone"
-                    onClick={() => fileInputRef.current?.click()}
-                    style={{ marginTop: "6px" }}
-                  >
-                    <Upload size={20} color="#3b82f6" style={{ margin: "0 auto 6px" }} />
-                    <div style={{ fontSize: "13px", color: "#f8fafc", fontWeight: "600" }}>
-                      Click to upload physical vendor bill / voucher
-                    </div>
-                    <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
-                      PNG, JPG, or PDF up to 10MB for visual audit verification
-                    </div>
+            <form onSubmit={(e) => handleCreatePurchase(e, false)} onKeyDown={handleFormKeyDown} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+              <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px", background: "rgba(15, 23, 42, 0.5)", padding: "10px 12px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#e2e8f0", cursor: "pointer", userSelect: "none" }}>
+                      <input
+                        type="checkbox"
+                        checked={continuousMode}
+                        onChange={(e) => setContinuousMode(e.target.checked)}
+                        style={{ accentColor: "#3b82f6", cursor: "pointer" }}
+                      />
+                      <span>Continuous Rapid Inward Mode</span>
+                    </label>
+                    <span style={{ fontSize: "11px", color: "#64748b" }}>
+                      Rapid material procurement entry
+                    </span>
                   </div>
-                ) : (
-                  <div
-                    style={{
-                      marginTop: "6px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "8px 12px",
-                      background: "rgba(59, 130, 246, 0.1)",
-                      border: "1px solid rgba(59, 130, 246, 0.3)",
-                      borderRadius: "6px"
-                    }}
+
+                  {continuousMode && (
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "#94a3b8", cursor: "pointer", userSelect: "none", marginLeft: "22px" }}>
+                      <input
+                        type="checkbox"
+                        checked={keepSupplier}
+                        onChange={(e) => setKeepSupplier(e.target.checked)}
+                        style={{ accentColor: "#3b82f6", cursor: "pointer" }}
+                      />
+                      <span>Retain selected supplier for multi-material shipment</span>
+                    </label>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Supplier / Vendor</label>
+                  <select
+                    ref={supplierRef}
+                    className="input-field"
+                    value={supplierId}
+                    onChange={(e) => setSupplierId(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, materialRef)}
+                    required
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <ImageIcon size={16} color="#3b82f6" />
-                      <div>
-                        <div style={{ fontSize: "12px", fontWeight: "600", color: "#f8fafc" }}>{attachedFile.name}</div>
-                        <div style={{ fontSize: "10px", color: "#94a3b8" }}>{attachedFile.size} - Ready for audit archive</div>
+                    <option value="">-- Select Supplier --</option>
+                    {suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.code}) - {s.category || "Supplier"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Raw Material Item</label>
+                  <select
+                    ref={materialRef}
+                    className="input-field"
+                    value={materialId}
+                    onChange={(e) => setMaterialId(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, quantityRef)}
+                    required
+                  >
+                    <option value="">-- Select Raw Material --</option>
+                    {materials.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.unit})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Quantity</label>
+                    <input
+                      ref={quantityRef}
+                      type="number"
+                      step="0.1"
+                      className="input-field num-mono"
+                      placeholder="e.g. 100"
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, unitPriceRef)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Unit Rate (Rs.)</label>
+                    <input
+                      ref={unitPriceRef}
+                      type="number"
+                      step="0.1"
+                      className="input-field num-mono"
+                      placeholder="e.g. 450"
+                      value={unitPrice}
+                      onChange={(e) => setUnitPrice(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, dateAdRef)}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Purchase Date (AD)</label>
+                    <input
+                      ref={dateAdRef}
+                      type="date"
+                      className="input-field"
+                      value={dateAd}
+                      onChange={(e) => setDateAd(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, dateBsRef)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Purchase Date (BS)</label>
+                    <input
+                      ref={dateBsRef}
+                      type="text"
+                      className="input-field"
+                      value={dateBs}
+                      onChange={(e) => setDateBs(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, submitButtonRef)}
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Vendor Bill / Receipt Attachment Component */}
+                <div>
+                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Paperclip size={13} /> Supplier Physical Bill / Receipt (Photo or PDF)
+                  </label>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    accept="image/*,.pdf"
+                    style={{ display: "none" }}
+                  />
+
+                  {!attachedFile ? (
+                    <div
+                      className="attachment-dropzone"
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{ marginTop: "6px" }}
+                    >
+                      <Upload size={20} color="#3b82f6" style={{ margin: "0 auto 6px" }} />
+                      <div style={{ fontSize: "13px", color: "#f8fafc", fontWeight: "600" }}>
+                        Click to upload physical vendor bill / voucher
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
+                        PNG, JPG, or PDF up to 10MB for visual audit verification
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setAttachedFile(null)}
-                      style={{ background: "none", border: "none", color: "#f43f5e", cursor: "pointer", padding: "4px" }}
+                  ) : (
+                    <div
+                      style={{
+                        marginTop: "6px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "8px 12px",
+                        background: "rgba(59, 130, 246, 0.1)",
+                        border: "1px solid rgba(59, 130, 246, 0.3)",
+                        borderRadius: "6px"
+                      }}
                     >
-                      <X size={16} />
-                    </button>
-                  </div>
-                )}
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <ImageIcon size={16} color="#3b82f6" />
+                        <div>
+                          <div style={{ fontSize: "12px", fontWeight: "600", color: "#f8fafc" }}>{attachedFile.name}</div>
+                          <div style={{ fontSize: "10px", color: "#94a3b8" }}>{attachedFile.size} - Ready for audit archive</div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAttachedFile(null)}
+                        style={{ background: "none", border: "none", color: "#f43f5e", cursor: "pointer", padding: "4px" }}
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Remarks / Gate Pass No.</label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="Optional gate entry or invoice serial reference"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                </div>
               </div>
 
-              <div>
-                <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Remarks / Gate Pass No.</label>
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder="Optional gate entry or invoice serial reference"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px", flexWrap: "wrap", gap: "10px" }}>
+              <div className="modal-footer">
                 <span style={{ fontSize: "11px", color: "#64748b" }}>
                   <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "2px 5px", borderRadius: "3px" }}>Esc</kbd> close • <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "2px 5px", borderRadius: "3px" }}>Ctrl+Enter</kbd> quick commit
                 </span>

@@ -252,6 +252,23 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
     });
   }, [orders, clients, searchQuery]);
 
+  // Pagination for large dataset (~100+ entities)
+  const [invoicePage, setInvoicePage] = useState(1);
+  const [orderPage, setOrderPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
+  const totalInvoicePages = Math.ceil(filteredInvoices.length / ITEMS_PER_PAGE) || 1;
+  const paginatedInvoices = useMemo(() => {
+    const start = (invoicePage - 1) * ITEMS_PER_PAGE;
+    return filteredInvoices.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredInvoices, invoicePage]);
+
+  const totalOrderPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE) || 1;
+  const paginatedOrders = useMemo(() => {
+    const start = (orderPage - 1) * ITEMS_PER_PAGE;
+    return filteredOrders.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredOrders, orderPage]);
+
   // CSV Exporters
   const handleExportInvoices = () => {
     if (!filteredInvoices.length) return;
@@ -424,7 +441,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredInvoices.map((inv) => {
+                  {paginatedInvoices.map((inv) => {
                     const client = getClientByOrderId(inv.sales_order_id);
                     return (
                       <tr key={inv.id}>
@@ -474,6 +491,33 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                   })}
                 </tbody>
               </table>
+
+              {filteredInvoices.length > ITEMS_PER_PAGE && (
+                <div className="pagination-bar">
+                  <span>
+                    Showing {(invoicePage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(invoicePage * ITEMS_PER_PAGE, filteredInvoices.length)} of {filteredInvoices.length} invoices
+                  </span>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <button
+                      className="pagination-btn"
+                      onClick={() => setInvoicePage((p) => Math.max(1, p - 1))}
+                      disabled={invoicePage === 1}
+                    >
+                      Previous
+                    </button>
+                    <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                      Page {invoicePage} of {totalInvoicePages}
+                    </span>
+                    <button
+                      className="pagination-btn"
+                      onClick={() => setInvoicePage((p) => Math.min(totalInvoicePages, p + 1))}
+                      disabled={invoicePage === totalInvoicePages}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )
         ) : (
@@ -497,7 +541,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredOrders.map((o) => {
+                  {paginatedOrders.map((o) => {
                     const client = getClientById(o.client_id);
                     return (
                       <tr key={o.id}>
@@ -542,19 +586,46 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                   })}
                 </tbody>
               </table>
+
+              {filteredOrders.length > ITEMS_PER_PAGE && (
+                <div className="pagination-bar">
+                  <span>
+                    Showing {(orderPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(orderPage * ITEMS_PER_PAGE, filteredOrders.length)} of {filteredOrders.length} sales orders
+                  </span>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <button
+                      className="pagination-btn"
+                      onClick={() => setOrderPage((p) => Math.max(1, p - 1))}
+                      disabled={orderPage === 1}
+                    >
+                      Previous
+                    </button>
+                    <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                      Page {orderPage} of {totalOrderPages}
+                    </span>
+                    <button
+                      className="pagination-btn"
+                      onClick={() => setOrderPage((p) => Math.min(totalOrderPages, p + 1))}
+                      disabled={orderPage === totalOrderPages}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )
         )}
       </div>
 
-      {/* Record Sale Modal with Sequential Keyboard Navigation */}
+      {/* Record Sale Modal Drawer with Sequential Keyboard Navigation */}
       {showOrderModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: "16px" }}>
-          <div className="glass-card" style={{ width: "100%", maxWidth: "520px", padding: "24px", background: "#131d33", border: "1px solid rgba(255,255,255,0.15)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+        <div className="modal-overlay">
+          <div className="modal-drawer">
+            <div className="modal-header">
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <ShoppingBag size={20} color="#3b82f6" />
-                <h3 style={{ fontSize: "17px", fontWeight: "700", color: "#f8fafc" }}>
+                <ShoppingBag size={18} color="#3b82f6" />
+                <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#f8fafc" }}>
                   Record Footwear Sale & Issue Invoice
                 </h3>
               </div>
@@ -563,150 +634,152 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
               </button>
             </div>
 
-            {/* Success Feedback Toast for Continuous Entry */}
-            {successFeedback && (
-              <div style={{ background: "rgba(59, 130, 246, 0.15)", border: "1px solid #3b82f6", borderRadius: "6px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", color: "#93c5fd", fontSize: "13px", fontWeight: "600" }}>
-                <CheckCircle2 size={16} />
-                <span>{successFeedback}</span>
-              </div>
-            )}
-
-            <form onSubmit={(e) => handleCreateOrder(e, false)} onKeyDown={handleFormKeyDown} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px", background: "rgba(15, 23, 42, 0.5)", padding: "10px 12px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.08)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#e2e8f0", cursor: "pointer", userSelect: "none" }}>
-                    <input
-                      type="checkbox"
-                      checked={continuousMode}
-                      onChange={(e) => setContinuousMode(e.target.checked)}
-                      style={{ accentColor: "#3b82f6", cursor: "pointer" }}
-                    />
-                    <span>Continuous Rapid Entry Mode</span>
-                  </label>
-                  <span style={{ fontSize: "11px", color: "#64748b" }}>
-                    Hands-free rapid sales logging
-                  </span>
-                </div>
-
-                {continuousMode && (
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "#94a3b8", cursor: "pointer", userSelect: "none", marginLeft: "22px" }}>
-                    <input
-                      type="checkbox"
-                      checked={keepClient}
-                      onChange={(e) => setKeepClient(e.target.checked)}
-                      style={{ accentColor: "#3b82f6", cursor: "pointer" }}
-                    />
-                    <span>Retain selected client for multiple item orders</span>
-                  </label>
+            <form onSubmit={(e) => handleCreateOrder(e, false)} onKeyDown={handleFormKeyDown} style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+              <div className="modal-body">
+                {/* Success Feedback Toast for Continuous Entry */}
+                {successFeedback && (
+                  <div style={{ background: "rgba(59, 130, 246, 0.15)", border: "1px solid #3b82f6", borderRadius: "6px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", color: "#93c5fd", fontSize: "13px", fontWeight: "600" }}>
+                    <CheckCircle2 size={16} />
+                    <span>{successFeedback}</span>
+                  </div>
                 )}
-              </div>
 
-              <div>
-                <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Client / Customer</label>
-                <select
-                  ref={clientRef}
-                  className="input-field"
-                  value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(e, productRef)}
-                  required
-                >
-                  <option value="">-- Select Client / Distributor --</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.code}) - PAN: {c.pan_number || "N/A"}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px", background: "rgba(15, 23, 42, 0.5)", padding: "10px 12px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#e2e8f0", cursor: "pointer", userSelect: "none" }}>
+                      <input
+                        type="checkbox"
+                        checked={continuousMode}
+                        onChange={(e) => setContinuousMode(e.target.checked)}
+                        style={{ accentColor: "#3b82f6", cursor: "pointer" }}
+                      />
+                      <span>Continuous Rapid Entry Mode</span>
+                    </label>
+                    <span style={{ fontSize: "11px", color: "#64748b" }}>
+                      Hands-free rapid sales logging
+                    </span>
+                  </div>
 
-              <div>
-                <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Footwear SKU</label>
-                <select
-                  ref={productRef}
-                  className="input-field"
-                  value={productId}
-                  onChange={(e) => handleProductChange(e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(e, quantityRef)}
-                  required
-                >
-                  <option value="">-- Select Product Item --</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.code} - {p.name} (Wholesale: Rs. {p.unit_price})
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  {continuousMode && (
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "#94a3b8", cursor: "pointer", userSelect: "none", marginLeft: "22px" }}>
+                      <input
+                        type="checkbox"
+                        checked={keepClient}
+                        onChange={(e) => setKeepClient(e.target.checked)}
+                        style={{ accentColor: "#3b82f6", cursor: "pointer" }}
+                      />
+                      <span>Retain selected client for multiple item orders</span>
+                    </label>
+                  )}
+                </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                 <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Quantity (Pairs)</label>
+                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Client / Customer</label>
+                  <select
+                    ref={clientRef}
+                    className="input-field"
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, productRef)}
+                    required
+                  >
+                    <option value="">-- Select Client / Distributor --</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.code}) - PAN: {c.pan_number || "N/A"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Footwear SKU</label>
+                  <select
+                    ref={productRef}
+                    className="input-field"
+                    value={productId}
+                    onChange={(e) => handleProductChange(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, quantityRef)}
+                    required
+                  >
+                    <option value="">-- Select Product Item --</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.code} - {p.name} (Wholesale: Rs. {p.unit_price})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Quantity (Pairs)</label>
+                    <input
+                      ref={quantityRef}
+                      type="number"
+                      className="input-field num-mono"
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, unitPriceRef)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Wholesale Unit Rate (Rs.)</label>
+                    <input
+                      ref={unitPriceRef}
+                      type="number"
+                      className="input-field num-mono"
+                      value={unitPrice}
+                      onChange={(e) => setUnitPrice(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, receivedAmountRef)}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Initial Cash Received (Rs.)</label>
                   <input
-                    ref={quantityRef}
+                    ref={receivedAmountRef}
                     type="number"
                     className="input-field num-mono"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, unitPriceRef)}
+                    value={receivedAmount}
+                    onChange={(e) => setReceivedAmount(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, orderDateAdRef)}
                     required
                   />
                 </div>
-                <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Wholesale Unit Rate (Rs.)</label>
-                  <input
-                    ref={unitPriceRef}
-                    type="number"
-                    className="input-field num-mono"
-                    value={unitPrice}
-                    onChange={(e) => setUnitPrice(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, receivedAmountRef)}
-                    required
-                  />
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Order Date (AD)</label>
+                    <input
+                      ref={orderDateAdRef}
+                      type="date"
+                      className="input-field"
+                      value={orderDateAd}
+                      onChange={(e) => setOrderDateAd(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, orderDateBsRef)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Order Date (BS)</label>
+                    <input
+                      ref={orderDateBsRef}
+                      type="text"
+                      className="input-field"
+                      value={orderDateBs}
+                      onChange={(e) => setOrderDateBs(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, submitButtonRef)}
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Initial Cash Received (Rs.)</label>
-                <input
-                  ref={receivedAmountRef}
-                  type="number"
-                  className="input-field num-mono"
-                  value={receivedAmount}
-                  onChange={(e) => setReceivedAmount(e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(e, orderDateAdRef)}
-                  required
-                />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Order Date (AD)</label>
-                  <input
-                    ref={orderDateAdRef}
-                    type="date"
-                    className="input-field"
-                    value={orderDateAd}
-                    onChange={(e) => setOrderDateAd(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, orderDateBsRef)}
-                    required
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Order Date (BS)</label>
-                  <input
-                    ref={orderDateBsRef}
-                    type="text"
-                    className="input-field"
-                    value={orderDateBs}
-                    onChange={(e) => setOrderDateBs(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, submitButtonRef)}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px", flexWrap: "wrap", gap: "10px" }}>
+              <div className="modal-footer">
                 <span style={{ fontSize: "11px", color: "#64748b" }}>
                   <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "2px 5px", borderRadius: "3px" }}>Esc</kbd> close • <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "2px 5px", borderRadius: "3px" }}>Ctrl+Enter</kbd> quick commit
                 </span>

@@ -1,18 +1,43 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { AppShell } from "@/components/AppShell";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { DailyReportView } from "@/components/DailyReportView";
-import { StockReportView } from "@/components/StockReportView";
-// NOTE: TallyPrimeView removed from Phase 1 — not client-requested, not in scope.
-// Archived at: frontend/_unscoped/tally-export/TallyPrimeView.tsx
-import { PurchaseView } from "@/components/PurchaseView";
-import { ProductionView } from "@/components/ProductionView";
-import { SalesInvoiceView } from "@/components/SalesInvoiceView";
-import { SettingsView } from "@/components/SettingsView";
+import { SkeletonLoader } from "@/components/SkeletonLoader";
 import { Building2, Lock, UserCheck, ShieldAlert, Info, Shield, FileText } from "lucide-react";
 import { LegalModal } from "@/components/LegalModal";
+
+// Dynamic Code-Splitting: Defer heavy views (e.g. recharts) until authenticated navigation
+const DailyReportView = dynamic(
+  () => import("@/components/DailyReportView").then((mod) => mod.DailyReportView),
+  { loading: () => <SkeletonLoader title="Loading Daily Analytics..." type="dashboard" />, ssr: false }
+);
+
+const StockReportView = dynamic(
+  () => import("@/components/StockReportView").then((mod) => mod.StockReportView),
+  { loading: () => <SkeletonLoader title="Loading Stock Ledger..." type="dashboard" />, ssr: false }
+);
+
+const SalesInvoiceView = dynamic(
+  () => import("@/components/SalesInvoiceView").then((mod) => mod.SalesInvoiceView),
+  { loading: () => <SkeletonLoader title="Loading Sales & Invoicing..." type="table" />, ssr: false }
+);
+
+const ProductionView = dynamic(
+  () => import("@/components/ProductionView").then((mod) => mod.ProductionView),
+  { loading: () => <SkeletonLoader title="Loading Production Batches..." type="table" />, ssr: false }
+);
+
+const PurchaseView = dynamic(
+  () => import("@/components/PurchaseView").then((mod) => mod.PurchaseView),
+  { loading: () => <SkeletonLoader title="Loading Purchase & Materials..." type="table" />, ssr: false }
+);
+
+const SettingsView = dynamic(
+  () => import("@/components/SettingsView").then((mod) => mod.SettingsView),
+  { loading: () => <SkeletonLoader title="Loading System Settings..." type="form" />, ssr: false }
+);
 
 export default function Home() {
   const [user, setUser] = useState<any>(null);

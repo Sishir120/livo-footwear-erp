@@ -75,6 +75,23 @@ def generate_invoice(data: InvoiceCreate, current_user: User = Depends(require_e
                 )
 
 
+@router.post("/{invoice_id}/cancel")
+def cancel_invoice(invoice_id: int, current_user: User = Depends(require_editor), db: Session = Depends(get_db)):
+    """
+    Voids an invoice adhering to Nepal statutory VAT rules (RULES.md §2).
+    The record is NEVER physically deleted, preserving the sequence and audit trail.
+    """
+    invoice_repo = TenantRepository(Invoice, db, current_user.company_id)
+    invoice = invoice_repo.get_by_id(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    invoice.is_void = True
+    db.commit()
+    db.refresh(invoice)
+    return {"message": "Invoice successfully marked as void", "id": invoice.id, "invoice_number": invoice.invoice_number, "is_void": True}
+
+
 @router.get("/{invoice_id}/printable", response_class=HTMLResponse)
 def get_printable_invoice(invoice_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
