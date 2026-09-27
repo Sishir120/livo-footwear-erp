@@ -37,6 +37,9 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
   const [dateBs, setDateBs] = useState("2083-06-09");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [continuousMode, setContinuousMode] = useState(true);
+  const [keepSupplier, setKeepSupplier] = useState(true);
+  const [successFeedback, setSuccessFeedback] = useState("");
 
   // Vendor Bill Attachment State
   const [attachedFile, setAttachedFile] = useState<{ name: string; size: string; previewUrl: string } | null>(null);
@@ -57,6 +60,39 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Global Keyboard Shortcuts (Alt+N to Open Modal, Escape to Close)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const activeTag = document.activeElement?.tagName || "";
+      const isInputActive = ["INPUT", "SELECT", "TEXTAREA"].includes(activeTag);
+
+      if ((e.altKey && e.key.toLowerCase() === "n") || (!isInputActive && e.key.toLowerCase() === "n")) {
+        if (userRole === "editor") {
+          e.preventDefault();
+          setShowModal(true);
+        }
+      } else if (e.key === "Escape" && showModal) {
+        e.preventDefault();
+        setShowModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [showModal, userRole]);
+
+  // Auto-focus appropriate field when modal opens
+  useEffect(() => {
+    if (showModal) {
+      setTimeout(() => {
+        if (keepSupplier && supplierId) {
+          materialRef.current?.focus();
+        } else {
+          supplierRef.current?.focus();
+        }
+      }, 50);
+    }
+  }, [showModal]);
 
   const loadData = async () => {
     setLoading(true);
@@ -97,7 +133,14 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
     }
   };
 
-  const handleCreatePurchase = async (e: React.FormEvent) => {
+  const handleFormKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      handleCreatePurchase(e as any, false);
+    }
+  };
+
+  const handleCreatePurchase = async (e: React.FormEvent, forceClose = false) => {
     e.preventDefault();
     if (!supplierId || !materialId || !quantity || !unitPrice) return;
 
@@ -121,12 +164,38 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
         })
       });
       if (res.ok) {
-        setShowModal(false);
-        setQuantity("");
-        setUnitPrice("");
-        setNotes("");
-        setAttachedFile(null);
         loadData();
+        const mat = getMaterial(parseInt(materialId));
+        const matName = mat?.name || "Raw Material";
+
+        if (forceClose || !continuousMode) {
+          setShowModal(false);
+          setQuantity("");
+          setUnitPrice("");
+          setNotes("");
+          setAttachedFile(null);
+        } else {
+          // Continuous Mode: Retain supplier and date, reset material/quantity
+          setSuccessFeedback(`✓ ${matName} (${quantity} units) logged to ledger! Ready for next inward.`);
+          setTimeout(() => setSuccessFeedback(""), 3500);
+
+          if (!keepSupplier) {
+            setSupplierId("");
+          }
+          setMaterialId("");
+          setQuantity("");
+          setUnitPrice("");
+          setNotes("");
+          setAttachedFile(null);
+
+          setTimeout(() => {
+            if (keepSupplier && supplierId) {
+              materialRef.current?.focus();
+            } else {
+              supplierRef.current?.focus();
+            }
+          }, 60);
+        }
       } else {
         const err = await res.json();
         alert(err.detail || "Error creating purchase record");
@@ -214,8 +283,8 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
         </div>
 
         {userRole === "editor" && (
-          <button className="btn-primary" onClick={() => setShowModal(true)}>
-            <PlusCircle size={16} /> Record New Purchase
+          <button className="btn-primary" onClick={() => setShowModal(true)} title="Shortcut: Alt+N or press 'N' on table">
+            <PlusCircle size={16} /> Record New Purchase <span style={{ fontSize: "11px", opacity: 0.85, marginLeft: "4px", background: "rgba(255,255,255,0.2)", padding: "1px 5px", borderRadius: "3px" }}>Alt+N</span>
           </button>
         )}
       </div>
@@ -383,7 +452,44 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
               </button>
             </div>
 
-            <form onSubmit={handleCreatePurchase} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            {/* Success Feedback Alert for Continuous Entry */}
+            {successFeedback && (
+              <div style={{ background: "rgba(59, 130, 246, 0.15)", border: "1px solid #3b82f6", borderRadius: "6px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", color: "#93c5fd", fontSize: "13px", fontWeight: "600" }}>
+                <CheckCircle2 size={16} />
+                <span>{successFeedback}</span>
+              </div>
+            )}
+
+            <form onSubmit={(e) => handleCreatePurchase(e, false)} onKeyDown={handleFormKeyDown} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px", background: "rgba(15, 23, 42, 0.5)", padding: "10px 12px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#e2e8f0", cursor: "pointer", userSelect: "none" }}>
+                    <input
+                      type="checkbox"
+                      checked={continuousMode}
+                      onChange={(e) => setContinuousMode(e.target.checked)}
+                      style={{ accentColor: "#3b82f6", cursor: "pointer" }}
+                    />
+                    <span>Continuous Rapid Inward Mode</span>
+                  </label>
+                  <span style={{ fontSize: "11px", color: "#64748b" }}>
+                    Rapid material procurement entry
+                  </span>
+                </div>
+
+                {continuousMode && (
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "#94a3b8", cursor: "pointer", userSelect: "none", marginLeft: "22px" }}>
+                    <input
+                      type="checkbox"
+                      checked={keepSupplier}
+                      onChange={(e) => setKeepSupplier(e.target.checked)}
+                      style={{ accentColor: "#3b82f6", cursor: "pointer" }}
+                    />
+                    <span>Retain selected supplier for multi-material shipment</span>
+                  </label>
+                )}
+              </div>
+
               <div>
                 <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Supplier / Vendor</label>
                 <select
@@ -393,7 +499,6 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
                   onChange={(e) => setSupplierId(e.target.value)}
                   onKeyDown={(e) => handleKeyDown(e, materialRef)}
                   required
-                  autoFocus
                 >
                   <option value="">-- Select Supplier --</option>
                   {suppliers.map((s) => (
@@ -550,13 +655,24 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
                 />
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
-                <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>
-                  Cancel
-                </button>
-                <button ref={submitButtonRef} type="submit" className="btn-primary" disabled={submitting}>
-                  {submitting ? "Writing to Ledger..." : "Commit Purchase"}
-                </button>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px", flexWrap: "wrap", gap: "10px" }}>
+                <span style={{ fontSize: "11px", color: "#64748b" }}>
+                  <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "2px 5px", borderRadius: "3px" }}>Esc</kbd> close • <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "2px 5px", borderRadius: "3px" }}>Ctrl+Enter</kbd> quick commit
+                </span>
+
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>
+                    Close
+                  </button>
+                  {continuousMode && (
+                    <button type="button" className="btn-secondary" onClick={(e) => handleCreatePurchase(e, true)} disabled={submitting}>
+                      Commit & Close
+                    </button>
+                  )}
+                  <button ref={submitButtonRef} type="submit" className="btn-primary" disabled={submitting}>
+                    {submitting ? "Writing to Ledger..." : continuousMode ? "Commit & Next Purchase ↵" : "Commit Purchase"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

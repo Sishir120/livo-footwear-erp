@@ -32,6 +32,8 @@ export function ProductionView({ userRole }: { userRole?: string }) {
   const [dateAd, setDateAd] = useState(new Date().toISOString().split("T")[0]);
   const [dateBs, setDateBs] = useState("2083-06-09");
   const [submitting, setSubmitting] = useState(false);
+  const [continuousMode, setContinuousMode] = useState(true);
+  const [successFeedback, setSuccessFeedback] = useState("");
 
   // Field Refs for Sequential Keyboard Navigation
   const batchNumRef = useRef<HTMLInputElement>(null);
@@ -46,6 +48,39 @@ export function ProductionView({ userRole }: { userRole?: string }) {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Global Keyboard Shortcuts (Alt+N to Open Modal, Escape to Close)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const activeTag = document.activeElement?.tagName || "";
+      const isInputActive = ["INPUT", "SELECT", "TEXTAREA"].includes(activeTag);
+
+      if ((e.altKey && e.key.toLowerCase() === "n") || (!isInputActive && e.key.toLowerCase() === "n")) {
+        if (userRole === "editor") {
+          e.preventDefault();
+          setShowModal(true);
+        }
+      } else if (e.key === "Escape" && showModal) {
+        e.preventDefault();
+        setShowModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [showModal, userRole]);
+
+  // Auto-focus first field when modal opens
+  useEffect(() => {
+    if (showModal) {
+      setTimeout(() => {
+        if (productId) {
+          targetQtyRef.current?.focus();
+        } else {
+          productSelectRef.current?.focus();
+        }
+      }, 50);
+    }
+  }, [showModal]);
 
   const loadData = async () => {
     setLoading(true);
@@ -74,7 +109,14 @@ export function ProductionView({ userRole }: { userRole?: string }) {
     }
   };
 
-  const handleCreateBatch = async (e: React.FormEvent) => {
+  const handleFormKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      handleCreateBatch(e as any, false);
+    }
+  };
+
+  const handleCreateBatch = async (e: React.FormEvent, forceClose = false) => {
     e.preventDefault();
     if (!productId || !producedQty) return;
 
@@ -95,11 +137,26 @@ export function ProductionView({ userRole }: { userRole?: string }) {
       });
 
       if (res.ok) {
-        setShowModal(false);
-        setProducedQty("");
-        setTargetQty("");
-        setBatchNumber(`BATCH-${Date.now().toString().slice(-4)}`);
+        const savedBatch = batchNumber;
         loadData();
+        if (forceClose || !continuousMode) {
+          setShowModal(false);
+          setProducedQty("");
+          setTargetQty("");
+          setProductId("");
+          setBatchNumber(`BATCH-${Date.now().toString().slice(-4)}`);
+        } else {
+          // Continuous Entry Mode: maintain worker count and date, clear entry, advance batch
+          setSuccessFeedback(`✓ ${savedBatch} committed to ledger! Ready for next batch.`);
+          setTimeout(() => setSuccessFeedback(""), 3500);
+          setProducedQty("");
+          setTargetQty("");
+          setProductId("");
+          setBatchNumber(`BATCH-${Date.now().toString().slice(-4)}`);
+          setTimeout(() => {
+            productSelectRef.current?.focus();
+          }, 60);
+        }
       } else {
         const err = await res.json();
         alert(err.detail || "Failed to record production batch");
@@ -182,8 +239,8 @@ export function ProductionView({ userRole }: { userRole?: string }) {
         </div>
 
         {userRole === "editor" && (
-          <button className="btn-primary" onClick={() => setShowModal(true)}>
-            <PlusCircle size={16} /> Record Finished Batch
+          <button className="btn-primary" onClick={() => setShowModal(true)} title="Shortcut: Alt+N or press 'N' on table">
+            <PlusCircle size={16} /> Record Finished Batch <span style={{ fontSize: "11px", opacity: 0.85, marginLeft: "4px", background: "rgba(255,255,255,0.2)", padding: "1px 5px", borderRadius: "3px" }}>Alt+N</span>
           </button>
         )}
       </div>
@@ -326,7 +383,30 @@ export function ProductionView({ userRole }: { userRole?: string }) {
               </button>
             </div>
 
-            <form onSubmit={handleCreateBatch} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            {/* Success Feedback Alert for Continuous Entry */}
+            {successFeedback && (
+              <div style={{ background: "rgba(16, 185, 129, 0.15)", border: "1px solid #10b981", borderRadius: "6px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", color: "#6ee7b7", fontSize: "13px", fontWeight: "600" }}>
+                <CheckCircle2 size={16} />
+                <span>{successFeedback}</span>
+              </div>
+            )}
+
+            <form onSubmit={(e) => handleCreateBatch(e, false)} onKeyDown={handleFormKeyDown} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(15, 23, 42, 0.5)", padding: "8px 12px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#e2e8f0", cursor: "pointer", userSelect: "none" }}>
+                  <input
+                    type="checkbox"
+                    checked={continuousMode}
+                    onChange={(e) => setContinuousMode(e.target.checked)}
+                    style={{ accentColor: "#10b981", cursor: "pointer" }}
+                  />
+                  <span>Continuous Rapid Entry Mode</span>
+                </label>
+                <span style={{ fontSize: "11px", color: "#64748b" }}>
+                  Keeps form open for back-to-back entries
+                </span>
+              </div>
+
               <div>
                 <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Batch Number</label>
                 <input
@@ -337,7 +417,6 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                   onChange={(e) => setBatchNumber(e.target.value)}
                   onKeyDown={(e) => handleKeyDown(e, productSelectRef)}
                   required
-                  autoFocus
                 />
               </div>
 
@@ -429,13 +508,24 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                 </div>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
-                <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>
-                  Cancel
-                </button>
-                <button ref={submitBtnRef} type="submit" className="btn-primary" disabled={submitting}>
-                  {submitting ? "Writing to Stock Ledger..." : "Commit Batch"}
-                </button>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px", flexWrap: "wrap", gap: "10px" }}>
+                <span style={{ fontSize: "11px", color: "#64748b" }}>
+                  <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "2px 5px", borderRadius: "3px" }}>Esc</kbd> close • <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "2px 5px", borderRadius: "3px" }}>Ctrl+Enter</kbd> quick commit
+                </span>
+
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>
+                    Close
+                  </button>
+                  {continuousMode && (
+                    <button type="button" className="btn-secondary" onClick={(e) => handleCreateBatch(e, true)} disabled={submitting}>
+                      Commit & Close
+                    </button>
+                  )}
+                  <button ref={submitBtnRef} type="submit" className="btn-primary" disabled={submitting}>
+                    {submitting ? "Writing to Stock Ledger..." : continuousMode ? "Commit & Next Batch ↵" : "Commit Batch"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

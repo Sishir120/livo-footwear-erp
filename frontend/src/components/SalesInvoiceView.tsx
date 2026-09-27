@@ -36,6 +36,9 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
   const [orderDateAd, setOrderDateAd] = useState(new Date().toISOString().split("T")[0]);
   const [orderDateBs, setOrderDateBs] = useState("2083-06-09");
   const [submitting, setSubmitting] = useState(false);
+  const [continuousMode, setContinuousMode] = useState(true);
+  const [keepClient, setKeepClient] = useState(true);
+  const [successFeedback, setSuccessFeedback] = useState("");
 
   // Field Refs for Sequential Keyboard Traversal
   const clientRef = useRef<HTMLSelectElement>(null);
@@ -50,6 +53,39 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Global Keyboard Shortcuts (Alt+N to Open Modal, Escape to Close)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const activeTag = document.activeElement?.tagName || "";
+      const isInputActive = ["INPUT", "SELECT", "TEXTAREA"].includes(activeTag);
+
+      if ((e.altKey && e.key.toLowerCase() === "n") || (!isInputActive && e.key.toLowerCase() === "n")) {
+        if (userRole === "editor") {
+          e.preventDefault();
+          setShowOrderModal(true);
+        }
+      } else if (e.key === "Escape" && showOrderModal) {
+        e.preventDefault();
+        setShowOrderModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [showOrderModal, userRole]);
+
+  // Auto-focus appropriate field when modal opens
+  useEffect(() => {
+    if (showOrderModal) {
+      setTimeout(() => {
+        if (keepClient && clientId) {
+          productRef.current?.focus();
+        } else {
+          clientRef.current?.focus();
+        }
+      }, 50);
+    }
+  }, [showOrderModal]);
 
   const loadData = async () => {
     setLoading(true);
@@ -96,7 +132,14 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
     }
   };
 
-  const handleCreateOrder = async (e: React.FormEvent) => {
+  const handleFormKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      handleCreateOrder(e as any, false);
+    }
+  };
+
+  const handleCreateOrder = async (e: React.FormEvent, forceClose = false) => {
     e.preventDefault();
     if (!clientId || !productId || !quantity) return;
 
@@ -126,14 +169,42 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
       if (res.ok) {
         const order = await res.json();
         // Generate Invoice for the order automatically
-        await fetch("/api/v1/invoices", {
+        const invRes = await fetch("/api/v1/invoices", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sales_order_id: order.id, vat_enabled: false })
         });
-
-        setShowOrderModal(false);
+        const invData = invRes.ok ? await invRes.json() : null;
         loadData();
+
+        if (forceClose || !continuousMode) {
+          setShowOrderModal(false);
+          setProductId("");
+          setQuantity("10");
+          setUnitPrice("");
+          setReceivedAmount("0");
+        } else {
+          // Continuous Mode: Keep modal open, reset product/quantities, retain client if selected
+          const invMsg = invData?.invoice_number ? ` (Invoice #${invData.invoice_number})` : "";
+          setSuccessFeedback(`✓ Order ${orderNum}${invMsg} issued! Ready for next sale.`);
+          setTimeout(() => setSuccessFeedback(""), 3500);
+
+          if (!keepClient) {
+            setClientId("");
+          }
+          setProductId("");
+          setQuantity("10");
+          setUnitPrice("");
+          setReceivedAmount("0");
+
+          setTimeout(() => {
+            if (keepClient && clientId) {
+              productRef.current?.focus();
+            } else {
+              clientRef.current?.focus();
+            }
+          }, 60);
+        }
       } else {
         const err = await res.json();
         alert(err.detail || "Failed to create sales order");
@@ -258,8 +329,8 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
         </div>
 
         {userRole === "editor" && (
-          <button className="btn-primary" onClick={() => setShowOrderModal(true)}>
-            <PlusCircle size={16} /> Record Sale & Issue Invoice
+          <button className="btn-primary" onClick={() => setShowOrderModal(true)} title="Shortcut: Alt+N or press 'N' on table">
+            <PlusCircle size={16} /> Record Sale & Issue Invoice <span style={{ fontSize: "11px", opacity: 0.85, marginLeft: "4px", background: "rgba(255,255,255,0.2)", padding: "1px 5px", borderRadius: "3px" }}>Alt+N</span>
           </button>
         )}
       </div>
@@ -492,7 +563,44 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
               </button>
             </div>
 
-            <form onSubmit={handleCreateOrder} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            {/* Success Feedback Toast for Continuous Entry */}
+            {successFeedback && (
+              <div style={{ background: "rgba(59, 130, 246, 0.15)", border: "1px solid #3b82f6", borderRadius: "6px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", color: "#93c5fd", fontSize: "13px", fontWeight: "600" }}>
+                <CheckCircle2 size={16} />
+                <span>{successFeedback}</span>
+              </div>
+            )}
+
+            <form onSubmit={(e) => handleCreateOrder(e, false)} onKeyDown={handleFormKeyDown} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px", background: "rgba(15, 23, 42, 0.5)", padding: "10px 12px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#e2e8f0", cursor: "pointer", userSelect: "none" }}>
+                    <input
+                      type="checkbox"
+                      checked={continuousMode}
+                      onChange={(e) => setContinuousMode(e.target.checked)}
+                      style={{ accentColor: "#3b82f6", cursor: "pointer" }}
+                    />
+                    <span>Continuous Rapid Entry Mode</span>
+                  </label>
+                  <span style={{ fontSize: "11px", color: "#64748b" }}>
+                    Hands-free rapid sales logging
+                  </span>
+                </div>
+
+                {continuousMode && (
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "#94a3b8", cursor: "pointer", userSelect: "none", marginLeft: "22px" }}>
+                    <input
+                      type="checkbox"
+                      checked={keepClient}
+                      onChange={(e) => setKeepClient(e.target.checked)}
+                      style={{ accentColor: "#3b82f6", cursor: "pointer" }}
+                    />
+                    <span>Retain selected client for multiple item orders</span>
+                  </label>
+                )}
+              </div>
+
               <div>
                 <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Client / Customer</label>
                 <select
@@ -502,7 +610,6 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                   onChange={(e) => setClientId(e.target.value)}
                   onKeyDown={(e) => handleKeyDown(e, productRef)}
                   required
-                  autoFocus
                 >
                   <option value="">-- Select Client / Distributor --</option>
                   {clients.map((c) => (
@@ -599,13 +706,24 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                 </div>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
-                <button type="button" className="btn-secondary" onClick={() => setShowOrderModal(false)}>
-                  Cancel
-                </button>
-                <button ref={submitButtonRef} type="submit" className="btn-primary" disabled={submitting}>
-                  {submitting ? "Writing to Ledger..." : "Save & Issue Invoice"}
-                </button>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px", flexWrap: "wrap", gap: "10px" }}>
+                <span style={{ fontSize: "11px", color: "#64748b" }}>
+                  <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "2px 5px", borderRadius: "3px" }}>Esc</kbd> close • <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "2px 5px", borderRadius: "3px" }}>Ctrl+Enter</kbd> quick commit
+                </span>
+
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button type="button" className="btn-secondary" onClick={() => setShowOrderModal(false)}>
+                    Close
+                  </button>
+                  {continuousMode && (
+                    <button type="button" className="btn-secondary" onClick={(e) => handleCreateOrder(e, true)} disabled={submitting}>
+                      Save & Close
+                    </button>
+                  )}
+                  <button ref={submitButtonRef} type="submit" className="btn-primary" disabled={submitting}>
+                    {submitting ? "Writing to Ledger..." : continuousMode ? "Save & Next Sale ↵" : "Save & Issue Invoice"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

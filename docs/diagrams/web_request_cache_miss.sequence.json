@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Web Request: Cache Miss & PostgreSQL Fallback Flow",
+    "quality_profile": "showcase",
+    "viewBox": [780, 680]
+  },
+  "participants": [
+    { "id": "browser", "type": "frontend", "label": "Browser", "sublabel": "client application" },
+    { "id": "api", "type": "backend", "label": "API Server", "sublabel": "HTTP service" },
+    { "id": "redis", "type": "database", "label": "Redis", "sublabel": "in-memory cache" },
+    { "id": "postgres", "type": "database", "label": "PostgreSQL", "sublabel": "primary persistent DB" }
+  ],
+  "segments": [
+    { "from": 140, "to": 290, "label": "Request & Cache Probe" },
+    { "from": 310, "to": 435, "label": "Cache Miss & DB Fallback" },
+    { "from": 455, "to": 615, "label": "Cache Population & Response" }
+  ],
+  "messages": [
+    { "from": "browser", "to": "api", "y": 180, "label": "GET /api/v1/resource/123", "variant": "emphasis" },
+    { "from": "api", "to": "redis", "y": 225, "label": "GET cache:resource:123", "variant": "default" },
+    { "from": "redis", "to": "api", "y": 268, "label": "nil (cache miss)", "variant": "return" },
+    { "from": "api", "to": "postgres", "y": 345, "label": "SELECT * FROM resources WHERE id = 123", "variant": "emphasis" },
+    { "from": "postgres", "to": "api", "y": 395, "label": "query result row", "variant": "return" },
+    { "from": "api", "to": "redis", "y": 480, "label": "SETEX cache:resource:123 3600 data", "variant": "dashed" },
+    { "from": "redis", "to": "api", "y": 520, "label": "OK (cached)", "variant": "return" },
+    { "from": "api", "to": "browser", "y": 575, "label": "200 OK (JSON payload)", "variant": "return" }
+  ],
+  "activations": [
+    { "participant": "browser", "from": 175, "to": 580, "type": "frontend" },
+    { "participant": "api", "from": 180, "to": 575, "type": "backend" },
+    { "participant": "redis", "from": 220, "to": 272, "type": "database" },
+    { "participant": "postgres", "from": 340, "to": 400, "type": "database" },
+    { "participant": "redis", "from": 475, "to": 525, "type": "database" }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Cache-Aside Pattern",
+      "items": [
+        "Browser triggers standard HTTP GET request to the API Server",
+        "API first queries Redis in-memory cache to avoid database read latency",
+        "Deterministic key format (`cache:resource:<id>`) isolates resource namespaces"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Cache Miss & Database Fallback",
+      "items": [
+        "Redis returns `nil`, signaling that data is not currently cached",
+        "API falls back to PostgreSQL primary database for the canonical row",
+        "Ensures consistent query execution and data integrity"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Cache Population & Client Response",
+      "items": [
+        "API populates Redis using `SETEX` with a bounded TTL (e.g., 3600s)",
+        "Subsequent requests within TTL serve directly from memory without hitting PostgreSQL",
+        "HTTP 200 OK response with JSON payload delivered to Browser"
+      ]
+    }
+  ]
+}
