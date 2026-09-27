@@ -40,7 +40,7 @@ confidence. Target: resolve within Day 1–2, or proceed on documented
 assumptions and accept possible rework.
 
 ## Phase 2a — Demo Deployment (Free Tier)
-**Status: Pass** (all checklist items completed, live links verified) | Target: Immediate
+**Status: Done** (Signed off with live HTTPS URLs, populated Neon PostgreSQL data, and verified cross-origin authentication) | Target: Immediate
 - [x] Connect to fresh Neon PostgreSQL project (project `green-wind-12533394`)
 - [x] Execute Alembic migrations on live Neon PostgreSQL (`002_invoice_uq (head)` verified)
 - [x] Run seed script against live Neon PostgreSQL (10 suppliers, 12 materials, 29 purchases, 11 products, 26 batches, 6 clients, 24 orders, 50 stock movements, 29 invoices verified)
@@ -49,7 +49,7 @@ assumptions and accept possible rework.
 - [x] Deploy backend to Render free tier using existing backend/Dockerfile (`https://livo-footwear-erp-backend.onrender.com` -- verified Live)
 - [x] Deploy frontend to Vercel free tier (`https://livo-footwear-erp.vercel.app` -- verified Live)
 - [x] Note: Object storage and backup automation explicitly out of scope for Phase 2a demo (deferred to Phase 2b)
-**Gate to pass:** live HTTPS URL (Vercel default domain), reachable from both desktop and phone browser, populated with sample data, all Build Stage 1 features (purchase, production, stock, sales/invoicing, daily/stock reports) clickable and working end-to-end. Render cold-start behavior flagged in report.
+**Gate to pass:** live HTTPS URL (Vercel default domain), reachable from both desktop and phone browser, populated with sample data, all Build Stage 1 features (purchase, production, stock, sales/invoicing, daily/stock reports) clickable and working end-to-end. Render cold-start behavior flagged in report. ✅ Passed & Signed Off.
 
 ## Phase 2b — Production Deployment (VPS)
 **Status: Blocked — Awaiting Client Cost Sign-off & Server Provisioning** | Target: Pre-Launch
@@ -66,7 +66,7 @@ a manual `pg_dump` backup + restore has been tested once. Don't start real
 feature work on infrastructure that hasn't proven it works end-to-end.
 
 ## Phase 3 — Core build (Phase 1 MVP per TASKS.md)
-**Status: Pending review — 1 item deferred to Phase 2 (documented)** | Target: Day 3–9
+**Status: Done** (Signed off; physical binary pg_dump deferred to Phase 2b container environment) | Target: Day 3–9
 
 - [x] Foundation: auth, roles, `company_id` tenant scoping, audit log, logging, exception handler (TASKS §1.1)
 - [x] Purchase module (TASKS §1.2)
@@ -74,10 +74,10 @@ feature work on infrastructure that hasn't proven it works end-to-end.
 - [x] Sales & Invoicing (TASKS §1.4)
 - [x] Reports: daily + stock (TASKS §1.5) — client's stated top priority
 - [x] Backup & historical data migration (TASKS §1.6)
-**Gate to pass:** every checkbox in TASKS.md Phase 1 §1.1–1.6 is done and demoable, on both a desktop and a mobile browser — including that passwords are hashed, the JWT is in an httpOnly cookie, and no business-table query skips the `company_id` filter (RULES.md §0, §4, §9). ✅ Phase Report generated at `docs/reports/phase-1-mvp-2026-09-25.md`.
+**Gate to pass:** every checkbox in TASKS.md Phase 1 §1.1–1.6 is done and demoable, on both a desktop and a mobile browser — including that passwords are hashed, the JWT is in an httpOnly cookie, and no business-table query skips the `company_id` filter (RULES.md §0, §4, §9). ✅ Passed & Signed Off.
 
 ## Phase 4 — Internal QA (before the client sees anything)
-**Status: Not started** | Target: Day 9–10
+**Status: In progress** | Target: Day 9–10
 - [ ] Unit tests green: stock-movement math, invoice numbering (RULES §6)
 - [ ] Error boundaries confirmed working (force a screen to throw, verify
       the rest of the app survives)

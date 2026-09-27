@@ -133,6 +133,20 @@ genuinely grow past this scale.
   - 10 suppliers, 12 materials, 29 purchases, 11 products, 26 batches, 6 clients, 24 orders, 50 stock movements, and 29 sequential immutable invoices (`INV-01-00001` through `INV-01-00029`).
 - **Dashboard Inspection:** Browser subagent confirmed Neon database is fully populated and healthy. Render environment `livofootwear` has 0 active web services, and Vercel has 0 projects for Livo ERP. Code needs to be pushed to GitHub to build the Web Service on Render and deploy the frontend on Vercel.
 
-
-
-
+## Phase 4 UI/UX Polish Sprint & Ergonomics Baseline (2026-09-27)
+- **Verified Production Head Commit:** `06434e7` ("feat(ui): continuous mouse-free rapid data entry mode and keyboard ergonomics").
+- **High-Density Data Architecture:** Refactored tables across `PurchaseView.tsx`, `ProductionView.tsx`, `StockReportView.tsx`, and `SalesInvoiceView.tsx` with compact spacing, border dividers, and monospace tabular alignment (`num-mono`).
+- **Continuous Hands-Free Entry:**
+  - Global hotkeys (`Alt+N` to open modal, `Escape` to close).
+  - Sequential `Enter` key traversal across all form fields.
+  - Quick commit via `Ctrl+Enter` or `⌘+Enter` from any field.
+  - "Continuous Rapid Entry Mode" toggles keeping form active, retaining common inputs (dates, active supplier/client), auto-generating next sequence batch/order numbers, and resetting focus back to the SKU selector.
+- **Visual Analytics:**
+  - Integrated 2D Recharts in `DailyReportView.tsx` (Production Output by Model, Produced vs Dispatched Volume) and `StockReportView.tsx` (Stock by Category, Size Curve Distribution across Paris Points 38–44).
+  - Tri-state stock health badging (`HEALTHY` >50, `LOW` ≤50, `OUT OF STOCK` ≤0) derived dynamically from append-only movement logs.
+- **Spreadsheet Portability:**
+  - Built `frontend/src/utils/csvExport.ts` with `\uFEFF` UTF-8 BOM encoding for Microsoft Excel compatibility and RFC 4180 escaping.
+  - 1-click CSV exports wired across all 5 operational ledger views.
+- **Live Deployment Verification:**
+  - Render backend (`https://livo-footwear-erp-backend.onrender.com/api/v1/health`) healthy with live Neon DB connection.
+  - Vercel frontend (`https://livo-footwear-erp.vercel.app`) verified live and operational on commit `06434e7`.
