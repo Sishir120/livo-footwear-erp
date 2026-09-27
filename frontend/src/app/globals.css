@@ -12,12 +12,11 @@
   --text-muted: #94a3b8;
   --text-dim: #64748b;
   
-  --accent-blue: #3b82f6;
-  --accent-blue-hover: #2563eb;
+  --accent-blue: #2563eb;
+  --accent-blue-hover: #1d4ed8;
   --accent-gold: #f59e0b;
   --accent-emerald: #10b981;
   --accent-rose: #f43f5e;
-  --accent-purple: #8b5cf6;
   
   --sidebar-width: 260px;
 }
@@ -37,19 +36,19 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Glassmorphism card utility */
+/* Industrial enterprise card utility */
 .glass-card {
   background: var(--bg-card);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-  transition: all 0.2s ease-in-out;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .glass-card:hover {
   background: var(--bg-card-hover);
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 /* App Shell Layout */
@@ -69,7 +68,7 @@ body {
   bottom: 0;
   left: 0;
   z-index: 50;
-  transition: transform 0.3s ease;
+  transition: transform 0.25s ease;
 }
 
 .main-wrapper {
@@ -82,9 +81,8 @@ body {
 
 /* Header */
 .app-header {
-  height: 64px;
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(8px);
+  height: 56px;
+  background: rgba(15, 23, 42, 0.95);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
@@ -95,60 +93,58 @@ body {
   z-index: 40;
 }
 
-/* Buttons */
+/* Standard Enterprise Buttons (Crisp 6px Radius, No Flashy Gradients) */
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-blue) 0%, #1d4ed8 100%);
-  color: #fff;
-  border: none;
-  padding: 10px 18px;
-  border-radius: 8px;
+  background: #2563eb;
+  color: #ffffff;
+  border: 1px solid #1d4ed8;
+  padding: 8px 16px;
+  border-radius: 6px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13.5px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+  background: #1d4ed8;
+  border-color: #1e40af;
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text-main);
   border: 1px solid var(--border-color);
-  padding: 10px 18px;
-  border-radius: 8px;
+  padding: 8px 16px;
+  border-radius: 6px;
   font-weight: 500;
-  font-size: 14px;
+  font-size: 13.5px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.2s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 /* Inputs & Form */
 .input-field {
   width: 100%;
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(15, 23, 42, 0.7);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 10px 14px;
+  border-radius: 6px;
+  padding: 8px 12px;
   color: var(--text-main);
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.15s;
 }
 
 .input-field:focus {
@@ -280,31 +276,30 @@ body {
   color: #34d399;
   border: 1px solid rgba(16, 185, 129, 0.3);
   padding: 8px 14px;
-  border-radius: 7px;
+  border-radius: 6px;
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: all 0.2s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .btn-export:hover {
   background: rgba(16, 185, 129, 0.2);
   border-color: #34d399;
-  transform: translateY(-1px);
 }
 
 /* Vendor Bill Attachment Zone */
 .attachment-dropzone {
   border: 2px dashed rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 16px;
   text-align: center;
   background: rgba(15, 23, 42, 0.4);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .attachment-dropzone:hover {
@@ -328,15 +323,9 @@ body {
 .badge-danger { background: rgba(244, 63, 94, 0.15); color: #f87171; border: 1px solid rgba(244, 63, 94, 0.25); }
 .badge-info { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.25); }
 .badge-low-stock {
-  background: rgba(239, 68, 68, 0.18);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  animation: pulse-border 2s infinite;
-}
-
-@keyframes pulse-border {
-  0%, 100% { border-color: rgba(239, 68, 68, 0.4); }
-  50% { border-color: rgba(239, 68, 68, 0.8); }
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
 }
 
 /* Responsive adjustments */

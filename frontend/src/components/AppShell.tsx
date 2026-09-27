@@ -17,6 +17,8 @@ import {
   UserCheck
 } from "lucide-react";
 
+import { LegalModal } from "./LegalModal";
+
 interface AppShellProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
@@ -29,6 +31,7 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
   const [dbStatus, setDbStatus] = useState<string>("checking...");
   const [appVersion, setAppVersion] = useState<string>("1.0.0");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [legalModal, setLegalModal] = useState<"privacy" | "terms" | null>(null);
 
   useEffect(() => {
     fetch("/api/v1/health")
@@ -97,16 +100,17 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
                   display: "flex",
                   alignItems: "center",
                   gap: "12px",
-                  padding: "12px 16px",
-                  borderRadius: "8px",
+                  padding: "10px 14px",
+                  borderRadius: "6px",
                   border: "none",
-                  background: isActive ? "linear-gradient(90deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.05) 100%)" : "transparent",
-                  color: isActive ? "#3b82f6" : "#94a3b8",
+                  borderLeft: isActive ? "3px solid #3b82f6" : "3px solid transparent",
+                  background: isActive ? "rgba(59, 130, 246, 0.16)" : "transparent",
+                  color: isActive ? "#60a5fa" : "#94a3b8",
                   fontWeight: isActive ? "600" : "400",
-                  fontSize: "14px",
+                  fontSize: "13.5px",
                   cursor: "pointer",
                   textAlign: "left",
-                  transition: "all 0.2s"
+                  transition: "all 0.15s ease"
                 }}
               >
                 <Icon size={18} />
@@ -116,8 +120,8 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
           })}
         </nav>
 
-        {/* Footer: Version & DB Health Self-Check */}
-        <div style={{ padding: "16px 24px", borderTop: "1px solid var(--border-color)", fontSize: "12px" }}>
+        {/* Footer: Version & DB Health Self-Check & Legal Compliance */}
+        <div style={{ padding: "16px 20px", borderTop: "1px solid var(--border-color)", fontSize: "12px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
             <span style={{ color: "#64748b" }}>DB Status:</span>
             <span style={{ display: "flex", alignItems: "center", gap: "4px", color: dbStatus === "Healthy" ? "#34d399" : "#f43f5e", fontWeight: "600" }}>
@@ -125,11 +129,23 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
               {dbStatus}
             </span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "#64748b" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "#64748b", marginBottom: "10px" }}>
             <span>Version:</span>
             <span style={{ fontWeight: "600", color: "#94a3b8" }}>v{appVersion}</span>
           </div>
+
+          <div style={{ paddingTop: "8px", borderTop: "1px solid var(--border-subtle)", display: "flex", gap: "8px", fontSize: "11px", color: "#64748b", justifyContent: "center" }}>
+            <button onClick={() => setLegalModal("privacy")} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: "11px", cursor: "pointer", textDecoration: "underline" }}>
+              Privacy Policy
+            </button>
+            <span>•</span>
+            <button onClick={() => setLegalModal("terms")} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: "11px", cursor: "pointer", textDecoration: "underline" }}>
+              Terms & Conditions
+            </button>
+          </div>
         </div>
+
+        {legalModal && <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />}
       </aside>
 
       {/* Main Container */}
