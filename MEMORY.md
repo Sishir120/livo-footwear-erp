@@ -150,3 +150,25 @@ genuinely grow past this scale.
 - **Live Deployment Verification:**
   - Render backend (`https://livo-footwear-erp-backend.onrender.com/api/v1/health`) healthy with live Neon DB connection.
   - Vercel frontend (`https://livo-footwear-erp.vercel.app`) verified live and operational on commit `06434e7`.
+
+## Phase 4 Automated Security Audit, Dynamic Bundling & Stitch Ergonomics (2026-09-27)
+- **Verified Production Commit:** `d0e8254` ("feat(sec,perf): automated security audit suite, dynamic code-splitting, and high-density modal ergonomics").
+- **Security Audit & Defensive Hardening (`backend/tests/test_security_audit.py`):**
+  - All 25/25 unit, regression, and vulnerability tests pass cleanly (`pytest tests -v --tb=short`).
+  - **RBAC Enforcement:** Viewer role strictly denied (`403 Forbidden`) on all mutating endpoints (`POST`, `PUT`, `PATCH`, `DELETE`) across purchases, production, stock movements, and sales.
+  - **Unauthenticated Access:** Business routes reject requests without valid JWT (`401 Unauthorized`).
+  - **Tenant Isolation & IDOR Defense:** Verified Tenant 2 cannot access, mutate, or void records belonging to Tenant 1. `TenantRepository` isolates all operations strictly to `company_id`.
+  - **SQL Injection Defense:** SQLAlchemy parameterized bindings prevent `' OR '1'='1` and nested statement injection payloads.
+  - **Fuzz Testing:** Handles 50,000 character buffer overflow strings, type mismatches, and malformed JSON payloads gracefully (HTTP 422).
+  - **Session & Transport:** Auth cookies retain `HttpOnly`, `SameSite=lax`. Sliding window rate limiter enforces HTTP 429 when threshold (30 rapid attempts) is exceeded.
+  - **Nepal VAT Cancellation:** Authored statutory `POST /api/v1/invoices/{invoice_id}/cancel` endpoint (requires editor; sets `is_void = True` without deleting the row).
+- **Frontend Bundle Optimization:**
+  - Introduced `next/dynamic` code splitting with high-density `SkeletonLoader.tsx` across all dashboard tabs (`DailyReportView`, `StockReportView`, `ProductionView`, `PurchaseView`, `SalesInvoiceView`, `SettingsView`).
+  - Route `/` size reduced from **140 kB to 10.6 kB** (92.4% reduction).
+  - First Load JS reduced from **227 kB to 98.1 kB** (56.8% reduction), enabling lightning-fast loads on 3G/4G mobile warehouse terminals.
+- **Stitch MCP UI/UX Refinement:**
+  - Extracted enterprise ergonomics guidelines from Stitch MCP project `15866847607130442980` (screen `7713fdb90a1e486ca5ea73d164f00cf7`).
+  - Converted modals to full-height responsive `.modal-drawer` components with sticky headers, scrollable `.modal-body`, and pinned `.modal-footer` action bars.
+  - Enhanced accessibility with `:focus-visible` dual-ring outline (`2px solid #3b82f6`, `2px offset`).
+  - Implemented client-side pagination (10 items/page) for large datasets across Production Batches, Purchase Vouchers, and Sales Invoices/Orders.
+
