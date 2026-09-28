@@ -34,249 +34,206 @@ Auditor / Floor Viewer  viewer_demo     LivoViewer2026!   Read-only analytics: A
 
 ---
 
-## 🎬 Automated End-to-End Walkthrough (Acts 1–6)
+## 🎬 Live System Walkthrough & Feature Showcase
 
-Recorded live across the deployed cloud environment using the DOM/browser agent:
-
-📹 **Full Walkthrough Video:** [**`docs/demos/livo_erp_complete_walkthrough.webm`**](docs/demos/livo_erp_complete_walkthrough.webm) *(also available as `.webp`)*
-
-### Act 1: Login & Bilingual Factory Ergonomics
-*Instant 1-click toggle between English and authentic Nepali (*प्रयोगकर्ता, पासवर्ड, लगइन*). Supports non-English-speaking factory supervisors.*
-
-![Act 1: Nepali Bilingual Login](docs/demos/act1_nepali_login_keyframe.png)
+📹 **Full Walkthrough Recording:** [**`docs/demos/livo_erp_complete_walkthrough.webm`**](docs/demos/livo_erp_complete_walkthrough.webm) *(also available as `.webp`)*  
+*(All images below are zoomed for crystal-clear readability. Click any image to view the full widescreen desktop capture).*
 
 ---
 
-### Act 2: Daily Executive Cockpit & Production Velocity
-*Factory Floor Velocity tracking (Produced vs. Dispatched ratio), Realized Cash Ratio, and line throughput without end-of-month lag.*
+### 1. 1-Click Login & Nepali / English Switch
+> **No training needed.** Factory workers can switch between English and Nepali with one tap.
 
-![Act 2: Daily Executive Cockpit](docs/demos/act2_executive_cockpit_keyframe.png)
+[![Nepali Login Screen](docs/demos/act1_login_zoom.png)](docs/demos/act1_nepali_login_keyframe.png)
+*🔍 [Click to view full widescreen view](docs/demos/act1_nepali_login_keyframe.png)*
 
----
-
-### Act 3: Finished Footwear Sizing Matrix (Paris Points 32–43)
-*Continental sizing curves across standard footwear sizes (32–43) with green in-stock indicators, zero-stock dashes, sticky columns, and 1-click CSV export.*
-
-![Act 3: Footwear Sizing Matrix](docs/demos/act3_stock_ledger_sizing_keyframe.png)
+- 🎯 **What it does:** Instant 1-click login buttons for testing (`Demo Admin` or `Demo Viewer`). Click the **नेपाली** button at top right to switch every button, label, and table to authentic Nepali (*प्रयोगकर्ता, पासवर्ड, लगइन*).
+- 💡 **Why it helps:** Line supervisors and warehouse helpers don't need English fluency to run the factory smoothly.
+- ⚡ **Try it live:** [Open Login Screen](https://livo-footwear-erp.vercel.app)
 
 ---
 
-### Act 4: Hands-Free Rapid Production Entry
-*Keyboard-driven sequential entry (<kbd>Alt+N</kbd> drawer trigger, sequential field traversal, <kbd>Ctrl+Enter</kbd> commit) with auto-incrementing batch sequence (`BATCH-1680`).*
+### 2. Daily Factory Cockpit (Live Counts & Real-Time Cash)
+> **Know your factory status in 5 seconds without waiting for end-of-month accounting.**
 
-![Act 4: Continuous Batch Entry](docs/demos/act4_production_continuous_batch_keyframe.png)
+[![Daily Cockpit KPI Cards](docs/demos/act2_cockpit_zoom.png)](docs/demos/act2_executive_cockpit_keyframe.png)
+*🔍 [Click to view full widescreen view](docs/demos/act2_executive_cockpit_keyframe.png)*
 
----
-
-### Act 5: Wholesale Sales Order, Live 13% VAT Strip & Sequential Invoice
-*Live calculation of taxable subtotal, 13% Nepal VAT, and gross NPR. Issues gapless, monotonic tax invoices (`INV-01-XXXXX`) with PAN and signature blocks.*
-
-![Act 5: Wholesale Sales Order and VAT Strip](docs/demos/act5_wholesale_vat_strip_keyframe.png)
-
-![Act 5: Statutory Printable VAT Invoice](docs/demos/act5_tax_invoice_keyframe.png)
-
----
-
-### Act 6: Role-Based Security Smoke Check (Viewer Lockout)
-*Demonstrating read-only auditor mode: Mutation actions (`+ Record Batch`, `+ Record Sale`, `Void`) are completely removed from the interface and guarded at the API level.*
-
-![Act 6: Viewer Role Read-Only Lockdown](docs/demos/act6_viewer_role_locked_keyframe.png)
+- 🎯 **What it does:** Shows live totals for the day:
+  1. **Factory Velocity:** Pairs produced today vs. pairs dispatched to wholesalers.
+  2. **Realized Cash:** Immediate cash collected vs. money owed (receivables) in NPR.
+  3. **Line Efficiency:** Number of active line workers and pairs made per worker.
+- 💡 **Why it helps:** Factory managers instantly see if production is behind schedule or if wholesale customers owe money.
+- ⚡ **Try it live:** [Open Daily Report](https://livo-footwear-erp.vercel.app)
 
 ---
 
-## 📐 Enterprise Architecture, Lifecycles & Rookie Debugging Playbook
+### 3. Shoe Sizing Grid (Sizes 32 to 43 at a Glance)
+> **Never break a size set. See exact pair counts for every size and shoe model.**
 
-### 1. Cloud Production Architecture & DevOps Topology
+[![Shoe Sizing Grid](docs/demos/act3_sizing_matrix_zoom.png)](docs/demos/act3_stock_ledger_sizing_keyframe.png)
+*🔍 [Click to view full widescreen view](docs/demos/act3_stock_ledger_sizing_keyframe.png)*
 
-> **Full-Stack Blueprint:** Follows requests from hardware barcode scanners through Vercel edge reverse proxying, Render containerized FastAPI with in-process concurrency mutexes, to Neon serverless PostgreSQL with 7-day point-in-time recovery.
+- 🎯 **What it does:** Displays all shoes across continental European sizes (**32 through 43**) on a single screen. Shows stock quantity, wholesale price, and total warehouse inventory value.
+- 💡 **Why it helps:** Prevents dispatching incomplete carton runs. You can tell a customer in 2 seconds if you have 50 pairs of Size 41 Executive Boots in stock.
+- ⚡ **Try it live:** [Open Sizing Matrix](https://livo-footwear-erp.vercel.app)
 
-![LIVO Cloud Architecture Blueprint](docs/diagrams/system_architecture_overview.visual-check.1440x900.dark.png)
+---
 
-<details>
-<summary><b>🔍 View Interactive Topology Code & Subsystem Map (Click to Expand)</b></summary>
+### 4. Fast Batch Entry (Record 500 Shoes in 5 Seconds)
+> **Designed for dusty factory floors. Enter batches without touching the mouse.**
+
+[![Fast Batch Entry Modal](docs/demos/act4_batch_entry_zoom.png)](docs/demos/act4_production_continuous_batch_keyframe.png)
+*🔍 [Click to view full widescreen view](docs/demos/act4_production_continuous_batch_keyframe.png)*
+
+- 🎯 **What it does:** Press <kbd>Alt+N</kbd> anywhere in the app to open the batch entry window. Type the pairs produced and press <kbd>Ctrl+Enter</kbd> to save. The form stays open for the next batch automatically!
+- 💡 **Why it helps:** Warehouse workers can record an entire day's production in under 2 minutes with zero keyboard-to-mouse delays.
+- ⚡ **Try it live:** Log in and press <kbd>Alt+N</kbd> on your keyboard.
+
+---
+
+### 5. Wholesale Sales & Automatic 13% Nepal VAT Billing
+> **Zero math mistakes. Auto-calculates VAT and prints official tax bills instantly.**
+
+[![Wholesale Sales Modal with 13% VAT](docs/demos/act5_vat_calculation_zoom.png)](docs/demos/act5_wholesale_vat_strip_keyframe.png)
+*🔍 [Click to view full widescreen view](docs/demos/act5_wholesale_vat_strip_keyframe.png)*
+
+[![Printable Tax Invoice](docs/demos/act5_invoice_paper_zoom.png)](docs/demos/act5_tax_invoice_keyframe.png)
+*🔍 [Click to view full widescreen view](docs/demos/act5_tax_invoice_keyframe.png)*
+
+- 🎯 **What it does:** Select a customer and quantity. The system automatically computes:
+  - **Subtotal:** E.g. $10 \times \text{Rs. } 3,200 = \text{Rs. } 32,000$
+  - **13% Nepal VAT:** $\text{Rs. } 4,160$
+  - **Grand Total:** $\text{Rs. } 36,160$
+  - **Receivable Balance:** Deducts initial cash received and tracks what the client still owes!
+  - **1-Click Print:** Generates an official, numbered tax invoice (`INV-01-00001`) with company PAN and signature blocks.
+- 💡 **Why it helps:** Eliminates tax audit fines from Nepal's Inland Revenue Department (IRD) and prevents clerks from making manual math mistakes.
+- ⚡ **Try it live:** [View Sample Printable Invoice](https://livo-footwear-erp.vercel.app/api/v1/invoices/1/printable)
+
+---
+
+### 6. Safe Auditor Mode (Viewers Cannot Change Stock)
+> **Share reports with tax officers, auditors, and bank managers safely.**
+
+[![Auditor View-Only Mode](docs/demos/act6_viewer_role_zoom.png)](docs/demos/act6_viewer_role_locked_keyframe.png)
+*🔍 [Click to view full widescreen view](docs/demos/act6_viewer_role_locked_keyframe.png)*
+
+- 🎯 **What it does:** When logged in with the **Demo Viewer** role, all buttons to add batches, record sales, or delete records are completely hidden and locked on the server.
+- 💡 **Why it helps:** You can hand a laptop or tablet to an external auditor or factory guest without worrying about anyone accidentally changing stock counts or prices.
+- ⚡ **Try it live:** Log out and click **Demo Viewer** on the login screen.
+
+---
+
+## 🗺️ How LIVO ERP Works (Simple Visual Guide)
+
+> Built for factory managers, line supervisors, and developers. No complicated jargon—just clear steps on how footwear is produced, tracked, billed, and fixed.
+
+---
+
+### 1. The Complete Factory Workflow (From Leather to Cash)
 
 ```mermaid
-flowchart TB
-    classDef client fill:#0b1329,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
-    classDef edge fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
-    classDef backend fill:#022c22,stroke:#34d399,stroke-width:2px,color:#f8fafc;
-    classDef security fill:#450a0a,stroke:#fb7185,stroke-width:2px,color:#fecaca;
-    classDef db fill:#2e1065,stroke:#c084fc,stroke-width:2px,color:#f8fafc;
-    classDef storage fill:#292524,stroke:#f59e0b,stroke-width:2px,color:#fef3c7;
+flowchart TD
+    classDef step fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef check fill:#1e1b4b,stroke:#a855f7,stroke-width:2px,color:#f8fafc;
+    classDef success fill:#022c22,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+    classDef alert fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fecaca;
 
-    subgraph CLIENT ["🖥️ CLIENT LAYER (Factory Line & Tablet Terminals)"]
-        SCANNER["Hardware Barcode Scanner<br/><code>HID USB/BT &lt;35ms Burst</code>"]:::client
-        BROWSER["Next.js 14 Enterprise UI<br/><code>Tailwind Tokens · 103kB Bundle</code>"]:::client
-        OFFLINE_DB[("Terminal IndexedDB Outbox<br/><code>Offline Queue · Zero Data Loss</code>")]:::client
-        I18N["Bilingual Localizer<br/><code>English / Authentic Nepali</code>"]:::client
-        PAISA["Integer Paisa Engine<br/><code>1 NPR = 100 Paisa (Zero Float Drift)</code>"]:::client
-    end
+    A["📦 1. BUY RAW MATERIALS<br/>Purchase Synthetic Leather, Soles & Glue from Suppliers"]:::step
+    B["🏭 2. MAKE SHOES ON FACTORY FLOOR<br/>Workers produce footwear batches in standard Continental Sizes 32 to 43"]:::step
+    C["📊 3. AUTOMATIC STOCK UPDATE<br/>System automatically deducts raw leather and adds finished shoe pairs to ledger"]:::step
+    D["🛒 4. WHOLESALE CLIENT ORDER<br/>Sales clerk creates an order for a retailer (e.g. 50 pairs of Size 41)"]:::step
+    E{"🔍 5. PHYSICAL STOCK CHECK<br/>Are there enough shoe pairs physically in the warehouse?"}:::check
+    F["❌ OVERSOLD BLOCKED (Error 422)<br/>System strictly blocks order if stock is zero. No negative stock allowed!"]:::alert
+    G["🧾 6. STATUTORY NEPAL TAX INVOICE<br/>Calculates exact 13% Nepal VAT and locks sequential bill number (INV-01-XXXXX)"]:::success
+    H["💰 7. COLLECT PAYMENT & TRACK PROFIT<br/>Record cash/cheque and update the daily factory cash & velocity dashboard"]:::success
 
-    subgraph DEVOPS_EDGE ["🌐 DEVOPS EDGE & REVERSE PROXY (Vercel Anycast CDN)"]
-        VERCEL_EDGE["Vercel Global Edge Network<br/><code>SSL Termination · DDoS Shield</code>"]:::edge
-        PROXY_REWRITE["Internal Edge Proxy (/api/backend/*)<br/><code>First-Party Route Unification</code>"]:::edge
-        COOKIES["First-Party Session Cookie<br/><code>SameSite=Lax · Secure · HttpOnly</code>"]:::edge
-    end
-
-    subgraph BACKEND_ENGINE ["⚡ BACKEND API ENGINE (Render Container / Python 3.12 FastAPI)"]
-        CORR["Correlation Tracing Middleware<br/><code>X-Request-ID: req_xxxxxxxxxxxx</code>"]:::backend
-        RBAC["JWT Security & RBAC Guard<br/><code>admin_demo (Write) / viewer_demo (Locked)</code>"]:::security
-        MUTEX["Concurrency Mutex & Pessimistic Lock<br/><code>Product.with_for_update() Barrier</code>"]:::security
-        BOM["Automated BOM Deduction Engine<br/><code>Raw Material Consumption (-KG)</code>"]:::backend
-        VAT["Statutory Tax Engine<br/><code>Exact 13% Nepal VAT · Decimal ROUND_HALF_UP</code>"]:::backend
-        SNAPSHOT["O(1) Snapshot Aggregator<br/><code>Stock = Snapshot + Delta Movements</code>"]:::backend
-    end
-
-    subgraph PERSISTENCE ["🗄️ PERSISTENCE & DISASTER RECOVERY (Neon Serverless PostgreSQL)"]
-        NEON_DB[("Neon PostgreSQL Serverless<br/><code>Auto-Suspend · PgBouncer Pool</code>")]:::db
-        STOCK_LEDGER[("stock_movements Table<br/><code>Signed Ledger (+1 IN / -1 OUT)</code>")]:::db
-        INVOICE_SEQ[("invoices Table<br/><code>uq_invoice_company_sequence Lock</code>")]:::db
-        SNAPSHOT_TBL[("stock_snapshots Table<br/><code>Materialized Balance &amp; last_id</code>")]:::db
-        S3_BACKUP[("Cloudflare R2 / S3 Backups<br/><code>Nightly pg_dump · 7-Day PITR</code>")]:::storage
-    end
-
-    SCANNER -->|"Scan Keystrokes"| BROWSER
-    BROWSER <-->|"Auto-Sync / Flush"| OFFLINE_DB
-    BROWSER --- I18N
-    BROWSER --- PAISA
-    BROWSER -->|"HTTPS Calls"| VERCEL_EDGE
-    VERCEL_EDGE --> PROXY_REWRITE
-    PROXY_REWRITE -->|"Proxied Request"| CORR
-    PROXY_REWRITE -.-> COOKIES
-    CORR --> RBAC
-    RBAC --> MUTEX
-    MUTEX --> BOM
-    BOM --> VAT
-    VAT --> SNAPSHOT
-    SNAPSHOT -->|"ACID Transaction"| NEON_DB
-    NEON_DB --- STOCK_LEDGER
-    NEON_DB --- INVOICE_SEQ
-    NEON_DB --- SNAPSHOT_TBL
-    NEON_DB -.->|"Automated WAL Sync"| S3_BACKUP
-
-    linkStyle default stroke:#475569,stroke-width:2px;
-```
-
-</details>
-
----
-
-### 2. End-to-End Manufacturing & Financial Lifecycle Workflow
-
-> **Factory Operations Lifeline:** Tracks raw material inwarding, automated BOM deductions, finished Paris Points batch creation, wholesale orders, monotonic VAT invoicing, and daily executive rollups.
-
-![Complete ERP Lifecycle Lifeline](docs/diagrams/workflow_complete_erp_lifecycle.visual-check.1440x900.dark.png)
-
-<details>
-<summary><b>🔍 View Sequential Pipeline Chart (Click to Expand)</b></summary>
-
-```mermaid
-flowchart LR
-    classDef step fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
-    classDef action fill:#022c22,stroke:#10b981,stroke-width:2px,color:#f8fafc;
-    classDef check fill:#2e1065,stroke:#a855f7,stroke-width:2px,color:#f8fafc;
-    classDef reject fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fecaca;
-    classDef finish fill:#1e1b4b,stroke:#06b6d4,stroke-width:2px,color:#f8fafc;
-
-    subgraph S1 ["Phase 1: Procurement"]
-        PO["Raw Material Purchase Order<br/>(Synthetic Leather, Soles, Glue)"]:::step
-        RM_LEDGER["Raw Material Ledger<br/>(+KG / +Meters Inward)"]:::action
-    end
-
-    subgraph S2 ["Phase 2: Manufacturing"]
-        BATCH["Log Production Batch<br/>(Paris Points 32–43 Sizing)"]:::step
-        BOM["Auto BOM Engine<br/>(-Raw Material Consumed)"]:::action
-        IN_LEDGER["Stock Movement (+IN)<br/>(+Pairs Finished Footwear)"]:::action
-    end
-
-    subgraph S3 ["Phase 3: Wholesale Dispatch"]
-        SO["Wholesale Sales Order<br/>(Client &amp; SKU Selection)"]:::step
-        LOCK_CHECK{"Pessimistic Lock Check<br/>(Stock &gt;= Quantity?)"}:::check
-        OUT_LEDGER["Stock Movement (-OUT)<br/>(-Pairs Dispatched)"]:::action
-        ERR_422["HTTP 422 Barrier<br/>(Oversell Prevented)"]:::reject
-    end
-
-    subgraph S4 ["Phase 4: Statutory Invoicing"]
-        VAT_CALC["Paisa Precision Calc<br/>(Subtotal + 13% Statutory VAT)"]:::step
-        INV_LOCK["Monotonic Sequence Lock<br/>(INV-01-XXXXX DB Constraint)"]:::action
-        PRINT_INV["Statutory Printable Invoice<br/>(PAN, Signatures, Line Items)"]:::finish
-    end
-
-    subgraph S5 ["Phase 5: Financial Velocity"]
-        PAYMENT["Record Payment<br/>(Cash / Bank Transfer)"]:::step
-        COCKPIT["Executive Cockpit<br/>(Realized Cash &amp; Factory Velocity)"]:::finish
-    end
-
-    PO --> RM_LEDGER
-    RM_LEDGER --> BOM
-    BATCH --> BOM
-    BOM --> IN_LEDGER
-    IN_LEDGER --> SO
-    SO --> LOCK_CHECK
-    LOCK_CHECK -->|"Stock Verified"| OUT_LEDGER
-    LOCK_CHECK -->|"Deficit Detected"| ERR_422
-    OUT_LEDGER --> VAT_CALC
-    VAT_CALC --> INV_LOCK
-    INV_LOCK --> PRINT_INV
-    PRINT_INV --> PAYMENT
-    PAYMENT --> COCKPIT
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E -->|"Stock Insufficient"| F
+    F -.->|"Produce Batch First (Alt+N)"| B
+    E -->|"Stock Available"| G
+    G --> H
 
     linkStyle default stroke:#64748b,stroke-width:2px;
 ```
 
-</details>
-
 ---
 
-### 3. Critical Debugging Triage Flowchart & Emergency Lifelines
-
-> **On-Call Pitch & Production Diagnostic Matrix:** Maps edge timeouts, JWT expiration, viewer role lockouts, sequence collisions, and negative stock barriers directly to 10-second solutions.
-
-![Critical Debugging Triage Lifeline](docs/diagrams/workflow_critical_debugging_triage.visual-check.1440x900.dark.png)
-
----
-
-### 🩺 Rookie-Proof Troubleshooting Decision Tree
-
-Follow this exact diagnostic tree whenever diagnosing an error or unexpected state:
+### 2. The Tech Setup (How the Pieces Talk to Each Other)
 
 ```mermaid
 flowchart TD
-    classDef startNode fill:#0f172a,stroke:#64748b,stroke-width:2px,color:#f8fafc;
-    classDef decision fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
-    classDef cause fill:#312e81,stroke:#a78bfa,stroke-width:2px,color:#f8fafc;
+    classDef user fill:#0b1329,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef web fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
+    classDef api fill:#022c22,stroke:#34d399,stroke-width:2px,color:#f8fafc;
+    classDef db fill:#2e1065,stroke:#c084fc,stroke-width:2px,color:#f8fafc;
+
+    subgraph FACTORY ["👟 FACTORY FLOOR & HARDWARE"]
+        SCAN["Barcode Scanner<br/>Beeps shoe box barcodes in 0.03 seconds"]:::user
+        APP["Web App on Phone / PC / Tablet<br/>Bilingual in Nepali and English · Works with Keyboard shortcuts"]:::user
+        OFFLINE["Offline Memory (IndexedDB)<br/>Keeps saving work even if factory WiFi cuts out"]:::user
+    end
+
+    subgraph CLOUD ["☁️ PRODUCTION CLOUD SYSTEM"]
+        ROUTER["Smart Website Router (Vercel Edge)<br/>Loads the website instantly across Nepal with SSL encryption"]:::web
+        ENGINE["Business Logic Engine (FastAPI on Render)<br/>Guarantees inventory limits, calculates 13% VAT, prevents duplicate bills"]:::api
+        DATABASE["Bank-Grade Database (PostgreSQL on Neon)<br/>Permanent append-only record with 7-day automatic rollback recovery"]:::db
+    end
+
+    SCAN --> APP
+    APP <--> OFFLINE
+    APP --> ROUTER
+    ROUTER --> ENGINE
+    ENGINE --> DATABASE
+
+    linkStyle default stroke:#64748b,stroke-width:2px;
+```
+
+---
+
+### 3. 🚨 Rookie Troubleshooting Guide (Fix Any Issue in 10 Seconds)
+
+If anything unexpected happens during demo or factory operation, look up your symptom below:
+
+| What You See on Screen | Why It Happened | 10-Second Fix (What to Do) |
+| :--- | :--- | :--- |
+| ⏳ **Page spins forever (>15s) or HTTP 504** | The free cloud server goes to sleep after 15 minutes of zero traffic. | **Wake it up:** Open any terminal and run this quick ping:<br/>`curl -s https://livo-footwear-erp-backend.onrender.com/api/v1/health`<br/>Wait 15 seconds, then refresh the page! |
+| 🚫 **Red Error: "Insufficient physical stock" (422)** | You tried to dispatch more pairs than currently exist in stock. | **Make more pairs first:**<br/>1. Open the **Production** tab.<br/>2. Press <kbd>Alt+N</kbd> to record a finished batch (+IN).<br/>3. Re-submit the wholesale sales order! |
+| 🔒 **Buttons to "+ Record Batch" or "+ Sale" are missing (403)** | You are logged in as **Viewer** (Auditor read-only mode). | **Switch to Admin:**<br/>Log out and click the **Demo Admin** button on the login screen to regain full editing permissions. |
+| 🔑 **"Not authenticated" or "Session expired" (401)** | Your 24-hour login session has expired. | **Log back in:**<br/>Click **Demo Admin** on the login screen to refresh your session immediately. |
+| 📶 **Factory WiFi / Internet is down** | Internet connection dropped on the factory line. | **Keep working!**<br/>The system automatically saves entries locally in browser memory and syncs them to the cloud when internet reconnects. |
+| 🔍 **Red Banner with `Support reference: [req_xxx]`** | An unexpected error occurred during a transaction. | **Fast support lookup:**<br/>Copy the reference code (e.g. `req_8f1a3b2c4d5e`). In the server logs, search for that exact code to see the full error details! |
+
+---
+
+### 4. Visual Troubleshooting Decision Tree
+
+Follow this simple flow if an error banner appears:
+
+```mermaid
+flowchart TD
+    classDef check fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
     classDef fix fill:#022c22,stroke:#10b981,stroke-width:2px,color:#f8fafc;
-    classDef defense fill:#450a0a,stroke:#fb7185,stroke-width:2px,color:#fecaca;
-    classDef trace fill:#0c4a6e,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef alert fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fecaca;
 
-    START(["🚨 Observation / Error Occurred on LIVO ERP"]):::startNode --> SYMPTOM{"What is the observable symptom?"}:::decision
+    Q{"What is the problem?"}:::check
 
-    %% Branch 1: Spinner / 504 Gateway Timeout
-    SYMPTOM -->|"Page spins &gt;15s or HTTP 504 Timeout"| C_504["Render Free-Tier Container Hibernating<br/>(Sleeps after 15 minutes of zero traffic)"]:::cause
-    C_504 --> F_504["⚡ 10-Second Warmup Fix:<br/>Run curl warmup ping in terminal:<br/><code>curl -s https://livo-footwear-erp-backend.onrender.com/api/v1/health</code><br/>Wait 15s for the container to wake up. Reload page!"]:::fix
+    Q -->|"Page is loading forever (>15s)"| WAKE["💤 Server is asleep<br/>Run: curl -s https://.../api/v1/health<br/>Wait 15 seconds and reload page"]:::fix
 
-    %% Branch 2: 401 Unauthorized / 403 Forbidden
-    SYMPTOM -->|"HTTP 401 or 403 Error Banner"| CHECK_AUTH{"Which HTTP status code?"}:::decision
-    CHECK_AUTH -->|"HTTP 401 (Unauthorized)"| F_401["🔑 5-Second Auth Fix:<br/>JWT session cookie expired after 24h.<br/>Click 'Demo Admin' button or log in again."]:::fix
-    CHECK_AUTH -->|"HTTP 403 (Forbidden)"| F_403["🛡️ Intentional Security Guard:<br/>You are logged in as 'viewer_demo' (Auditor Mode).<br/>Mutation buttons (+ Batch, + Order, Void) are locked by design.<br/>Click 'Demo Admin' (admin_demo) to regain write privileges."]:::defense
+    Q -->|"Red error: Insufficient stock (422)"| STOCK["📦 Not enough shoes in stock!<br/>Go to Production tab and add a batch<br/>Then submit the sales order again"]:::fix
 
-    %% Branch 3: 422 Negative Stock Boundary
-    SYMPTOM -->|"HTTP 422 (Insufficient physical stock)"| C_422["Negative Stock Barrier Triggered:<br/>'Insufficient physical stock for this size variant (Available: X, Requested: Y)'"]:::defense
-    C_422 --> F_422["📦 10-Second Inventory Fix:<br/>1. Open Stock Report to see in-stock size pairs.<br/>2. Press Alt+N on Production tab to log a finished batch (+IN).<br/>3. Re-dispatch the sales order with valid stock."]:::fix
+    Q -->|"Add buttons are missing or locked (403)"| VIEW["👀 You are in View-Only mode<br/>Log out and click 'Demo Admin' to edit"]:::fix
 
-    %% Branch 4: 409 Sequence Conflict
-    SYMPTOM -->|"HTTP 409 (Invoice Sequence Conflict)"| C_409["Concurrent Invoice Sequence Collision:<br/>Two clerks generated an invoice at the exact same millisecond."]:::cause
-    C_409 --> F_409["🔄 Built-In Auto-Recovery:<br/>The API retry loop recovers automatically (up to 3 retries).<br/>Simply click 'Create Invoice' once more."]:::fix
+    Q -->|"Session expired / Logged out (401)"| AUTH["🔑 Login timed out<br/>Click 'Demo Admin' at login screen"]:::fix
 
-    %% Branch 5: Offline / Network Drop
-    SYMPTOM -->|"Internet Dropped / Factory WiFi Cut"| C_OFF["Factory Connectivity Offline:<br/>Terminal Outbox activated automatically."]:::cause
-    C_OFF --> F_OFF["💾 Zero Data Loss Guarantee:<br/>Mutations are safely buffered in local IndexedDB.<br/>They automatically flush to the cloud when WiFi reconnects."]:::fix
+    Q -->|"WiFi / Internet disconnected"| NET["📶 Don't panic!<br/>Work is saved in offline browser memory<br/>Automatically syncs when WiFi returns"]:::fix
 
-    %% Branch 6: Any Unknown / General Error
-    SYMPTOM -->|"Error Banner with Support Reference"| C_TRACE["Error banner displays reference code:<br/><code>Transaction failed. Support reference: [req_xxxxxxxxxxxx]</code>"]:::trace
-    C_TRACE --> F_TRACE["🔍 Instant Cloud Trace Action:<br/>1. Copy reference code (e.g. <code>req_8f1a3b2c4d5e</code>).<br/>2. Open Render Cloud Backend Logs.<br/>3. Search for <code>request_id</code> to view the full structured JSON trace and Python exception!"]:::trace
+    Q -->|"Red banner with [req_xxxxxxxxxxxx]"| TRACE["🔍 Copy the reference code<br/>Search server logs by request_id for instant trace"]:::alert
 
-    linkStyle default stroke:#475569,stroke-width:2px;
+    linkStyle default stroke:#64748b,stroke-width:2px;
 ```
 
 ---
