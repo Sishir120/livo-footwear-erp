@@ -6,9 +6,8 @@ from app.models.stock import Product, StockMovement
 from app.models.production import ProductionBatch, ProductionMaterialUsage
 from app.models.sales import Client, SalesOrder, SalesItem, Payment
 from app.models.invoice import Invoice
-# NOTE: accounting.py (AccountGroup, LedgerAccount, JournalVoucher, JournalEntry) removed.
-# Those were Tally double-entry ledger models, orphaned after Tally router was de-scoped.
-# Archived at: backend/_unscoped/tally-export/accounting_model.py
+from app.models.stock_snapshot import StockSnapshot
+from app.models.bom import BillOfMaterials
 
 __all__ = [
     "Company",
@@ -26,4 +25,6 @@ __all__ = [
     "SalesItem",
     "Payment",
     "Invoice",
+    "StockSnapshot",
+    "BillOfMaterials",
 ]

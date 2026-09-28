@@ -17,6 +17,8 @@ import {
   Ban
 } from "lucide-react";
 import { exportToCSV } from "../utils/csvExport";
+import { useBarcodeScanner } from "../hooks/useBarcodeScanner";
+import { apiFetch } from "../lib/api";
 
 export function SalesInvoiceView({ userRole }: { userRole?: string }) {
   const [clients, setClients] = useState<any[]>([]);
@@ -54,6 +56,34 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Hardware Barcode Scanner Hook: captures rapid USB/Bluetooth scanner keystrokes (<35ms)
+  useBarcodeScanner((barcode) => {
+    const clean = barcode.trim().toUpperCase();
+    const matched = products.find(
+      (p) =>
+        p.code?.toUpperCase() === clean ||
+        p.code?.toUpperCase().includes(clean) ||
+        clean.includes(p.code?.toUpperCase())
+    );
+
+    if (matched) {
+      setProductId(String(matched.id));
+      if (matched.unit_price) {
+        setUnitPrice(String(matched.unit_price));
+      }
+      setShowOrderModal(true);
+      setSuccessFeedback(`Barcode Scanned: ${matched.code} (${matched.name} · Size ${matched.size || "-"})`);
+      setTimeout(() => setSuccessFeedback(""), 4500);
+      setTimeout(() => {
+        quantityRef.current?.focus();
+        quantityRef.current?.select();
+      }, 50);
+    } else {
+      setSuccessFeedback(`Barcode detected: "${clean}" (No matching SKU found)`);
+      setTimeout(() => setSuccessFeedback(""), 4500);
+    }
+  }, userRole === "editor");
 
   // Global Keyboard Shortcuts (Alt+N to Open Modal, Escape to Close)
   useEffect(() => {
@@ -147,7 +177,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
     setSubmitting(true);
     try {
       const orderNum = `SO-${Date.now().toString().slice(-4)}`;
-      const res = await fetch("/api/v1/sales/orders", {
+      const res = await apiFetch("/api/v1/sales/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -170,7 +200,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
       if (res.ok) {
         const order = await res.json();
         // Generate Invoice for the order automatically
-        const invRes = await fetch("/api/v1/invoices", {
+        const invRes = await apiFetch("/api/v1/invoices", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sales_order_id: order.id, vat_enabled: false })

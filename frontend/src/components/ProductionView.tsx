@@ -11,9 +11,12 @@ import {
   X,
   Layers,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Printer
 } from "lucide-react";
 import { exportToCSV } from "../utils/csvExport";
+import { ThermalLabelModal, BoxLabelData } from "./ThermalLabelModal";
+import { apiFetch } from "../lib/api";
 
 export function ProductionView({ userRole }: { userRole?: string }) {
   const [products, setProducts] = useState<any[]>([]);
@@ -34,6 +37,13 @@ export function ProductionView({ userRole }: { userRole?: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [continuousMode, setContinuousMode] = useState(true);
   const [successFeedback, setSuccessFeedback] = useState("");
+  const [showLabelModal, setShowLabelModal] = useState(false);
+  const [currentLabelData, setCurrentLabelData] = useState<BoxLabelData>({
+    productName: "LIVO FOOTWEAR",
+    sku: "",
+    size: "41",
+    batchNumber: "",
+  });
 
   // Field Refs for Sequential Keyboard Navigation
   const batchNumRef = useRef<HTMLInputElement>(null);
@@ -122,7 +132,7 @@ export function ProductionView({ userRole }: { userRole?: string }) {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/v1/production/batches", {
+      const res = await apiFetch("/api/v1/production/batches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -138,6 +148,16 @@ export function ProductionView({ userRole }: { userRole?: string }) {
 
       if (res.ok) {
         const savedBatch = batchNumber;
+        const prod = getProduct(parseInt(productId));
+        setCurrentLabelData({
+          productName: prod?.name || "LIVO FOOTWEAR",
+          sku: prod?.code || savedBatch,
+          size: prod?.size || "41",
+          color: prod?.color || "Black",
+          batchNumber: savedBatch,
+          dateStr: dateAd,
+        });
+        setShowLabelModal(true);
         loadData();
         if (forceClose || !continuousMode) {
           setShowModal(false);
@@ -147,7 +167,7 @@ export function ProductionView({ userRole }: { userRole?: string }) {
           setBatchNumber(`BATCH-${Date.now().toString().slice(-4)}`);
         } else {
           // Continuous Entry Mode: maintain worker count and date, clear entry, advance batch
-          setSuccessFeedback(`✓ ${savedBatch} committed to ledger! Ready for next batch.`);
+          setSuccessFeedback(`✓ ${savedBatch} committed to ledger! Box label generated.`);
           setTimeout(() => setSuccessFeedback(""), 3500);
           setProducedQty("");
           setTargetQty("");
@@ -325,6 +345,7 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                   <th style={{ textAlign: "right", width: "75px" }}>Workers</th>
                   <th style={{ width: "125px", textAlign: "center" }}>Stock Impact</th>
                   <th style={{ width: "95px", textAlign: "center" }}>Status</th>
+                  <th style={{ width: "85px", textAlign: "center" }}>Label</th>
                 </tr>
               </thead>
               <tbody>
@@ -369,6 +390,37 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                       </td>
                       <td style={{ textAlign: "center" }}>
                         <span className="badge badge-info">{b.status || "Completed"}</span>
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCurrentLabelData({
+                              productName: p?.name || "LIVO FOOTWEAR",
+                              sku: p?.code || b.batch_number,
+                              size: p?.size || "41",
+                              color: p?.color || "-",
+                              batchNumber: b.batch_number,
+                              dateStr: b.date_ad,
+                            });
+                            setShowLabelModal(true);
+                          }}
+                          style={{
+                            background: "rgba(255,255,255,0.06)",
+                            border: "1px solid rgba(255,255,255,0.15)",
+                            color: "#94a3b8",
+                            padding: "3px 8px",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            fontSize: "11px"
+                          }}
+                          title="Print 2x1 Thermal Box Label"
+                        >
+                          <Printer size={12} /> Label
+                        </button>
                       </td>
                     </tr>
                   );
@@ -580,6 +632,13 @@ export function ProductionView({ userRole }: { userRole?: string }) {
           </div>
         </div>
       )}
+
+      {/* 2x1 Thermal Box Label Print Modal */}
+      <ThermalLabelModal
+        isOpen={showLabelModal}
+        onClose={() => setShowLabelModal(false)}
+        labelData={currentLabelData}
+      />
     </div>
   );
 }

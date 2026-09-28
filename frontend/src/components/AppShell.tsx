@@ -19,6 +19,7 @@ import {
 
 import { LegalModal } from "./LegalModal";
 import { useLocale } from "../context/LocaleContext";
+import { subscribeQueueChange, replayQueue } from "../lib/offlineQueue";
 
 interface AppShellProps {
   activeTab: string;
@@ -34,6 +35,45 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
   const [appVersion, setAppVersion] = useState<string>("1.0.0");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [legalModal, setLegalModal] = useState<"privacy" | "terms" | null>(null);
+
+  // Offline outbox queue state
+  const [isOnline, setIsOnline] = useState(true);
+  const [queuedCount, setQueuedCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      setIsSyncing(true);
+      replayQueue().finally(() => setIsSyncing(false));
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    const unsubscribe = subscribeQueueChange((count) => {
+      setQueuedCount(count);
+    });
+
+    const handleToast = (e: any) => {
+      if (e.detail?.message) {
+        setToastMessage(e.detail.message);
+        setTimeout(() => setToastMessage(null), 4000);
+      }
+    };
+    window.addEventListener("livo:toast", handleToast);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("livo:toast", handleToast);
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     fetch("/api/v1/health")
@@ -162,6 +202,60 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            {/* Offline Outbox Status Badge */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              {!isOnline ? (
+                <span
+                  style={{
+                    background: "rgba(234, 179, 8, 0.2)",
+                    color: "#fde047",
+                    border: "1px solid rgba(234, 179, 8, 0.4)",
+                    padding: "4px 8px",
+                    fontSize: "11px",
+                    fontWeight: "600",
+                    borderRadius: "4px"
+                  }}
+                >
+                  🟡 Offline ({queuedCount} queued)
+                </span>
+              ) : queuedCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSyncing(true);
+                    replayQueue().finally(() => setIsSyncing(false));
+                  }}
+                  disabled={isSyncing}
+                  style={{
+                    background: "rgba(59, 130, 246, 0.2)",
+                    color: "#93c5fd",
+                    border: "1px solid rgba(59, 130, 246, 0.4)",
+                    padding: "4px 8px",
+                    fontSize: "11px",
+                    fontWeight: "600",
+                    borderRadius: "4px",
+                    cursor: "pointer"
+                  }}
+                >
+                  {isSyncing ? "🔄 Syncing..." : `🔄 Sync (${queuedCount})`}
+                </button>
+              ) : (
+                <span
+                  style={{
+                    background: "rgba(16, 185, 129, 0.15)",
+                    color: "#34d399",
+                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                    padding: "4px 8px",
+                    fontSize: "11px",
+                    fontWeight: "600",
+                    borderRadius: "4px"
+                  }}
+                >
+                  🟢 Live
+                </span>
+              )}
+            </div>
+
             {/* Bilingual Language Switcher (EN | नेपाली) */}
             <div
               role="group"
@@ -217,6 +311,33 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
             </button>
           </div>
         </header>
+
+        {/* Global Toast Notification */}
+        {toastMessage && (
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              position: "fixed",
+              top: "60px",
+              right: "24px",
+              zIndex: 9999,
+              background: "#0f172a",
+              color: "#fde047",
+              border: "1px solid #ca8a04",
+              borderRadius: "6px",
+              padding: "10px 16px",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
+              fontSize: "13px",
+              fontWeight: "600",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px"
+            }}
+          >
+            <span>⚠️ {toastMessage}</span>
+          </div>
+        )}
 
         <main style={{ padding: "24px", flex: 1, overflowY: "auto" }} id="main-content">
           {children}
