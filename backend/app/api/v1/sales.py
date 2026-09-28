@@ -77,6 +77,13 @@ def list_orders(current_user: User = Depends(get_current_user), db: Session = De
         })
     return result
 
+from decimal import Decimal
+from contextlib import ExitStack
+from sqlalchemy import func
+from app.models.stock_snapshot import StockSnapshot
+from app.core.currency import quantize_npr
+from app.core.locks import get_stock_mutex
+
 @router.post("/orders")
 def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(require_editor), db: Session = Depends(get_db)):
     # Defensive check: ensure client belongs strictly to caller's company (Tenant Isolation / IDOR prevention)
@@ -84,58 +91,110 @@ def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(requ
     if not client_repo.get_by_id(data.client_id):
         raise HTTPException(status_code=404, detail="Client not found in current company")
 
-    # Defensive check: ensure each product belongs strictly to caller's company
-    product_repo = TenantRepository(Product, db, current_user.company_id)
-    for item in data.items:
-        if not product_repo.get_by_id(item.product_id):
-            raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found in current company")
-
     order_repo = TenantRepository(SalesOrder, db, current_user.company_id)
     item_repo = TenantRepository(SalesItem, db, current_user.company_id)
     movement_repo = TenantRepository(StockMovement, db, current_user.company_id)
 
-    # 1. Calculate order total
-    total_amount = sum(item.quantity * item.unit_price for item in data.items)
-    receivable_amount = total_amount - data.received_amount
+    # Acquire in-process mutexes sorted by product_id to prevent AB-BA deadlocks across threads
+    locks = [get_stock_mutex(current_user.company_id, pid) for pid in sorted(list(set(item.product_id for item in data.items)))] if data.delivered else []
 
-    # 2. Create order record
-    order = order_repo.create(
-        order_number=data.order_number,
-        client_id=data.client_id,
-        order_date_ad=data.order_date_ad,
-        order_date_bs=data.order_date_bs,
-        status="delivered" if data.delivered else "pending",
-        total_amount=total_amount,
-        received_amount=data.received_amount,
-        receivable_amount=receivable_amount,
-        delivered=data.delivered
-    )
+    with ExitStack() as stack:
+        for lock in locks:
+            stack.enter_context(lock)
 
-    # 3. Create item line entries & stock movements (-1 OUT)
-    for item in data.items:
-        line_total = item.quantity * item.unit_price
-        item_repo.create(
-            sales_order_id=order.id,
-            product_id=item.product_id,
-            quantity=item.quantity,
-            unit_price=item.unit_price,
-            total_price=line_total
+        # 1. Pessimistic Row Locking & Physical Stock Boundary Check
+        for item in data.items:
+            # Acquire row-level lock on product variant (with_for_update)
+            product = db.query(Product).filter(
+                Product.id == item.product_id,
+                Product.company_id == current_user.company_id
+            ).with_for_update().first()
+
+            if not product:
+                raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found in current company")
+
+            if data.delivered:
+                # Calculate current available balance within the lock boundary
+                latest_snap = db.query(StockSnapshot).filter(
+                    StockSnapshot.company_id == current_user.company_id,
+                    StockSnapshot.product_id == item.product_id
+                ).order_by(StockSnapshot.snapshot_date.desc(), StockSnapshot.id.desc()).first()
+
+                if latest_snap:
+                    subsequent = db.query(
+                        func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), 0.0)
+                    ).filter(
+                        StockMovement.company_id == current_user.company_id,
+                        StockMovement.product_id == item.product_id,
+                        StockMovement.id > latest_snap.last_movement_id
+                    ).scalar()
+                    current_balance = float(latest_snap.balance) + float(subsequent)
+                else:
+                    current_balance = float(
+                        db.query(func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), 0.0))
+                        .filter(
+                            StockMovement.product_id == item.product_id,
+                            StockMovement.company_id == current_user.company_id
+                        )
+                        .scalar()
+                    )
+
+                if current_balance - float(item.quantity) < 0:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Insufficient physical stock for this size variant (Available: {int(current_balance)}, Requested: {int(item.quantity)})"
+                    )
+
+        # 2. Strict Decimal Precision Currency Calculation
+        total_amount_dec = quantize_npr(sum(
+            quantize_npr(Decimal(str(item.quantity)) * quantize_npr(item.unit_price))
+            for item in data.items
+        ))
+        received_dec = quantize_npr(data.received_amount)
+        receivable_dec = quantize_npr(total_amount_dec - received_dec)
+
+        total_amount = float(total_amount_dec)
+        received_amount = float(received_dec)
+        receivable_amount = float(receivable_dec)
+
+        # 3. Create order record
+        order = order_repo.create(
+            order_number=data.order_number,
+            client_id=data.client_id,
+            order_date_ad=data.order_date_ad,
+            order_date_bs=data.order_date_bs,
+            status="delivered" if data.delivered else "pending",
+            total_amount=total_amount,
+            received_amount=received_amount,
+            receivable_amount=receivable_amount,
+            delivered=data.delivered
         )
 
-        if data.delivered:
-            movement_repo.create(
+        # 4. Create item line entries & stock movements (-1 OUT)
+        for item in data.items:
+            line_total_dec = quantize_npr(Decimal(str(item.quantity)) * quantize_npr(item.unit_price))
+            item_repo.create(
+                sales_order_id=order.id,
                 product_id=item.product_id,
                 quantity=item.quantity,
-                direction=-1,
-                ref_type="sale",
-                ref_id=order.id,
-                date_ad=data.order_date_ad,
-                date_bs=data.order_date_bs,
-                notes=f"Sales Order {data.order_number}"
+                unit_price=float(quantize_npr(item.unit_price)),
+                total_price=float(line_total_dec)
             )
 
-    db.commit()
-    return order
+            if data.delivered:
+                movement_repo.create(
+                    product_id=item.product_id,
+                    quantity=item.quantity,
+                    direction=-1,
+                    ref_type="sale",
+                    ref_id=order.id,
+                    date_ad=data.order_date_ad,
+                    date_bs=data.order_date_bs,
+                    notes=f"Sales Order {data.order_number}"
+                )
+
+        db.commit()
+        return order
 
 # Payments
 @router.post("/payments")
@@ -154,11 +213,24 @@ def record_payment(data: PaymentCreate, current_user: User = Depends(require_edi
     if order.client_id != data.client_id:
         raise HTTPException(status_code=400, detail="Client ID does not match sales order client")
 
-    payment = payment_repo.create(**data.model_dump())
-    
-    # Update order received & receivable balance
-    order.received_amount += data.amount
-    order.receivable_amount = max(0.0, order.total_amount - order.received_amount)
-    
+    payment_amt_dec = quantize_npr(data.amount)
+    payment = payment_repo.create(
+        sales_order_id=data.sales_order_id,
+        client_id=data.client_id,
+        amount=float(payment_amt_dec),
+        payment_date_ad=data.payment_date_ad,
+        payment_date_bs=data.payment_date_bs,
+        payment_method=data.payment_method,
+        notes=data.notes
+    )
+
+    # Update order received & receivable balance with exact Decimal quantization
+    new_received_dec = quantize_npr(Decimal(str(order.received_amount)) + payment_amt_dec)
+    order_total_dec = quantize_npr(order.total_amount)
+    new_receivable_dec = quantize_npr(max(Decimal("0.00"), order_total_dec - new_received_dec))
+
+    order.received_amount = float(new_received_dec)
+    order.receivable_amount = float(new_receivable_dec)
+
     db.commit()
     return payment

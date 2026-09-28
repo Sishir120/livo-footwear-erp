@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/backend/:path*",
+      "destination": "https://livo-footwear-erp-backend.onrender.com/api/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://livo-footwear-erp-backend.onrender.com/api/:path*"
+    }
+  ]
+}

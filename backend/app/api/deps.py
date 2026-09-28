@@ -49,6 +49,10 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive.",
         )
+
+    # Set company_id in contextvar for structured logging
+    from app.middleware.correlation import set_company_id
+    set_company_id(user.company_id)
         
     return user
 

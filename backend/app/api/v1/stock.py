@@ -3,7 +3,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.api.deps import get_db, get_current_user, require_editor
 from app.models.user import User
 from app.models.stock import Product, StockMovement
@@ -15,6 +15,14 @@ router = APIRouter(prefix="/stock", tags=["Stock Ledger"])
 class SnapshotCreate(BaseModel):
     snapshot_date: Optional[str] = None  # YYYY-MM-DD, defaults to today
 
+class StockMovementCreate(BaseModel):
+    product_id: int
+    quantity: float
+    direction: int = Field(..., description="1 for inward, -1 for outbound")
+    reference_type: Optional[str] = "manual"
+    reference_id: Optional[int] = None
+    notes: Optional[str] = None
+
 @router.get("/movements")
 def list_stock_movements(
     product_id: Optional[int] = Query(None),
@@ -25,6 +33,109 @@ def list_stock_movements(
     if product_id:
         return repo.filter(StockMovement.product_id == product_id)
     return repo.get_all()
+
+from app.core.locks import get_stock_mutex
+
+@router.post("/movements")
+def create_stock_movement(
+    payload: StockMovementCreate,
+    current_user: User = Depends(require_editor),
+    db: Session = Depends(get_db)
+):
+    """
+    Appends a stock ledger movement with explicit pessimistic row-level locking
+    and atomic negative stock verification boundary check.
+    """
+    if payload.direction not in (-1, 1):
+        raise HTTPException(status_code=400, detail="Direction must be 1 (inward) or -1 (outbound)")
+    if payload.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be greater than 0")
+
+    # Before appending any outbound stock movement (direction = -1):
+    if payload.direction == -1:
+        mutex = get_stock_mutex(current_user.company_id, payload.product_id)
+        with mutex:
+            # 1. Acquire an explicit pessimistic row lock on the target product variant inside current transaction:
+            product = db.query(Product).filter(
+                Product.id == payload.product_id,
+                Product.company_id == current_user.company_id
+            ).with_for_update().first()
+
+            if not product:
+                raise HTTPException(status_code=404, detail="Product not found in current company")
+
+            # 2. Compute the current available balance inside this serialized transaction boundary:
+            latest_snap = db.query(StockSnapshot).filter(
+                StockSnapshot.company_id == current_user.company_id,
+                StockSnapshot.product_id == payload.product_id
+            ).order_by(StockSnapshot.snapshot_date.desc(), StockSnapshot.id.desc()).first()
+
+            if latest_snap:
+                subsequent = db.query(
+                    func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), 0.0)
+                ).filter(
+                    StockMovement.company_id == current_user.company_id,
+                    StockMovement.product_id == payload.product_id,
+                    StockMovement.id > latest_snap.last_movement_id
+                ).scalar()
+                current_balance = float(latest_snap.balance) + float(subsequent)
+            else:
+                current_balance = float(
+                    db.query(func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), 0.0))
+                    .filter(
+                        StockMovement.product_id == payload.product_id,
+                        StockMovement.company_id == current_user.company_id
+                    )
+                    .scalar()
+                )
+
+            # 3. If current_balance - payload.quantity < 0:
+            if current_balance - payload.quantity < 0:
+                avail_str = int(current_balance) if current_balance.is_integer() else current_balance
+                req_str = int(payload.quantity) if payload.quantity.is_integer() else payload.quantity
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Insufficient physical stock for this size variant (Available: {avail_str}, Requested: {req_str})"
+                )
+
+            # 4. Append the -1 movement and commit the transaction, releasing the lock.
+            movement_repo = TenantRepository(StockMovement, db, current_user.company_id)
+            movement = movement_repo.create(
+                product_id=payload.product_id,
+                direction=payload.direction,
+                quantity=payload.quantity,
+                ref_type=payload.reference_type or "manual",
+                ref_id=payload.reference_id,
+                notes=payload.notes,
+                date_ad=datetime.now().strftime("%Y-%m-%d"),
+                date_bs=""
+            )
+            db.commit()
+            db.refresh(movement)
+            return movement
+
+    # Inward movement (+1)
+    product = db.query(Product).filter(
+        Product.id == payload.product_id,
+        Product.company_id == current_user.company_id
+    ).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found in current company")
+
+    movement_repo = TenantRepository(StockMovement, db, current_user.company_id)
+    movement = movement_repo.create(
+        product_id=payload.product_id,
+        direction=payload.direction,
+        quantity=payload.quantity,
+        ref_type=payload.reference_type or "manual",
+        ref_id=payload.reference_id,
+        notes=payload.notes,
+        date_ad=datetime.now().strftime("%Y-%m-%d"),
+        date_bs=""
+    )
+    db.commit()
+    db.refresh(movement)
+    return movement
 
 @router.get("/snapshots")
 def list_stock_snapshots(

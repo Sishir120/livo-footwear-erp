@@ -25,11 +25,21 @@ elif db_url.startswith("postgresql"):
                         connect_args["sslmode"] = "require"
 
 
+from sqlalchemy import event
+
 engine = create_engine(
             db_url,
             connect_args=connect_args,
             pool_pre_ping=True
 )
+
+if db_url.startswith("sqlite"):
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA busy_timeout = 30000")
+        cursor.execute("PRAGMA journal_mode = WAL")
+        cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, expire_on_commit=False, bind=engine)
 Base = declarative_base()

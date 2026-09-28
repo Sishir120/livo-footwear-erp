@@ -18,7 +18,8 @@ import {
 } from "lucide-react";
 import { exportToCSV } from "../utils/csvExport";
 import { useBarcodeScanner } from "../hooks/useBarcodeScanner";
-import { apiFetch } from "../lib/api";
+import { apiFetch, extractSupportReference } from "../lib/api";
+import { toPaisa, fromPaisa, calculateVatPaisa } from "../utils/currency";
 
 export function SalesInvoiceView({ userRole }: { userRole?: string }) {
   const [clients, setClients] = useState<any[]>([]);
@@ -42,6 +43,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
   const [continuousMode, setContinuousMode] = useState(true);
   const [keepClient, setKeepClient] = useState(true);
   const [successFeedback, setSuccessFeedback] = useState("");
+  const [errorBanner, setErrorBanner] = useState<{ message: string; refCode?: string } | null>(null);
 
   // Field Refs for Sequential Keyboard Traversal
   const clientRef = useRef<HTMLSelectElement>(null);
@@ -198,6 +200,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
       });
 
       if (res.ok) {
+        setErrorBanner(null);
         const order = await res.json();
         // Generate Invoice for the order automatically
         const invRes = await apiFetch("/api/v1/invoices", {
@@ -237,11 +240,21 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
           }, 60);
         }
       } else {
-        const err = await res.json();
-        alert(err.detail || "Failed to create sales order");
+        const reqId = extractSupportReference(res);
+        const err = await res.json().catch(() => ({}));
+        const detailMsg = err.detail || "Failed to create sales order";
+        console.error(`Transaction failed. Support reference: [${reqId}]`, detailMsg);
+        setErrorBanner({
+          message: detailMsg,
+          refCode: reqId
+        });
       }
-    } catch (e) {
-      alert("Error saving sales order");
+    } catch (e: any) {
+      console.error("Network or submission error:", e);
+      setErrorBanner({
+        message: e?.message || "Error saving sales order. Please verify connection.",
+        refCode: "req_network_err"
+      });
     } finally {
       setSubmitting(false);
     }
@@ -708,6 +721,26 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
 
             <form onSubmit={(e) => handleCreateOrder(e, false)} onKeyDown={handleFormKeyDown} style={{ display: "flex", flexDirection: "column", flex: 1 }}>
               <div className="modal-body">
+                {/* Support Reference Error Banner */}
+                {errorBanner && (
+                  <div role="alert" style={{ background: "rgba(220, 38, 38, 0.15)", border: "1px solid #ef4444", borderRadius: "4px", padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", color: "#fca5a5" }}>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+                      <AlertTriangle size={16} style={{ color: "#ef4444", flexShrink: 0, marginTop: "2px" }} />
+                      <div>
+                        <div style={{ fontSize: "12px", fontWeight: "700", color: "#fee2e2" }}>
+                          Transaction failed. Support reference: [{errorBanner.refCode || "req_unknown"}]
+                        </div>
+                        <div style={{ fontSize: "11.5px", color: "#fca5a5", marginTop: "2px" }}>
+                          {errorBanner.message}
+                        </div>
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => setErrorBanner(null)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", padding: "0" }}>
+                      <X size={15} />
+                    </button>
+                  </div>
+                )}
+
                 {/* Success Feedback Toast for Continuous Entry */}
                 {successFeedback && (
                   <div role="status" aria-live="polite" style={{ background: "rgba(37, 99, 235, 0.15)", border: "1px solid #2563eb", borderRadius: "4px", padding: "8px 12px", display: "flex", alignItems: "center", gap: "8px", color: "#93c5fd", fontSize: "12.5px", fontWeight: "600" }}>
@@ -825,32 +858,31 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                   </div>
                 </div>
 
-                {/* Inline Nepal VAT & Financial Calculations Strip */}
+                {/* Inline Nepal VAT & Financial Calculations Strip with Strict Paisa Arithmetic */}
                 {(() => {
-                  const q = parseFloat(quantity) || 0;
-                  const r = parseFloat(unitPrice) || 0;
-                  const subtotal = q * r;
-                  const vat = subtotal * 0.13;
-                  const total = subtotal + vat;
-                  const rcv = parseFloat(receivedAmount) || 0;
-                  const due = Math.max(0, total - rcv);
+                  const q = Math.max(0, parseFloat(quantity) || 0);
+                  const unitPricePaisa = toPaisa(unitPrice || "0");
+                  const subtotalPaisa = Math.round(q * unitPricePaisa);
+                  const { vatPaisa, grandTotalPaisa } = calculateVatPaisa(subtotalPaisa, 13);
+                  const rcvPaisa = toPaisa(receivedAmount || "0");
+                  const duePaisa = Math.max(0, grandTotalPaisa - rcvPaisa);
                   return (
                     <div style={{ background: "#090d16", border: "1px solid #1e293b", borderRadius: "4px", padding: "8px 12px", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", textAlign: "center" }}>
                       <div>
                         <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Subtotal</div>
-                        <div className="num-mono-bold" style={{ fontSize: "12px", color: "#f8fafc" }}>Rs. {subtotal.toLocaleString()}</div>
+                        <div className="num-mono-bold" style={{ fontSize: "12px", color: "#f8fafc" }}>Rs. {fromPaisa(subtotalPaisa)}</div>
                       </div>
                       <div>
                         <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>13% Nepal VAT</div>
-                        <div className="num-mono" style={{ fontSize: "12px", color: "#94a3b8" }}>Rs. {vat.toFixed(0)}</div>
+                        <div className="num-mono" style={{ fontSize: "12px", color: "#94a3b8" }}>Rs. {fromPaisa(vatPaisa)}</div>
                       </div>
                       <div>
                         <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Grand Total</div>
-                        <div className="num-mono-bold" style={{ fontSize: "12px", color: "#60a5fa" }}>Rs. {total.toFixed(0)}</div>
+                        <div className="num-mono-bold" style={{ fontSize: "12px", color: "#60a5fa" }}>Rs. {fromPaisa(grandTotalPaisa)}</div>
                       </div>
                       <div>
                         <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Receivable Due</div>
-                        <div className="num-mono-bold" style={{ fontSize: "12px", color: due > 0 ? "#f87171" : "#10b981" }}>Rs. {due.toFixed(0)}</div>
+                        <div className="num-mono-bold" style={{ fontSize: "12px", color: duePaisa > 0 ? "#f87171" : "#10b981" }}>Rs. {fromPaisa(duePaisa)}</div>
                       </div>
                     </div>
                   );

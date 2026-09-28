@@ -23,7 +23,9 @@ def list_invoices(current_user: User = Depends(get_current_user), db: Session = 
     repo = TenantRepository(Invoice, db, current_user.company_id)
     return repo.get_all()
 
+from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
+from app.core.currency import quantize_npr, calculate_vat
 
 @router.post("")
 def generate_invoice(data: InvoiceCreate, current_user: User = Depends(require_editor), db: Session = Depends(get_db)):
@@ -34,9 +36,19 @@ def generate_invoice(data: InvoiceCreate, current_user: User = Depends(require_e
     if not order:
         raise HTTPException(status_code=404, detail="Sales order not found")
 
-    subtotal = order.total_amount
-    vat_amount = (subtotal * (data.vat_rate / 100.0)) if data.vat_enabled else 0.0
-    total_amount = subtotal + vat_amount
+    # Strict Decimal precision with statutory Nepal VAT calculation
+    subtotal_taxable, vat_dec, grand_total_dec = calculate_vat(
+        order.total_amount,
+        vat_enabled=data.vat_enabled,
+        custom_rate=Decimal(str(data.vat_rate)) if data.vat_enabled else Decimal("13.0")
+    )
+    received_dec = quantize_npr(order.received_amount)
+    receivable_dec = quantize_npr(grand_total_dec - received_dec)
+
+    subtotal = float(subtotal_taxable)
+    vat_amount = float(vat_dec)
+    total_amount = float(grand_total_dec)
+    receivable_amount = float(receivable_dec)
 
     # Retry loop to handle concurrent request sequence number collisions safely under the DB unique constraint
     max_retries = 3

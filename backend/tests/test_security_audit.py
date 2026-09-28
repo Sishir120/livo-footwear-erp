@@ -195,6 +195,17 @@ def test_tenant_isolation_and_idor_prevention(setup_audit_env):
         assert c_res.status_code == 200
         t1_client_id = c_res.json()["id"]
 
+        b_res = client1.post("/api/v1/production/batches", json={
+            "batch_number": "T1-BATCH-101",
+            "product_id": t1_product_id,
+            "target_quantity": 50.0,
+            "produced_quantity": 50.0,
+            "worker_count": 4,
+            "date_ad": "2026-10-01",
+            "date_bs": "2083-06-15"
+        })
+        assert b_res.status_code == 200
+
         o_res = client1.post("/api/v1/sales/orders", json={
             "order_number": "T1-ORD-9001",
             "client_id": t1_client_id,
