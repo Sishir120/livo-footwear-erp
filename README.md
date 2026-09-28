@@ -84,15 +84,159 @@ Recorded live across the deployed cloud environment using the DOM/browser agent:
 
 ---
 
-## 📐 Interactive Architecture & Triage Diagrams (Archify)
+## 📐 System Architecture, Workflows & Rookie Debugging Decision Tree
 
-All diagrams are compiled as standalone, interactive HTML files with trace animations, dark/light themes, and inspectable lifelines:
+```mermaid
+flowchart TB
+    subgraph CLIENT ["🖥️ CLIENT LAYER (Factory Floor & Executive Cockpit)"]
+        BROWSER["Modern Browser / Mobile Tablet\n(Next.js 14 High-Density UI · Tailwind Tokens)"]
+        SCANNER["Hardware Barcode Scanner\n(USB / Bluetooth HID Burst < 35ms)"]
+        OFFLINE_DB[("Terminal IndexedDB Outbox\n(Offline Mutation Queue · Idempotent UUID)")]
+        I18N_ENGINE["Bilingual Localizer\n(English / Authentic Nepali · Zero Layout Shift)"]
+        PAISA_MATH["Integer Paisa Math Engine\n(1 NPR = 100 Paisa · Zero IEEE-754 Drift)"]
+    end
 
-1. [**Complete Footwear ERP Lifecycle Diagram** (`docs/diagrams/workflow_complete_erp_lifecycle.html`)](docs/diagrams/workflow_complete_erp_lifecycle.html)  
-   *Visualizes data flow from Supplier Purchase Order $\rightarrow$ Hash-verified bill attachment $\rightarrow$ Paris Points 32–43 Batch creation $\rightarrow$ Append-only `StockMovement` (+IN) $\rightarrow$ Wholesale sales order (-OUT) $\rightarrow$ Sequential invoice generation $\rightarrow$ Nepal 13% VAT $\rightarrow$ Daily financial ledger rollups.*
+    subgraph DEVOPS_EDGE ["🌐 DEVOPS EDGE & REVERSE PROXY (Vercel Global CDN)"]
+        VERCEL_EDGE["Vercel Global Edge Network\n(Anycast CDN · SSL Termination)"]
+        REWRITE_PROXY["Internal Edge Rewrite (/api/backend/*)\n(Routes calls through frontend domain)"]
+        FIRST_PARTY_COOKIE["First-Party Session Cookie\n(SameSite=Lax · Secure · HttpOnly)"]
+    end
 
-2. [**Critical Debugging Triage Flowchart** (`docs/diagrams/workflow_critical_debugging_triage.html`)](docs/diagrams/workflow_critical_debugging_triage.html)  
-   *Operational incident triage mapping client breaking points (Browser Network vs. Vercel Edge vs. Render 504 Cold Start vs. Neon DB Pool Timeout) with exact 1-click mitigation vectors for `401 Expired`, `403 Viewer Defense`, `409 Sequence Conflict`, and `422 Negative Stock Boundary`.*
+    subgraph BACKEND_ENGINE ["⚡ BACKEND API ENGINE (Render Cloud / Python 3.12 FastAPI)"]
+        CORR_MIDDLEWARE["Correlation Middleware\n(Extracts / Generates X-Request-ID: req_xxxxxxxxxxxx)"]
+        AUTH_RBAC["JWT Security & RBAC Guard\n(Admin/Editor Mutate vs. Viewer Read-Only)"]
+        MUTEX_LOCK["Concurrency Mutex & Pessimistic Lock\n(Product.with_for_update · Stock Barrier)"]
+        BOM_ENGINE["Automated BOM Deduction Engine\n(Raw Material KG / Meters consumed per batch)"]
+        VAT_ENGINE["Statutory Tax Engine\n(Exact 13% Nepal VAT · Decimal ROUND_HALF_UP)"]
+        SNAPSHOT_ENGINE["O(1) Snapshot Aggregator\n(Stock = Snapshot Balance + Delta Movements)"]
+    end
+
+    subgraph PERSISTENCE ["🗄️ PERSISTENCE & DEVOPS INFRASTRUCTURE (Neon PostgreSQL + Storage)"]
+        NEON_DB[("Neon Serverless PostgreSQL\n(Auto-Suspend · PgBouncer Pooled Connection)")]
+        STOCK_LEDGER[("stock_movements Table\n(Signed Append-Only Ledger: +1 IN / -1 OUT)")]
+        INVOICE_SEQ[("invoices Table\n(uq_invoice_company_sequence Unique DB Lock)")]
+        SNAPSHOTS[("stock_snapshots Table\n(Materialized Balance & last_movement_id)")]
+        S3_BACKUP[("Cloud Storage / S3 Backups\n(Daily pg_dump Snapshots & Vendor Bill Attachments)")]
+    end
+
+    SCANNER -->|"Rapid Scan Burst"| BROWSER
+    BROWSER <-->|"Auto-Sync / Flush"| OFFLINE_DB
+    BROWSER --- I18N_ENGINE
+    BROWSER --- PAISA_MATH
+    BROWSER -->|"HTTPS Requests"| VERCEL_EDGE
+    VERCEL_EDGE --> REWRITE_PROXY
+    REWRITE_PROXY -->|"Proxied API Calls"| CORR_MIDDLEWARE
+    REWRITE_PROXY -.-> FIRST_PARTY_COOKIE
+    CORR_MIDDLEWARE --> AUTH_RBAC
+    AUTH_RBAC --> MUTEX_LOCK
+    MUTEX_LOCK --> BOM_ENGINE
+    BOM_ENGINE --> VAT_ENGINE
+    VAT_ENGINE --> SNAPSHOT_ENGINE
+    SNAPSHOT_ENGINE -->|"ACID Transaction"| NEON_DB
+    NEON_DB --- STOCK_LEDGER
+    NEON_DB --- INVOICE_SEQ
+    NEON_DB --- SNAPSHOTS
+    NEON_DB -.->|"Automated Nightly Backups"| S3_BACKUP
+```
+
+---
+
+### 🏭 End-to-End Factory Manufacturing & Financial Lifecycle
+
+```mermaid
+flowchart LR
+    subgraph P1 ["1. Procurement"]
+        PO["Raw Material Purchase\n(Leather, Rubber, Soles)"]
+        RM_STOCK["Raw Material Stock\n(+KG / +Meters Inward)"]
+    end
+
+    subgraph P2 ["2. Manufacturing"]
+        BATCH["Log Production Batch\n(Paris Points Sizes 32–43)"]
+        BOM["Auto BOM Deduction\n(-Raw Materials Consumed)"]
+        IN_LEDGER["Stock Movement (+IN)\n(+Finished Footwear Pairs)"]
+    end
+
+    subgraph P3 ["3. Sales & Dispatch"]
+        SO["Wholesale Sales Order\n(Client, Size, Price Selection)"]
+        LOCK_CHECK{"Pessimistic Lock Check\n(Available Stock >= Order?)"}
+        OUT_LEDGER["Stock Movement (-OUT)\n(-Finished Pairs Dispatched)"]
+    end
+
+    subgraph P4 ["4. Statutory Invoicing"]
+        VAT_CALC["Paisa Precision Calc\n(Taxable Subtotal + 13% VAT)"]
+        INV_LOCK["Monotonic Sequence Lock\n(INV-01-XXXXX Unique Constraint)"]
+        PRINT_INV["Statutory Printable Invoice\n(PAN, Signatures, Line Items)"]
+    end
+
+    subgraph P5 ["5. Financial Velocity"]
+        PAYMENT["Record Cash / Bank Payment\n(Integer Paisa Arithmetic)"]
+        COCKPIT["Executive Cockpit Update\n(Realized Cash Ratio & Daily Velocity)"]
+    end
+
+    PO --> RM_STOCK
+    RM_STOCK --> BOM
+    BATCH --> BOM
+    BOM --> IN_LEDGER
+    IN_LEDGER --> SO
+    SO --> LOCK_CHECK
+    LOCK_CHECK -->|"Stock Available"| OUT_LEDGER
+    LOCK_CHECK -->|"Insufficient Stock"| ERR_422["HTTP 422 Barrier\n(Oversell Blocked)"]
+    OUT_LEDGER --> VAT_CALC
+    VAT_CALC --> INV_LOCK
+    INV_LOCK --> PRINT_INV
+    PRINT_INV --> PAYMENT
+    PAYMENT --> COCKPIT
+```
+
+---
+
+### 🩺 Rookie-Proof Troubleshooting & Debugging Decision Tree
+
+If anything fails on the factory floor or during testing, follow this intuitive diagnostic tree step-by-step:
+
+```mermaid
+flowchart TD
+    START(["🚨 Observation / Error Occurred on LIVO ERP"]) --> SYMPTOM{"What is the exact observable symptom?"}
+
+    %% Symptom 1: Spinner / 504 Gateway Timeout
+    SYMPTOM -->|"Page spins forever (>15s) or HTTP 504"| CAUSE_504["Render Free-Tier Container Hibernating\n(Sleeps after 15 min of zero traffic)"]
+    CAUSE_504 --> FIX_504["⚡ 10-Second Rookie Fix:\nRun the health check warmup ping in terminal:\ncurl -s https://livo-footwear-erp-backend.onrender.com/api/v1/health\nWait 15s for the container to wake up. Reload page!"]
+
+    %% Symptom 2: 401 Unauthorized / 403 Forbidden
+    SYMPTOM -->|"HTTP 401 or 403 Error Banner"| CHECK_AUTH{"Which error code is returned?"}
+    CHECK_AUTH -->|"HTTP 401 (Unauthorized)"| FIX_401["🔑 5-Second Rookie Fix:\nJWT session token expired or cookie cleared.\nClick 'Demo Admin' or log in again."]
+    CHECK_AUTH -->|"HTTP 403 (Forbidden)"| FIX_403["🛡️ Intentional Security Guard:\nYou are logged in as 'viewer_demo' (Auditor Mode).\nMutation buttons are disabled by design.\nClick 'Demo Admin' (admin_demo) to regain write access."]
+
+    %% Symptom 3: 422 Negative Stock Boundary
+    SYMPTOM -->|"HTTP 422 (Insufficient physical stock)"| CAUSE_422["Negative Stock Boundary Guard Triggered:\nAttempted to dispatch more pairs than exist in stock."]
+    CAUSE_422 --> FIX_422["📦 10-Second Rookie Fix:\n1. Check available pairs in Stock Report.\n2. Press Alt+N on Production tab to log a finished batch (+IN).\n3. Re-dispatch the sales order with valid stock."]
+
+    %% Symptom 4: 409 Sequence Conflict
+    SYMPTOM -->|"HTTP 409 (Invoice Sequence Conflict)"| CAUSE_409["Concurrent Invoice Generation Race:\nTwo clerks issued an invoice at the exact same millisecond."]
+    CAUSE_409 --> FIX_409["🔄 Built-In Auto-Recovery:\nThe system automatically retries 3 times.\nSimply click 'Create Invoice' once more."]
+
+    %% Symptom 5: Offline / Network Drop
+    SYMPTOM -->|"Internet Dropped / Factory WiFi Offline"| CAUSE_OFFLINE["Factory Connectivity Lost:\nTerminal Outbox activated automatically."]
+    CAUSE_OFFLINE --> FIX_OFFLINE["💾 Zero Data Loss Guarantee:\nMutations are stored locally in IndexedDB.\nThey automatically flush to the server when connection returns."]
+
+    %% Symptom 6: Any Unknown / General Error
+    SYMPTOM -->|"Error Banner showing Support Reference"| CAUSE_TRACE["Error banner displays reference code:\n'Transaction failed. Support reference: [req_xxxxxxxxxxxx]'"]
+    CAUSE_TRACE --> FIX_TRACE["🔍 Instant Trace Action:\n1. Copy the reference code (e.g. req_8f1a3b2c4d5e).\n2. Search Render Backend Logs for this exact string.\n3. The log shows the exact endpoint, latency, user_id, and Python trace!"]
+```
+
+---
+
+### 🚨 Emergency Triage Matrix & Quick Commands
+
+| Symptom / Error | Root Cause | Immediate 10-Second Remediation |
+| :--- | :--- | :--- |
+| **HTTP 504 / Cold Start** | Render free-tier container spinning down after 15 min idle | Run: `curl -s https://livo-footwear-erp-backend.onrender.com/api/v1/health` (Warms up container in 15s). |
+| **HTTP 401 Unauthorized** | JWT cookie expired after 24h session duration | Click **Demo Admin** on the login screen to re-authenticate with full credentials. |
+| **HTTP 403 Forbidden** | User session is scoped to read-only `viewer` role | Switch role to `editor` or click **Demo Admin** (`admin_demo`) to perform mutations. |
+| **HTTP 422 Stock Error** | Negative stock barrier: Requested quantity > Available pairs | Open **Stock Report**, verify current size pairs, and log a batch (+IN) before dispatching. |
+| **HTTP 409 Conflict** | Invoice monotonic sequence number collision under heavy load | The API retries 3 times automatically. If retries exhaust, click **Create Invoice** once more. |
+| **Network Disconnection** | Factory floor WiFi or cellular backup dropped | Do not reload: The **Terminal Outbox** buffers mutations and will auto-flush upon reconnect. |
+| **Unknown Error Trace** | Backend application exception during transaction | Copy the support reference `[req_xxxxxxxxxxxx]` from the UI and grep Render cloud logs. |
 
 ---
 
