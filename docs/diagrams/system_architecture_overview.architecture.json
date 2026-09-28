@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "LIVO Footwear ERP: Cloud Production Architecture & DevOps Topology",
+    "output": "docs/diagrams/system_architecture_overview.html",
+    "quality_profile": "showcase",
+    "viewBox": [1360, 680],
+    "views": [
+      {
+        "id": "public-traffic",
+        "label": "Client & Edge Ingress",
+        "focus": ["scanner", "browser", "outbox", "edge"],
+        "note": "Hardware barcode input, offline client outbox, and Vercel edge reverse proxy routing."
+      },
+      {
+        "id": "backend-core",
+        "label": "FastAPI Core & Concurrency Mutex",
+        "focus": ["edge", "api", "mutex", "db"],
+        "note": "First-party reverse proxying, correlation tracing, and pessimistic row locking."
+      },
+      {
+        "id": "persistence-dr",
+        "label": "State Persistence & Disaster Recovery",
+        "focus": ["api", "db", "backup"],
+        "note": "Append-only ledger math, snapshot materialization, and 7-day point-in-time recovery."
+      }
+    ]
+  },
+  "components": [
+    { "id": "scanner", "type": "external", "label": "Hardware Barcode", "sublabel": "USB/BT HID < 35ms", "pos": [40, 220], "size": [136, 62], "tag": "factory floor" },
+    { "id": "browser", "type": "frontend", "label": "Next.js Web UI", "sublabel": "Desktop / Tablet", "pos": [280, 220], "size": [136, 62], "tag": "client" },
+    { "id": "outbox", "type": "database", "label": "IndexedDB Outbox", "sublabel": "Offline Outbox", "pos": [280, 420], "size": [136, 62], "tag": "browser state" },
+    { "id": "edge", "type": "cloud", "label": "Vercel Edge Proxy", "sublabel": "Anycast CDN / TLS", "pos": [540, 220], "size": [140, 62], "tag": "edge team" },
+    { "id": "api", "type": "backend", "label": "Render FastAPI", "sublabel": "Python 3.12 Engine", "pos": [810, 220], "size": [140, 62], "tag": "platform" },
+    { "id": "mutex", "type": "security", "label": "Concurrency Mutex", "sublabel": "Row Lock Barrier", "pos": [810, 420], "size": [140, 62], "tag": "zero oversell" },
+    { "id": "db", "type": "database", "label": "Neon PostgreSQL", "sublabel": "PgBouncer + PITR", "pos": [1080, 220], "size": [140, 62], "tag": "data team" },
+    { "id": "backup", "type": "cloud", "label": "Cloud Storage (S3)", "sublabel": "Nightly pg_dump", "pos": [1080, 420], "size": [140, 62], "tag": "disaster recovery" }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Client Environment (Factory Line)", "wraps": ["scanner", "browser", "outbox"], "pad": 16 },
+    { "kind": "security-group", "label": "Production Cloud Network (Vercel + Render + Neon)", "wraps": ["edge", "api", "mutex", "db", "backup"], "pad": 20 }
+  ],
+  "connections": [
+    { "id": "scan-to-ui", "from": "scanner", "to": "browser", "label": "HID keystrokes", "variant": "emphasis" },
+    { "id": "ui-to-outbox", "from": "browser", "to": "outbox", "label": "buffer mutation", "variant": "dashed", "labelAt": [348, 320] },
+    { "id": "ui-to-edge", "from": "browser", "to": "edge", "label": "HTTPS :443", "variant": "emphasis" },
+    { "id": "edge-to-api", "from": "edge", "to": "api", "label": "1st-party rewrite", "variant": "emphasis" },
+    { "id": "api-to-mutex", "from": "api", "to": "mutex", "label": "acquire lock", "variant": "security", "labelAt": [880, 320] },
+    { "id": "api-to-db", "from": "api", "to": "db", "label": "ACID SQL :5432", "variant": "emphasis" },
+    { "id": "db-to-backup", "from": "db", "to": "backup", "label": "pg_dump / WAL", "variant": "dashed", "labelAt": [1150, 320] }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Client & Factory Resiliency",
+      "items": [
+        "Hardware USB/Bluetooth scanner emits rapid keystrokes intercepted in under 35ms",
+        "Terminal Outbox traps mutations in IndexedDB during network cuts with automatic flush",
+        "Bilingual English/Nepali zero-CLS layout switcher supports all factory shift workers"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Backend Integrity & Observability",
+      "items": [
+        "Vercel Edge rewrites /api/backend/* directly into Render, enforcing 1st-party SameSite=Lax cookies",
+        "Correlation middleware tags every transaction with unique X-Request-ID (req_xxxxxxxxxxxx)",
+        "Pessimistic row locking (Product.with_for_update) eliminates negative stock overselling"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "State Persistence & Statutory Tax",
+      "items": [
+        "Append-only stock ledger computes balance dynamically with O(1) snapshot scaling",
+        "Unique constraint (uq_invoice_company_sequence) guarantees monotonic, gapless VAT invoices",
+        "Serverless Neon PostgreSQL with PgBouncer connection pooling and 7-day PITR disaster recovery"
+      ]
+    }
+  ]
+}
