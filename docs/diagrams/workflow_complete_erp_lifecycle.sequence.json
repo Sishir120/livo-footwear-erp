@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Complete Footwear ERP Lifecycle: Procurement, Production, Invoicing & Financials",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 920],
+    "column_fit": "spread",
+    "animation": "trace",
+    "views": [
+      {
+        "id": "procurement-production",
+        "label": "Procurement & Production",
+        "focus": ["clerk", "frontend", "backend", "db", "cloud"],
+        "note": "Raw material inwarding and finished Paris Points batch ledger entries."
+      },
+      {
+        "id": "sales-invoicing",
+        "label": "Wholesale Sales & Invoicing",
+        "focus": ["clerk", "frontend", "backend", "db"],
+        "note": "Append-only stock dispatch, sequence locking, and Nepal 13% VAT calculation."
+      },
+      {
+        "id": "financial-reconciliation",
+        "label": "Financials & Daily Cockpit",
+        "focus": ["frontend", "backend", "db"],
+        "note": "Realized cash ratio, accounts receivable, and append-only ledger rollups."
+      }
+    ]
+  },
+  "participants": [
+    { "id": "clerk", "type": "external", "label": "Factory Staff", "sublabel": "data entry clerk" },
+    { "id": "frontend", "type": "frontend", "label": "Next.js UI", "sublabel": "high-density ERP" },
+    { "id": "backend", "type": "backend", "label": "FastAPI Engine", "sublabel": "RBAC & ledger math" },
+    { "id": "cloud", "type": "cloud", "label": "Blob Storage", "sublabel": "voucher S3 & backups" },
+    { "id": "db", "type": "database", "label": "PostgreSQL", "sublabel": "append-only Neon DB" }
+  ],
+  "segments": [
+    { "from": 140, "to": 285, "label": "Phase 1: Procurement & Raw Material Inward" },
+    { "from": 300, "to": 450, "label": "Phase 2: Production (Paris Points 32-43) & +IN Ledger" },
+    { "from": 465, "to": 635, "label": "Phase 3: Sales Order, 13% VAT & Sequential Invoicing (-OUT)" },
+    { "from": 650, "to": 810, "label": "Phase 4: Cash Settlement, Receivables & Daily Velocity" }
+  ],
+  "messages": [
+    { "from": "clerk", "to": "frontend", "y": 165, "label": "Inward material & bill voucher", "variant": "default" },
+    { "from": "frontend", "to": "backend", "y": 195, "label": "POST /api/v1/purchase/orders", "variant": "emphasis" },
+    { "from": "backend", "to": "cloud", "y": 225, "label": "Store vendor bill attachment (hash-verified)", "variant": "dashed" },
+    { "from": "backend", "to": "db", "y": 255, "label": "INSERT purchase_order & raw_stock (+KG)", "variant": "emphasis" },
+    { "from": "backend", "to": "frontend", "y": 280, "label": "201 Created (Material inventory updated)", "variant": "return" },
+
+    { "from": "clerk", "to": "frontend", "y": 320, "label": "Alt+N: Log finished batch (Sz 32-43)", "variant": "default" },
+    { "from": "frontend", "to": "backend", "y": 350, "label": "POST /api/v1/production/batches", "variant": "emphasis" },
+    { "from": "backend", "to": "db", "y": 380, "label": "Deduct raw material BOM consumption (-leather/rubber)", "variant": "security" },
+    { "from": "backend", "to": "db", "y": 410, "label": "INSERT stock_movements (+IN direction=1)", "variant": "emphasis" },
+    { "from": "backend", "to": "frontend", "y": 440, "label": "201 Created (Stock ledger increased)", "variant": "return" },
+
+    { "from": "clerk", "to": "frontend", "y": 485, "label": "Wholesale client order & rate entry", "variant": "default" },
+    { "from": "frontend", "to": "backend", "y": 515, "label": "POST /api/v1/sales/orders", "variant": "emphasis" },
+    { "from": "backend", "to": "db", "y": 545, "label": "INSERT stock_movements (-OUT direction=-1)", "variant": "emphasis" },
+    { "from": "backend", "to": "db", "y": 575, "label": "Lock uq_invoice_company_sequence + 13% VAT", "variant": "security" },
+    { "from": "backend", "to": "db", "y": 605, "label": "INSERT invoice (INV-01-XXXXX immutable)", "variant": "emphasis" },
+    { "from": "backend", "to": "frontend", "y": 630, "label": "201 Created (Printable VAT invoice ready)", "variant": "return" },
+
+    { "from": "clerk", "to": "frontend", "y": 670, "label": "Record client payment / credit advance", "variant": "default" },
+    { "from": "frontend", "to": "backend", "y": 700, "label": "POST /api/v1/sales/orders/{id}/payments", "variant": "emphasis" },
+    { "from": "backend", "to": "db", "y": 730, "label": "UPDATE receivable_amount & log payment", "variant": "security" },
+    { "from": "frontend", "to": "backend", "y": 755, "label": "GET /api/v1/reports/daily?date_ad=today", "variant": "default" },
+    { "from": "backend", "to": "db", "y": 778, "label": "SUM(direction * quantity) ledger rollups", "variant": "emphasis" },
+    { "from": "backend", "to": "frontend", "y": 804, "label": "200 OK (Executive velocity & cash ratio)", "variant": "return" }
+  ],
+  "activations": [
+    { "participant": "frontend", "from": 165, "to": 282, "type": "frontend" },
+    { "participant": "backend", "from": 195, "to": 280, "type": "backend" },
+    { "participant": "db", "from": 250, "to": 260, "type": "database" },
+
+    { "participant": "frontend", "from": 320, "to": 442, "type": "frontend" },
+    { "participant": "backend", "from": 350, "to": 440, "type": "backend" },
+    { "participant": "db", "from": 375, "to": 415, "type": "database" },
+
+    { "participant": "frontend", "from": 485, "to": 632, "type": "frontend" },
+    { "participant": "backend", "from": 515, "to": 630, "type": "backend" },
+    { "participant": "db", "from": 540, "to": 610, "type": "database" },
+
+    { "participant": "frontend", "from": 670, "to": 806, "type": "frontend" },
+    { "participant": "backend", "from": 700, "to": 804, "type": "backend" },
+    { "participant": "db", "from": 725, "to": 785, "type": "database" }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Strict Append-Only Ledger Math",
+      "items": [
+        "Products carry no mutable stock_qty balance field; state is strictly derived from movements",
+        "Production inserts immutable +IN movements; Wholesale delivery inserts -OUT movements",
+        "Zero-balance and negative inventory boundaries are guaranteed at the transaction layer"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "IRD Sequential Invoicing & 13% VAT",
+      "items": [
+        "Nepal Inland Revenue Department compliance via uq_invoice_company_sequence constraint",
+        "Statutory 13% VAT calculated and rounded inline before immutable row insertion",
+        "Cancelled invoices set is_void=True retaining sequence numbers permanently for audit"
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "Realized Cash & Factory Velocity",
+      "items": [
+        "Immediate cash collected vs receivable balance reconciled automatically per sales order",
+        "Daily Operational Report aggregates velocity: pairs produced vs dispatched",
+        "Executive Industrial Strip visualizes 100% cash realization ratio and floor yield"
+      ]
+    }
+  ]
+}

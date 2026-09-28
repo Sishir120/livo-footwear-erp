@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "LIVO Footwear ERP: Critical Debugging Triage & Emergency Recovery Vectors",
+    "quality_profile": "showcase",
+    "viewBox": [1040, 920],
+    "column_fit": "spread",
+    "animation": "trace",
+    "views": [
+      {
+        "id": "cold-start-triage",
+        "label": "504 Cold Start & Edge Timeout",
+        "focus": ["client", "edge", "backend", "lead"],
+        "note": "Diagnosis and instant mitigation for Render sleeping container."
+      },
+      {
+        "id": "auth-rbac-triage",
+        "label": "401 Expired & 403 Viewer Defense",
+        "focus": ["client", "backend", "lead"],
+        "note": "Resolving JWT expiration and showing off intentional viewer role lockout."
+      },
+      {
+        "id": "ledger-db-triage",
+        "label": "422 Negative Stock & Neon DB Latency",
+        "focus": ["client", "backend", "db", "lead"],
+        "note": "Handling negative inventory boundary checks and Neon connection pooling."
+      }
+    ]
+  },
+  "participants": [
+    { "id": "client", "type": "external", "label": "Presenter UI", "sublabel": "Browser / Next.js" },
+    { "id": "edge", "type": "frontend", "label": "Vercel Edge", "sublabel": "Reverse Proxy & TLS" },
+    { "id": "backend", "type": "backend", "label": "Render FastAPI", "sublabel": "Python Core Engine" },
+    { "id": "db", "type": "database", "label": "Neon PostgreSQL", "sublabel": "Pooled + 7-Day PITR" },
+    { "id": "lead", "type": "external", "label": "Pitch Lead", "sublabel": "On-Call Responder" }
+  ],
+  "segments": [
+    { "from": 140, "to": 285, "label": "Triage 1: 504 Gateway Timeout (Render Container Cold Start)" },
+    { "from": 300, "to": 455, "label": "Triage 2: 401 Auth Expired & 403 Role Mutation Guard" },
+    { "from": 470, "to": 630, "label": "Triage 3: 409 Sequence Conflict & 422 Negative Stock Boundary" },
+    { "from": 645, "to": 810, "label": "Triage 4: Neon DB Connection Pool Latency & Auto-Resume" }
+  ],
+  "messages": [
+    { "from": "client", "to": "edge", "y": 165, "label": "GET /api/v1/reports/daily (Request stalls > 15s)", "variant": "default" },
+    { "from": "edge", "to": "backend", "y": 195, "label": "Forwarding upstream (FastAPI container spinning up)", "variant": "dashed" },
+    { "from": "edge", "to": "client", "y": 225, "label": "504 Gateway Timeout (Vercel 15s edge limit hit)", "variant": "security" },
+    { "from": "lead", "to": "backend", "y": 255, "label": "Mitigation: curl -s https://.../api/v1/health (Warmup ping)", "variant": "emphasis" },
+    { "from": "backend", "to": "client", "y": 280, "label": "200 OK (Warm container ready, sub-50ms responses)", "variant": "return" },
+
+    { "from": "client", "to": "backend", "y": 320, "label": "POST /api/v1/production/batches (Token expired or viewer role)", "variant": "default" },
+    { "from": "backend", "to": "client", "y": 348, "label": "401 Unauthorized / 403 Forbidden (RBAC mutation block)", "variant": "security" },
+    { "from": "lead", "to": "client", "y": 378, "label": "Triage Check: Inspect JWT payload & role claims", "variant": "dashed" },
+    { "from": "client", "to": "backend", "y": 408, "label": "Mitigation: Click 'Demo Admin' quick-switch (Issue new JWT)", "variant": "emphasis" },
+    { "from": "backend", "to": "client", "y": 438, "label": "200 OK (editor_admin role restored with write rights)", "variant": "return" },
+
+    { "from": "client", "to": "backend", "y": 490, "label": "POST /api/v1/sales/orders (Dispatch 60 pairs Sz 41)", "variant": "default" },
+    { "from": "backend", "to": "db", "y": 518, "label": "Check append-only balance & invoice sequence lock", "variant": "emphasis" },
+    { "from": "db", "to": "backend", "y": 546, "label": "422 Unprocessable (Stock balance = 12 pairs; cannot exceed)", "variant": "security" },
+    { "from": "lead", "to": "client", "y": 574, "label": "Mitigation: Alt+N quick batch entry to replenish Sz 41", "variant": "emphasis" },
+    { "from": "backend", "to": "client", "y": 602, "label": "Retry: 201 Created (INV-01-00042 monotonic sequence locked)", "variant": "return" },
+
+    { "from": "backend", "to": "db", "y": 665, "label": "SELECT SUM(stock_movements) (Neon serverless resume)", "variant": "default" },
+    { "from": "db", "to": "backend", "y": 695, "label": "Connection pool wait (Neon PgBouncer cold resume ~1.2s)", "variant": "dashed" },
+    { "from": "lead", "to": "backend", "y": 725, "label": "Triage: Verify pool_pre_ping=True & Neon endpoint status", "variant": "dashed" },
+    { "from": "db", "to": "backend", "y": 755, "label": "PostgreSQL connection active (7-day PITR, SSL enforce)", "variant": "emphasis" },
+    { "from": "backend", "to": "client", "y": 785, "label": "200 OK (Consolidated ledger report rendered in 42ms)", "variant": "return" }
+  ],
+  "activations": [
+    { "participant": "edge", "from": 165, "to": 227, "type": "frontend" },
+    { "participant": "lead", "from": 250, "to": 260, "type": "external" },
+    { "participant": "backend", "from": 255, "to": 282, "type": "backend" },
+
+    { "participant": "backend", "from": 320, "to": 350, "type": "backend" },
+    { "participant": "client", "from": 405, "to": 440, "type": "frontend" },
+    { "participant": "backend", "from": 408, "to": 440, "type": "backend" },
+
+    { "participant": "backend", "from": 490, "to": 604, "type": "backend" },
+    { "participant": "db", "from": 518, "to": 548, "type": "database" },
+
+    { "participant": "backend", "from": 665, "to": 787, "type": "backend" },
+    { "participant": "db", "from": 665, "to": 757, "type": "database" }
+  ],
+  "cards": [
+    {
+      "dot": "amber",
+      "title": "Triage Vector 1: Render Cold Start (504)",
+      "items": [
+        "Render free-tier instances hibernate after 15 minutes of zero traffic",
+        "Always execute pre-pitch warm-up curl 3 minutes before the presentation",
+        "If 504 occurs live: Explain microservice auto-scaling while curl re-warms container in 15s"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Triage Vector 2: RBAC Security Guard (401 / 403)",
+      "items": [
+        "403 Forbidden is a desired architectural defense when presenting viewer_demo role",
+        "Viewer persona cleanly hides Alt+N batch creation and Void invoice action triggers",
+        "Single click on quick-fill 'Demo Admin' instantly switches session to editor_admin"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Triage Vector 3: Ledger & Sequence Safeguards (409 / 422)",
+      "items": [
+        "422 is an intentional safety boundary: prevents phantom stock and negative warehouse balances",
+        "Monotonic sequence uq_invoice_company_sequence guarantees IRD Nepal compliance with zero duplicate bills",
+        "Zero database surgery needed: system protects financial truth at the database constraint level"
+      ]
+    }
+  ]
+}
