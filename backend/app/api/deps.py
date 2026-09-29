@@ -67,3 +67,13 @@ def require_editor(current_user: User = Depends(get_current_user)) -> User:
             detail="Permission denied. Role 'editor' or 'admin' is required for modifying data.",
         )
     return current_user
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Enforces 'admin' role requirement."""
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied. Role 'admin' is required for this operation.",
+        )
+    return current_user
+

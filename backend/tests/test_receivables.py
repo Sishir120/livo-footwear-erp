@@ -81,9 +81,11 @@ def setup_ar_env():
             name="Himalayan Footwear Distributors",
             contact_person="Ramesh Shrestha",
             phone="9841000000",
-            credit_limit=50000.0
+            credit_limit=5000000.0
         )
         db.add(client)
+    else:
+        client.credit_limit = 5000000.0
 
     db.commit()
     db.refresh(comp)

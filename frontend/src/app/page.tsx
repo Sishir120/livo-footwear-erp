@@ -45,6 +45,11 @@ const SettingsView = dynamic(
   { loading: () => <SkeletonLoader title="Loading System Settings..." type="form" />, ssr: false }
 );
 
+const OpsCockpitView = dynamic(
+  () => import("@/components/OpsCockpitView").then((mod) => mod.OpsCockpitView),
+  { loading: () => <SkeletonLoader title="Loading Ops Cockpit..." type="dashboard" />, ssr: false }
+);
+
 export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -151,6 +156,12 @@ export default function Home() {
       {activeTab === "purchase" && (
         <ErrorBoundary screenName="Purchase Raw Materials">
           <PurchaseView userRole={user.role} />
+        </ErrorBoundary>
+      )}
+
+      {activeTab === "ops_cockpit" && user?.role === "admin" && (
+        <ErrorBoundary screenName="Ops Cockpit">
+          <OpsCockpitView />
         </ErrorBoundary>
       )}
 

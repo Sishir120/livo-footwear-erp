@@ -14,6 +14,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     purchase_raw_materials: "Raw Material Purchases",
     sales_invoicing: "Sales & Invoicing",
     settings_backups: "Settings & Diagnostics",
+    ops_cockpit: "Ops Cockpit (सुपरभाइजर ककपिट)",
 
     // Titles
     daily_summary_title: "Daily Operational Summary",
@@ -104,6 +105,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     purchase_raw_materials: "कच्चा पदार्थ खरिद",
     sales_invoicing: "बिक्री तथा बिलिङ",
     settings_backups: "सेटिङ तथा ब्याकअप",
+    ops_cockpit: "सुपरभाइजर ककपिट (Ops Cockpit)",
 
     // Titles
     daily_summary_title: "दैनिक कार्यसञ्चालन प्रतिवेदन",

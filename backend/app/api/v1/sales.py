@@ -84,7 +84,13 @@ from contextlib import ExitStack
 from sqlalchemy import func
 from app.models.stock_snapshot import StockSnapshot
 from app.core.currency import quantize_npr
-from app.core.locks import get_stock_mutex, acquire_stock_advisory_lock
+from app.core.locks import (
+    get_stock_mutex,
+    acquire_stock_advisory_lock,
+    acquire_client_credit_lock,
+    acquire_stock_mutation_lock,
+    get_client_credit_mutex,
+)
 
 @router.post("/orders")
 def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(require_editor), db: Session = Depends(get_db)):
@@ -97,30 +103,38 @@ def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(requ
     item_repo = TenantRepository(SalesItem, db, current_user.company_id)
     movement_repo = TenantRepository(StockMovement, db, current_user.company_id)
 
-    # Acquire distributed PostgreSQL transaction-scoped advisory locks sorted by product_id
+    # Pre-fetch products to obtain SKUs and sizes
+    prod_map = {}
+    for item in data.items:
+        product = db.query(Product).filter(
+            Product.id == item.product_id,
+            Product.company_id == current_user.company_id
+        ).with_for_update().first()
+        if not product:
+            raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found in current company")
+        prod_map[item.product_id] = product
+
+    # Distributed PostgreSQL transaction-scoped advisory locks
+    acquire_client_credit_lock(db, current_user.company_id, data.client_id)
     if data.delivered:
-        for pid in sorted(list(set(item.product_id for item in data.items))):
+        targets = sorted(list(set((1, item.product_id, str(prod_map[item.product_id].size or "")) for item in data.items)))
+        for wh_id, pid, sz in targets:
+            acquire_stock_mutation_lock(db, current_user.company_id, wh_id, pid, sz)
             acquire_stock_advisory_lock(db, current_user.company_id, pid)
 
-    # Acquire in-process mutexes sorted by product_id to prevent AB-BA deadlocks across threads
-    locks = [get_stock_mutex(current_user.company_id, pid) for pid in sorted(list(set(item.product_id for item in data.items)))] if data.delivered else []
+    # In-process mutexes for thread-level synchronization across concurrent requests
+    credit_mutex = get_client_credit_mutex(current_user.company_id, data.client_id)
+    stock_mutexes = [get_stock_mutex(current_user.company_id, pid) for pid in sorted(list(set(item.product_id for item in data.items)))] if data.delivered else []
 
     with ExitStack() as stack:
-        for lock in locks:
+        stack.enter_context(credit_mutex)
+        for lock in stock_mutexes:
             stack.enter_context(lock)
 
-        # 1. Pessimistic Row Locking & Physical Stock Boundary Check
-        prod_map = {}
-        for item in data.items:
-            # Acquire row-level lock on product variant (with_for_update)
-            product = db.query(Product).filter(
-                Product.id == item.product_id,
-                Product.company_id == current_user.company_id
-            ).with_for_update().first()
 
-            if not product:
-                raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found in current company")
-            prod_map[item.product_id] = product
+        # 1. Physical Stock Boundary Check
+        for item in data.items:
+            product = prod_map[item.product_id]
 
             if data.delivered:
                 # Calculate current available balance within the lock boundary
@@ -151,7 +165,15 @@ def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(requ
                 if current_balance - float(item.quantity) < 0:
                     raise HTTPException(
                         status_code=422,
-                        detail=f"Insufficient physical stock for this size variant (Available: {int(current_balance)}, Requested: {int(item.quantity)})"
+                        detail={
+                            "error": "INSUFFICIENT_STOCK",
+                            "sku": product.code,
+                            "size": product.size or "",
+                            "available": int(current_balance),
+                            "requested": int(item.quantity),
+                            "message": f"Insufficient physical stock for this size variant (Available: {int(current_balance)}, Requested: {int(item.quantity)})",
+                            "Insufficient physical stock": True
+                        }
                     )
 
         # 2. Strict Decimal Precision Currency Calculation
@@ -192,7 +214,14 @@ def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(requ
                 if not getattr(data, "supervisor_override", False):
                     raise HTTPException(
                         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                        detail="Credit limit exceeded - supervisor override required"
+                        detail={
+                            "error": "CREDIT_LIMIT_EXCEEDED",
+                            "current_outstanding_paisa": ar_outstanding_paisa,
+                            "credit_limit_paisa": credit_limit_paisa,
+                            "order_value_paisa": order_total_paisa,
+                            "message": "Credit limit exceeded - supervisor override required",
+                            "Credit limit exceeded - supervisor override required": True
+                        }
                     )
 
         # 4. Create order record

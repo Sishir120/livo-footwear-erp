@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   AlertCircle,
   UserCheck,
-  CreditCard
+  CreditCard,
+  ShieldAlert
 } from "lucide-react";
 
 import { LegalModal } from "./LegalModal";
@@ -94,6 +95,7 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
     { id: "receivables", label: t("ar_aging"), icon: CreditCard },
     { id: "production", label: t("production_batches"), icon: Factory },
     { id: "purchase", label: t("purchase_raw_materials"), icon: FileText },
+    ...(user?.role === "admin" ? [{ id: "ops_cockpit", label: t("ops_cockpit"), icon: ShieldAlert }] : []),
     { id: "settings", label: t("settings_backups"), icon: SettingsIcon },
   ];
 
@@ -119,9 +121,9 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
           <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border-color)", background: "#F8FAFC" }}>
             <div style={{ fontSize: "13px", fontWeight: "600", color: "#0F172A" }}>{user.name}</div>
             <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px" }}>
-              <span className={`badge ${user.role === "editor" ? "badge-success" : "badge-info"}`}>
+              <span className={`badge ${user.role === "admin" ? "badge-danger" : user.role === "editor" ? "badge-success" : "badge-info"}`}>
                 <UserCheck size={12} style={{ marginRight: "4px" }} />
-                {user.role === "editor" ? t("role_editor") : t("role_viewer")}
+                {user.role === "admin" ? "ADMIN / SUPERVISOR" : user.role === "editor" ? t("role_editor") : t("role_viewer")}
               </span>
             </div>
           </div>

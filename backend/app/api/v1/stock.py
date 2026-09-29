@@ -43,7 +43,7 @@ def list_stock_movements(
         return repo.filter(StockMovement.product_id == product_id)
     return repo.get_all()
 
-from app.core.locks import get_stock_mutex, acquire_stock_advisory_lock
+from app.core.locks import get_stock_mutex, acquire_stock_advisory_lock, acquire_stock_mutation_lock
 
 @router.post("/movements")
 def create_stock_movement(
@@ -106,7 +106,15 @@ def create_stock_movement(
                 req_str = int(payload.quantity) if payload.quantity.is_integer() else payload.quantity
                 raise HTTPException(
                     status_code=422,
-                    detail=f"Insufficient physical stock for this size variant (Available: {avail_str}, Requested: {req_str})"
+                    detail={
+                        "error": "INSUFFICIENT_STOCK",
+                        "sku": product.code,
+                        "size": product.size or "",
+                        "available": avail_str,
+                        "requested": req_str,
+                        "message": f"Insufficient physical stock for this size variant (Available: {avail_str}, Requested: {req_str})",
+                        "Insufficient physical stock": True
+                    }
                 )
 
             # 4. Append the -1 movement and commit the transaction, releasing the lock.

@@ -218,3 +218,166 @@ def test_concurrent_sales_orders_dispatch_race(setup_race_env):
         target_item = next((it for it in items if it["product_id"] == product_id), None)
         assert target_item is not None
         assert target_item["current_stock_pairs"] == 0.0
+
+
+def test_concurrent_single_pair_dispatch_race(setup_race_env):
+    """
+    Phase 6 Concurrency Proof 1:
+    - Product variant seeded with exactly 1 pair of Size 40.
+    - Two concurrent threads attempt to dispatch 1 pair simultaneously.
+    - Exactly one must succeed (HTTP 200/201), exactly one must fail (HTTP 422).
+    - Final stock balance must be exactly 0 (never -1).
+    """
+    token = setup_race_env["token"]
+    company_id = setup_race_env["company_id"]
+
+    db = SessionLocal()
+    product = Product(
+        company_id=company_id,
+        code="RACE-SNK-40-SOLO",
+        name="Solo Race Sneaker 40",
+        category="Sneaker",
+        size="40",
+        color="Black",
+        unit_price=2000.0
+    )
+    db.add(product)
+    db.commit()
+    db.refresh(product)
+    product_id = product.id
+
+    # Seed exactly 1 pair
+    seed = StockMovement(
+        company_id=company_id,
+        product_id=product_id,
+        direction=1,
+        quantity=1.0,
+        ref_type="production_seed",
+        ref_id=99,
+        notes="Solo pair seed",
+        date_ad="2026-10-01",
+        date_bs=""
+    )
+    db.add(seed)
+    db.commit()
+    db.close()
+
+    def send_dispatch(idx: int):
+        with TestClient(app, cookies={COOKIE_NAME: token}) as client:
+            res = client.post(
+                "/api/v1/stock/movements",
+                json={
+                    "product_id": product_id,
+                    "quantity": 1.0,
+                    "direction": -1,
+                    "reference_type": "solo_race",
+                    "reference_id": idx,
+                    "notes": f"Solo race worker {idx}"
+                }
+            )
+            return res.status_code, res.text
+
+    results = []
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(send_dispatch, i) for i in range(2)]
+        for f in as_completed(futures):
+            results.append(f.result())
+
+    status_codes = [s for s, _ in results]
+    success_count = sum(1 for sc in status_codes if sc in (200, 201))
+    fail_422_count = sum(1 for sc in status_codes if sc == 422)
+
+    assert success_count == 1, f"Expected exactly 1 success, got {success_count}. Statuses: {status_codes}"
+    assert fail_422_count == 1, f"Expected exactly 1 422 failure, got {fail_422_count}. Statuses: {status_codes}"
+
+    with TestClient(app, cookies={COOKIE_NAME: token}) as client:
+        balance_res = client.get("/api/v1/stock/balance")
+        assert balance_res.status_code == 200
+        items = balance_res.json()
+        target = next((it for it in items if it["product_id"] == product_id), None)
+        assert target is not None
+        assert target["current_stock_pairs"] == 0.0, f"Expected 0.0 stock, found {target['current_stock_pairs']}"
+
+
+def test_concurrent_credit_limit_race(setup_race_env):
+    """
+    Phase 6 Concurrency Proof 2:
+    - Customer seeded with credit limit with headroom for only ONE order (limit=1000.0).
+    - Product seeded with abundant stock.
+    - Two concurrent orders each worth 800.0 submitted simultaneously.
+    - Exactly one must succeed (HTTP 200), exactly one must fail (HTTP 422 CREDIT_LIMIT_EXCEEDED).
+    """
+    token = setup_race_env["token"]
+    company_id = setup_race_env["company_id"]
+
+    db = SessionLocal()
+    client_obj = Client(
+        company_id=company_id,
+        code="RACE-CRED-CLI",
+        name="Race Credit Customer",
+        phone="9800000009",
+        credit_limit=1000.0
+    )
+    db.add(client_obj)
+    db.commit()
+    db.refresh(client_obj)
+    client_id = client_obj.id
+
+    product = Product(
+        company_id=company_id,
+        code="RACE-CRED-PROD",
+        name="Credit Race Product",
+        category="Loafer",
+        size="41",
+        color="Tan",
+        unit_price=800.0
+    )
+    db.add(product)
+    db.commit()
+    db.refresh(product)
+    product_id = product.id
+
+    # Seed abundant stock (10 pairs)
+    seed = StockMovement(
+        company_id=company_id,
+        product_id=product_id,
+        direction=1,
+        quantity=10.0,
+        ref_type="production_seed",
+        ref_id=101,
+        notes="Abundant seed for credit race",
+        date_ad="2026-10-01",
+        date_bs=""
+    )
+    db.add(seed)
+    db.commit()
+    db.close()
+
+    def send_credit_order(idx: int):
+        with TestClient(app, cookies={COOKIE_NAME: token}) as client:
+            res = client.post(
+                "/api/v1/sales/orders",
+                json={
+                    "order_number": f"SO-CRACE-{idx:03d}",
+                    "client_id": client_id,
+                    "order_date_ad": "2026-10-01",
+                    "order_date_bs": "2083-06-15",
+                    "items": [{"product_id": product_id, "quantity": 1.0, "unit_price": 800.0}],
+                    "delivered": False
+                }
+            )
+            return res.status_code, res.text
+
+    results = []
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(send_credit_order, i) for i in range(2)]
+        for f in as_completed(futures):
+            results.append(f.result())
+
+    status_codes = [s for s, _ in results]
+    success_count = sum(1 for sc in status_codes if sc in (200, 201))
+    fail_422_count = sum(1 for sc in status_codes if sc == 422)
+
+    assert success_count == 1, f"Expected exactly 1 success, got {success_count}. Statuses: {status_codes}"
+    assert fail_422_count == 1, f"Expected exactly 1 422 failure, got {fail_422_count}. Statuses: {status_codes}"
+
