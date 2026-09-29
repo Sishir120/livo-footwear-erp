@@ -34,7 +34,7 @@ def upgrade() -> None:
             sa.Column('actor_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=False),
             sa.Column('occurred_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
             sa.Column('due_date', sa.DateTime(timezone=True), nullable=True),
-            sa.Column('is_disputed', sa.Boolean(), server_default=sa.text('0'), nullable=False),
+            sa.Column('is_disputed', sa.Boolean(), server_default=sa.false(), nullable=False),
             sa.Column('dispute_notes', sa.String(length=255), nullable=True),
             sa.Column('notes', sa.String(length=255), nullable=True)
         )

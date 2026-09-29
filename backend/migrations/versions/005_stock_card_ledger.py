@@ -36,11 +36,17 @@ def upgrade() -> None:
         op.create_index('ix_warehouses_code', 'warehouses', ['code'], unique=False)
 
     # 2. Seed default warehouse (id=1) for company 1 if available
-    conn.execute(sa.text(
-        "INSERT OR IGNORE INTO warehouses (id, company_id, name, code, location, is_active, created_at) "
-        "SELECT 1, id, 'Main Finished Warehouse (केन्द्रीय गोदाम)', 'WH-01', 'Kathmandu Factory Floor', 1, CURRENT_TIMESTAMP "
-        "FROM companies WHERE id = 1"
-    ))
+    existing_wh = conn.execute(sa.text("SELECT id FROM warehouses WHERE id = 1")).fetchone()
+    if not existing_wh:
+        has_comp = conn.execute(sa.text("SELECT id FROM companies WHERE id = 1")).fetchone()
+        if has_comp:
+            conn.execute(
+                sa.text(
+                    "INSERT INTO warehouses (id, company_id, name, code, location, is_active, created_at) "
+                    "VALUES (1, 1, 'Main Finished Warehouse (केन्द्रीय गोदाम)', 'WH-01', 'Kathmandu Factory Floor', :active, CURRENT_TIMESTAMP)"
+                ),
+                {"active": True}
+            )
 
     # 3. Add audit and stock card columns to stock_movements if missing
     existing_cols = {c['name'] for c in inspector.get_columns('stock_movements')}
