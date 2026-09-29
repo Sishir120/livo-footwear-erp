@@ -17,7 +17,7 @@ import {
 import { exportToCSV } from "../utils/csvExport";
 import { useBarcodeScanner } from "../hooks/useBarcodeScanner";
 import { apiFetch, extractSupportReference } from "../lib/api";
-import { toPaisa, fromPaisa, calculateVatPaisa } from "../utils/currency";
+import { toPaisa, fromPaisa, calculateVat, calculateVatPaisa } from "../lib/currency";
 
 const COMPANY_PAN = "609823412";
 const COMPANY_NAME = "LIVO FOOTWEAR INDUSTRIES PVT. LTD.";
@@ -39,7 +39,9 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [clientId, setClientId] = useState("");
   const [productId, setProductId] = useState("");
-  const [quantity, setQuantity] = useState("10");
+  const [cartons, setCartons] = useState("1");
+  const [loosePairs, setLoosePairs] = useState("0");
+  const [quantity, setQuantity] = useState("12");
   const [unitPrice, setUnitPrice] = useState("3200");
   const [receivedAmount, setReceivedAmount] = useState("10000");
   const [orderDateAd, setOrderDateAd] = useState(new Date().toISOString().split("T")[0]);
@@ -49,6 +51,14 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
   const [keepClient, setKeepClient] = useState(true);
   const [successFeedback, setSuccessFeedback] = useState("");
   const [errorBanner, setErrorBanner] = useState<{ message: string; refCode?: string } | null>(null);
+
+  // Dual-Unit Carton-to-Pair Physical Validation: Expected Pairs = Cartons * 12 + Loose Pairs
+  const numCartons = parseInt(cartons || "0", 10) || 0;
+  const numLoose = parseInt(loosePairs || "0", 10) || 0;
+  const expectedPairs = numCartons * 12 + numLoose;
+  const enteredPairs = parseFloat(quantity || "0") || 0;
+  const cartonMismatch = enteredPairs > 0 && expectedPairs !== enteredPairs;
+  const cartonMismatchMsg = `कार्टुन र जोर संख्या मिलेन: ${numCartons} कार्टुन = ${expectedPairs} जोर हुनुपर्छ।`;
 
   // Field Refs for Sequential Keyboard Traversal
   const clientRef = useRef<HTMLSelectElement>(null);
@@ -188,6 +198,11 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
   const handleCreateOrder = async (e: React.FormEvent, forceClose = false) => {
     e.preventDefault();
     if (!clientId || !productId || !quantity) return;
+
+    if (cartonMismatch) {
+      setErrorBanner({ message: cartonMismatchMsg });
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -1187,29 +1202,89 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                   </select>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "3px" }}>
-                      <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>
-                        Quantity (Pairs / जोर)
+                {/* Dual-Unit Carton Packaging & Physical Reconciliation */}
+                <div style={{ background: "#F1F5F9", border: "1px solid #CBD5E1", borderRadius: "4px", padding: "10px 12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.04em", color: "#334155" }}>
+                      Dual-Unit Carton Reconciliation (कार्टुन र जोर मिलान)
+                    </span>
+                    <span style={{ fontSize: "10.5px", color: "#1E3A8A", fontWeight: "700", background: "#DBEAFE", padding: "1px 6px", borderRadius: "3px" }}>
+                      १ कार्टुन = १२ जोर
+                    </span>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+                    <div>
+                      <label style={{ fontSize: "10.5px", textTransform: "uppercase", color: "#475569", fontWeight: "700", display: "block", marginBottom: "2px" }}>
+                        Cartons (कार्टुन)
                       </label>
-                      <span style={{ fontSize: "10px", color: "#1E3A8A", fontWeight: "700", background: "#EFF6FF", padding: "1px 5px", borderRadius: "3px", border: "1px solid #BFDBFE" }}>
-                        १ कार्टुन = १२ जोर
-                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        className="input-field num-mono"
+                        value={cartons}
+                        onChange={(e) => {
+                          const c = e.target.value;
+                          setCartons(c);
+                          const cVal = parseInt(c || "0", 10) || 0;
+                          const lVal = parseInt(loosePairs || "0", 10) || 0;
+                          setQuantity(String(cVal * 12 + lVal));
+                        }}
+                        placeholder="0"
+                      />
                     </div>
-                    <input
-                      ref={quantityRef}
-                      type="number"
-                      className="input-field num-mono"
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                      onKeyDown={(e) => handleKeyDown(e, unitPriceRef)}
-                      required
-                    />
-                    <div style={{ fontSize: "10.5px", color: "#64748B", marginTop: "2px", textAlign: "right" }}>
-                      Packaging: <strong style={{ color: "#0F172A" }}>{(Math.max(0, parseFloat(quantity) || 0) / 12).toFixed(1)} Cartons</strong> ({quantity || 0} Pairs)
+                    <div>
+                      <label style={{ fontSize: "10.5px", textTransform: "uppercase", color: "#475569", fontWeight: "700", display: "block", marginBottom: "2px" }}>
+                        Loose Pairs (खुद्रा)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="input-field num-mono"
+                        value={loosePairs}
+                        onChange={(e) => {
+                          const l = e.target.value;
+                          setLoosePairs(l);
+                          const cVal = parseInt(cartons || "0", 10) || 0;
+                          const lVal = parseInt(l || "0", 10) || 0;
+                          setQuantity(String(cVal * 12 + lVal));
+                        }}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: "10.5px", textTransform: "uppercase", color: "#475569", fontWeight: "700", display: "block", marginBottom: "2px" }}>
+                        Entered Pairs (जोर)
+                      </label>
+                      <input
+                        ref={quantityRef}
+                        type="number"
+                        min="1"
+                        className="input-field num-mono"
+                        style={cartonMismatch ? { borderColor: "#DC2626", background: "#FEF2F2", color: "#991B1B" } : {}}
+                        value={quantity}
+                        onChange={(e) => setQuantity(e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(e, unitPriceRef)}
+                        required
+                      />
                     </div>
                   </div>
+
+                  {cartonMismatch && (
+                    <div style={{ marginTop: "8px", padding: "6px 10px", background: "#FEE2E2", border: "1px solid #F87171", borderRadius: "3px", color: "#991B1B", fontSize: "11px", fontWeight: "600", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span>⚠️ {cartonMismatchMsg}</span>
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(String(expectedPairs))}
+                        style={{ fontSize: "10px", background: "#DC2626", color: "#FFFFFF", border: "none", borderRadius: "3px", padding: "3px 8px", cursor: "pointer", fontWeight: "700" }}
+                      >
+                        Sync to {expectedPairs} Pairs
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                   <div>
                     <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Wholesale Unit Rate (Rs.)</label>
                     <input
@@ -1219,6 +1294,18 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                       value={unitPrice}
                       onChange={(e) => setUnitPrice(e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, receivedAmountRef)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Initial Cash Received (Rs.)</label>
+                    <input
+                      ref={receivedAmountRef}
+                      type="number"
+                      className="input-field num-mono"
+                      value={receivedAmount}
+                      onChange={(e) => setReceivedAmount(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, orderDateAdRef)}
                       required
                     />
                   </div>
@@ -1253,19 +1340,6 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     </div>
                   );
                 })()}
-
-                <div>
-                  <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Initial Cash Received (Rs.)</label>
-                  <input
-                    ref={receivedAmountRef}
-                    type="number"
-                    className="input-field num-mono"
-                    value={receivedAmount}
-                    onChange={(e) => setReceivedAmount(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, orderDateAdRef)}
-                    required
-                  />
-                </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                   <div>
@@ -1305,11 +1379,21 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     Close
                   </button>
                   {continuousMode && (
-                    <button type="button" className="btn-secondary" onClick={(e) => handleCreateOrder(e, true)} disabled={submitting}>
+                    <button type="button" className="btn-secondary" onClick={(e) => handleCreateOrder(e, true)} disabled={submitting || cartonMismatch || enteredPairs <= 0}>
                       Save & Close
                     </button>
                   )}
-                  <button ref={submitButtonRef} type="submit" className="btn-primary" disabled={submitting} style={{ background: "#1E3A8A", borderColor: "#1E3A8A" }}>
+                  <button
+                    ref={submitButtonRef}
+                    type="submit"
+                    className="btn-primary"
+                    disabled={submitting || cartonMismatch || enteredPairs <= 0}
+                    style={{
+                      background: cartonMismatch ? "#94A3B8" : "#1E3A8A",
+                      borderColor: cartonMismatch ? "#94A3B8" : "#1E3A8A",
+                      cursor: cartonMismatch ? "not-allowed" : "pointer"
+                    }}
+                  >
                     {submitting ? "Writing to Ledger..." : continuousMode ? "Commit & Next Sale ↵" : "Commit Sale & Issue Invoice"}
                   </button>
                 </div>
