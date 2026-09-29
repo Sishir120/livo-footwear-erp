@@ -202,47 +202,47 @@ export function StockReportView() {
       {/* Summary KPI Header */}
       {summary && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px" }}>
-          <div className="glass-card" style={{ padding: "16px 18px", borderLeft: "3px solid #3b82f6" }}>
-            <div style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em" }}>
-              ACTIVE PRODUCT VARIANTS
+          <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "3px solid #1E3A8A", background: "#FFFFFF", border: "1px solid #CBD5E1" }}>
+            <div style={{ color: "#475569", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+              Active Product Variants
             </div>
-            <div style={{ fontSize: "24px", fontWeight: "700", marginTop: "4px", color: "#f8fafc" }} className="num-mono-bold">
+            <div style={{ fontSize: "22px", fontWeight: "700", marginTop: "4px", color: "#0F172A" }} className="num-mono-bold">
               {summary.total_products_count}{" "}
-              <span style={{ fontSize: "13px", color: "#94a3b8", fontWeight: "400" }}>SKUs</span>
+              <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "400" }}>SKUs</span>
             </div>
-            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>Across all shoe categories</div>
+            <div style={{ fontSize: "11px", color: "#64748B", marginTop: "2px" }}>Across all shoe categories</div>
           </div>
 
-          <div className="glass-card" style={{ padding: "16px 18px", borderLeft: "3px solid #10b981" }}>
-            <div style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em" }}>
-              TOTAL INVENTORY QUANTITY
+          <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "3px solid #059669", background: "#FFFFFF", border: "1px solid #CBD5E1" }}>
+            <div style={{ color: "#475569", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+              Total Inventory Quantity
             </div>
-            <div style={{ fontSize: "24px", fontWeight: "700", marginTop: "4px", color: "#10b981" }} className="num-mono-bold">
+            <div style={{ fontSize: "22px", fontWeight: "700", marginTop: "4px", color: "#059669" }} className="num-mono-bold">
               {summary.total_stock_pairs.toLocaleString()}{" "}
-              <span style={{ fontSize: "13px", color: "#94a3b8", fontWeight: "400" }}>pairs</span>
+              <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "400" }}>pairs</span>
             </div>
-            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>Verified append-only stock ledger</div>
+            <div style={{ fontSize: "11px", color: "#64748B", marginTop: "2px" }}>Verified append-only stock ledger</div>
           </div>
 
-          <div className="glass-card" style={{ padding: "16px 18px", borderLeft: "3px solid #8b5cf6" }}>
-            <div style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em" }}>
-              TOTAL INVENTORY VALUATION
+          <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "3px solid #1E3A8A", background: "#FFFFFF", border: "1px solid #CBD5E1" }}>
+            <div style={{ color: "#475569", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+              Total Inventory Valuation
             </div>
-            <div style={{ fontSize: "24px", fontWeight: "700", marginTop: "4px", color: "#8b5cf6" }} className="num-mono-bold">
+            <div style={{ fontSize: "22px", fontWeight: "700", marginTop: "4px", color: "#0F172A" }} className="num-mono-bold">
               Rs. {summary.total_stock_value.toLocaleString()}
             </div>
-            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>Estimated wholesale market valuation</div>
+            <div style={{ fontSize: "11px", color: "#64748B", marginTop: "2px" }}>Estimated wholesale market valuation</div>
           </div>
 
-          <div className="glass-card" style={{ padding: "16px 18px", borderLeft: lowStockItems.length > 0 ? "3px solid #f59e0b" : "3px solid #10b981" }}>
-            <div style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em" }}>
-              LOW-STOCK REORDER ALERTS
+          <div className="glass-card" style={{ padding: "14px 16px", borderLeft: lowStockItems.length > 0 ? "3px solid #D97706" : "3px solid #059669", background: "#FFFFFF", border: "1px solid #CBD5E1" }}>
+            <div style={{ color: "#475569", fontSize: "11px", fontWeight: "700", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+              Low-Stock Reorder Alerts
             </div>
-            <div style={{ fontSize: "24px", fontWeight: "700", marginTop: "4px", color: lowStockItems.length > 0 ? "#fbbf24" : "#10b981" }} className="num-mono-bold">
+            <div style={{ fontSize: "22px", fontWeight: "700", marginTop: "4px", color: lowStockItems.length > 0 ? "#D97706" : "#059669" }} className="num-mono-bold">
               {lowStockItems.length}{" "}
-              <span style={{ fontSize: "13px", color: "#94a3b8", fontWeight: "400" }}>SKUs</span>
+              <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "400" }}>SKUs</span>
             </div>
-            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>
+            <div style={{ fontSize: "11px", color: "#64748B", marginTop: "2px" }}>
               {lowStockItems.length > 0 ? "Under 50 pairs threshold" : "All SKUs comfortably stocked"}
             </div>
           </div>
@@ -252,56 +252,56 @@ export function StockReportView() {
       {/* Visual Analytics Row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "16px" }}>
         {/* Category Breakdown Bar Chart */}
-        <div className="glass-card" style={{ padding: "18px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+        <div className="glass-card" style={{ padding: "16px 18px", background: "#FFFFFF", border: "1px solid #CBD5E1" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <BarChart3 size={16} color="#3b82f6" />
-              <span style={{ fontSize: "13px", fontWeight: "700", color: "#f8fafc", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              <BarChart3 size={16} color="#1E3A8A" />
+              <span style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                 Stock by Shoe Category
               </span>
             </div>
-            <span style={{ fontSize: "11px", color: "#94a3b8" }}>Total Pairs in Warehouse</span>
+            <span style={{ fontSize: "11px", color: "#475569" }}>Total Pairs in Warehouse</span>
           </div>
 
-          <div style={{ width: "100%", height: "200px" }}>
+          <div style={{ width: "100%", height: "190px" }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={categoryChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <XAxis dataKey="name" stroke="#475569" fontSize={11} tickLine={false} />
+                <YAxis stroke="#475569" fontSize={11} tickLine={false} />
                 <Tooltip
-                  contentStyle={{ background: "#0f172a", borderColor: "rgba(255,255,255,0.15)", borderRadius: "8px", fontSize: "12px" }}
+                  contentStyle={{ background: "#FFFFFF", borderColor: "#CBD5E1", borderRadius: "4px", fontSize: "12px", color: "#0F172A" }}
                   formatter={(val: any) => [`${val} pairs`, "Quantity"]}
                 />
-                <Bar dataKey="pairs" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="pairs" fill="#1E3A8A" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Size Distribution */}
-        <div className="glass-card" style={{ padding: "18px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+        <div className="glass-card" style={{ padding: "16px 18px", background: "#FFFFFF", border: "1px solid #CBD5E1" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Layers size={16} color="#10b981" />
-              <span style={{ fontSize: "13px", fontWeight: "700", color: "#f8fafc", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              <Layers size={16} color="#047857" />
+              <span style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                 Inventory Size Curve Distribution
               </span>
             </div>
-            <span style={{ fontSize: "11px", color: "#94a3b8" }}>Size Curve (Paris Points)</span>
+            <span style={{ fontSize: "11px", color: "#475569" }}>जुत्ता साइज (Sizes 32–43) Curve</span>
           </div>
 
-          <div style={{ width: "100%", height: "200px" }}>
+          <div style={{ width: "100%", height: "190px" }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={sizeChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="size" stroke="#94a3b8" fontSize={10} tickLine={false} interval="preserveStartEnd" />
-                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <XAxis dataKey="size" stroke="#475569" fontSize={10} tickLine={false} interval="preserveStartEnd" />
+                <YAxis stroke="#475569" fontSize={10} tickLine={false} />
                 <Tooltip
-                  contentStyle={{ background: "#0f172a", borderColor: "rgba(255,255,255,0.15)", borderRadius: "4px", fontSize: "12px" }}
+                  contentStyle={{ background: "#FFFFFF", borderColor: "#CBD5E1", borderRadius: "4px", fontSize: "12px", color: "#0F172A" }}
                   formatter={(val: any) => [`${val} pairs`, "In Stock"]}
                 />
-                <Bar dataKey="pairs" fill="#10b981" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="pairs" fill="#047857" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -309,21 +309,21 @@ export function StockReportView() {
       </div>
 
       {/* Filter, Quick Search and View Mode Switcher */}
-      <div className="glass-card" style={{ padding: "12px 16px", display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: "220px", background: "#090d16", padding: "6px 10px", borderRadius: "4px", border: "1px solid #1e293b" }}>
-          <Search size={15} color="#94a3b8" />
+      <div className="glass-card" style={{ padding: "10px 14px", display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", border: "1px solid #CBD5E1" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: "220px", background: "#F8FAFC", padding: "6px 10px", borderRadius: "4px", border: "1px solid #CBD5E1" }}>
+          <Search size={15} color="#475569" />
           <input
             type="text"
             placeholder="Search SKU, shoe model, color, or batch code..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ background: "none", border: "none", color: "#f8fafc", fontSize: "12.5px", outline: "none", width: "100%" }}
+            style={{ background: "none", border: "none", color: "#0F172A", fontSize: "12.5px", outline: "none", width: "100%" }}
           />
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           {/* View Mode Toggle */}
-          <div style={{ display: "inline-flex", background: "#090d16", padding: "2px", borderRadius: "4px", border: "1px solid #1e293b" }}>
+          <div style={{ display: "inline-flex", background: "#F1F5F9", padding: "2px", borderRadius: "4px", border: "1px solid #CBD5E1" }}>
             <button
               type="button"
               onClick={() => setViewMode("matrix")}
@@ -334,11 +334,11 @@ export function StockReportView() {
                 borderRadius: "3px",
                 border: "none",
                 cursor: "pointer",
-                background: viewMode === "matrix" ? "#2563eb" : "transparent",
-                color: viewMode === "matrix" ? "#ffffff" : "#94a3b8"
+                background: viewMode === "matrix" ? "#1E3A8A" : "transparent",
+                color: viewMode === "matrix" ? "#FFFFFF" : "#475569"
               }}
             >
-              Sizing Matrix (32–43)
+              जुत्ता साइज (Sizes 32–43)
             </button>
             <button
               type="button"
@@ -350,8 +350,8 @@ export function StockReportView() {
                 borderRadius: "3px",
                 border: "none",
                 cursor: "pointer",
-                background: viewMode === "detailed" ? "#2563eb" : "transparent",
-                color: viewMode === "detailed" ? "#ffffff" : "#94a3b8"
+                background: viewMode === "detailed" ? "#1E3A8A" : "transparent",
+                color: viewMode === "detailed" ? "#FFFFFF" : "#475569"
               }}
             >
               Detailed SKU Ledger
@@ -393,32 +393,32 @@ export function StockReportView() {
       </div>
 
       {/* Main High-Density Stock Table */}
-      <div className="glass-card" style={{ padding: "14px 16px" }}>
+      <div className="glass-card" style={{ padding: "14px 16px", background: "#FFFFFF", border: "1px solid #CBD5E1" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <Boxes size={16} color="#3b82f6" />
-            <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#f8fafc" }}>
+            <Boxes size={16} color="#1E3A8A" />
+            <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>
               {viewMode === "matrix"
                 ? `Finished Footwear Sizing Matrix (${matrixRows.length} Product Models)`
                 : `Warehouse Stock Ledger (${filteredItems.length} SKUs Listed)`}
             </h3>
           </div>
-          <div style={{ fontSize: "11px", color: "#64748b", display: "flex", alignItems: "center", gap: "4px" }}>
-            <Info size={11} /> Paris Points 32–43 • Append-only ledger math
+          <div style={{ fontSize: "11px", color: "#64748B", display: "flex", alignItems: "center", gap: "4px" }}>
+            <Info size={11} /> जुत्ता साइज (Sizes 32–43) • Append-only ledger math
           </div>
         </div>
 
         {loading ? (
-          <div style={{ padding: "50px", textAlign: "center", color: "#94a3b8" }}>
-            <RefreshCw size={22} className="animate-spin" style={{ margin: "0 auto 10px" }} />
+          <div style={{ padding: "50px", textAlign: "center", color: "#475569" }}>
+            <RefreshCw size={22} className="animate-spin" style={{ margin: "0 auto 10px", color: "#1E3A8A" }} />
             <div>Reconciling real-time inventory ledger...</div>
           </div>
         ) : filteredItems.length === 0 ? (
-          <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
+          <div style={{ padding: "30px", textAlign: "center", color: "#475569", fontSize: "13px" }}>
             No product inventory records match the selected filter criteria.
           </div>
         ) : viewMode === "matrix" ? (
-          /* SIZING MATRIX GRID (Paris Points 32-43) */
+          /* SIZING MATRIX GRID - जुत्ता साइज (Sizes 32-43) */
           <div className="table-container-dense">
             <table className="table-dense">
               <thead>
@@ -428,7 +428,7 @@ export function StockReportView() {
                   <th style={{ width: "80px" }}>Category</th>
                   <th style={{ width: "80px" }}>Color</th>
                   {PARIS_POINTS.map((sz) => (
-                    <th key={sz} style={{ width: "42px", textAlign: "center", background: "#0b1324" }}>
+                    <th key={sz} style={{ width: "42px", textAlign: "center" }}>
                       {sz}
                     </th>
                   ))}
@@ -442,46 +442,51 @@ export function StockReportView() {
                 {matrixRows.map((row) => {
                   const isDepleted = row.totalPairs <= 0;
                   const isLow = row.totalPairs > 0 && row.totalPairs <= 50;
+                  const hasStock = row.totalPairs > 0;
                   return (
-                    <tr key={row.key}>
-                      <td className="sticky-col-left-1 num-mono" style={{ fontWeight: "700", color: "#3b82f6" }}>
+                    <tr key={row.key} style={{ height: "36px" }}>
+                      <td className="sticky-col-left-1 num-mono" style={{ fontWeight: "700", color: "#1E3A8A", padding: "6px 10px" }}>
                         {row.codePrefix}
                       </td>
-                      <td className="sticky-col-left-2" style={{ fontWeight: "600", color: "#f8fafc" }}>
+                      <td className="sticky-col-left-2" style={{ fontWeight: "600", color: "#0F172A", padding: "6px 10px" }}>
                         {row.modelName}
                       </td>
-                      <td>
-                        <span style={{ fontSize: "11px", color: "#94a3b8" }}>{row.category}</span>
+                      <td style={{ padding: "6px 10px" }}>
+                        <span style={{ fontSize: "11px", color: "#475569" }}>{row.category}</span>
                       </td>
-                      <td style={{ color: "#94a3b8", fontSize: "11px" }}>{row.color}</td>
+                      <td style={{ color: "#475569", fontSize: "11px", padding: "6px 10px" }}>{row.color}</td>
                       {PARIS_POINTS.map((sz) => {
                         const count = row.sizes[sz] || 0;
+                        const isBrokenRunHole = hasStock && count === 0;
                         return (
                           <td
                             key={sz}
-                            className={`matrix-cell ${count > 0 ? "has-stock" : "zero-stock"}`}
+                            className={`matrix-cell ${count > 0 ? "has-stock" : isBrokenRunHole ? "broken-size-run" : "zero-stock"}`}
+                            style={{ height: "36px", padding: "6px 10px" }}
+                            title={isBrokenRunHole ? `Broken size run: stock available in other sizes, but Size ${sz} is depleted` : undefined}
                           >
                             {count > 0 ? count : "-"}
                           </td>
                         );
                       })}
-                      <td style={{ textAlign: "right" }} className="num-mono">
+                      <td style={{ textAlign: "right", padding: "6px 10px" }} className="num-mono">
                         Rs. {row.unit_price?.toLocaleString()}
                       </td>
                       <td
                         style={{
                           textAlign: "right",
                           fontWeight: "700",
-                          color: isDepleted ? "#f43f5e" : isLow ? "#fbbf24" : "#10b981"
+                          color: isDepleted ? "#BE123C" : isLow ? "#B45309" : "#047857",
+                          padding: "6px 10px"
                         }}
                         className="num-mono-bold"
                       >
                         {row.totalPairs.toLocaleString()}
                       </td>
-                      <td style={{ textAlign: "right", fontWeight: "600" }} className="num-mono">
+                      <td style={{ textAlign: "right", fontWeight: "600", padding: "6px 10px" }} className="num-mono">
                         Rs. {row.totalValuation.toLocaleString()}
                       </td>
-                      <td style={{ textAlign: "center" }}>
+                      <td style={{ textAlign: "center", padding: "6px 10px" }}>
                         {isDepleted ? (
                           <span className="badge badge-danger">Out</span>
                         ) : isLow ? (

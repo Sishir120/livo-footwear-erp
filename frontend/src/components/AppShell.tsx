@@ -98,23 +98,23 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
     <div className="app-container">
       {/* Sidebar */}
       <aside className={`sidebar ${mobileOpen ? "open" : ""}`} aria-label="Main Navigation">
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ padding: "18px 20px", borderBottom: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <Building2 size={24} color="#3b82f6" />
+            <Building2 size={24} color="#1E3A8A" />
             <div>
-              <div style={{ fontWeight: "700", fontSize: "16px", letterSpacing: "0.02em", color: "#f8fafc" }}>LIVO GROUP</div>
-              <div style={{ fontSize: "11px", color: "#94a3b8" }}>Footwear ERP</div>
+              <div style={{ fontWeight: "700", fontSize: "15px", letterSpacing: "0.02em", color: "#0F172A" }}>LIVO GROUP</div>
+              <div style={{ fontSize: "11px", color: "#64748B" }}>Footwear ERP</div>
             </div>
           </div>
-          <button onClick={() => setMobileOpen(false)} style={{ background: "none", border: "none", color: "#94a3b8", display: "none" }} className="mobile-close-btn" aria-label="Close navigation menu">
+          <button onClick={() => setMobileOpen(false)} style={{ background: "none", border: "none", color: "#475569", display: "none" }} className="mobile-close-btn" aria-label="Close navigation menu">
             <X size={20} />
           </button>
         </div>
 
         {/* User Role Badge */}
         {user && (
-          <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--border-color)", background: "rgba(255, 255, 255, 0.02)" }}>
-            <div style={{ fontSize: "13px", fontWeight: "600", color: "#f8fafc" }}>{user.name}</div>
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border-color)", background: "#F8FAFC" }}>
+            <div style={{ fontSize: "13px", fontWeight: "600", color: "#0F172A" }}>{user.name}</div>
             <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px" }}>
               <span className={`badge ${user.role === "editor" ? "badge-success" : "badge-info"}`}>
                 <UserCheck size={12} style={{ marginRight: "4px" }} />
@@ -125,7 +125,7 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
         )}
 
         {/* Navigation items */}
-        <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: "4px" }} aria-label="Sidebar Menu">
+        <nav style={{ flex: 1, padding: "14px 10px", display: "flex", flexDirection: "column", gap: "3px" }} aria-label="Sidebar Menu">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -140,21 +140,21 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "12px",
-                  padding: "10px 14px",
-                  borderRadius: "6px",
+                  gap: "10px",
+                  padding: "9px 12px",
+                  borderRadius: "4px",
                   border: "none",
-                  borderLeft: isActive ? "3px solid #3b82f6" : "3px solid transparent",
-                  background: isActive ? "rgba(59, 130, 246, 0.16)" : "transparent",
-                  color: isActive ? "#60a5fa" : "#94a3b8",
-                  fontWeight: isActive ? "600" : "400",
-                  fontSize: "13.5px",
+                  borderLeft: isActive ? "3px solid #1E3A8A" : "3px solid transparent",
+                  background: isActive ? "#EFF6FF" : "transparent",
+                  color: isActive ? "#1E3A8A" : "#475569",
+                  fontWeight: isActive ? "600" : "500",
+                  fontSize: "13px",
                   cursor: "pointer",
                   textAlign: "left",
-                  transition: "all 0.15s ease"
+                  transition: "all 0.12s ease"
                 }}
               >
-                <Icon size={18} />
+                <Icon size={17} color={isActive ? "#1E3A8A" : "#64748B"} />
                 <span>{item.label}</span>
               </button>
             );
@@ -162,25 +162,25 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
         </nav>
 
         {/* Footer: Version & DB Health Self-Check & Legal Compliance */}
-        <div style={{ padding: "16px 20px", borderTop: "1px solid var(--border-color)", fontSize: "12px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-            <span style={{ color: "#64748b" }}>DB Status:</span>
-            <span style={{ display: "flex", alignItems: "center", gap: "4px", color: dbStatus === "Healthy" ? "#34d399" : "#f43f5e", fontWeight: "600" }}>
+        <div style={{ padding: "14px 18px", borderTop: "1px solid var(--border-color)", fontSize: "11.5px", background: "#F8FAFC" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ color: "#64748B" }}>DB Status:</span>
+            <span style={{ display: "flex", alignItems: "center", gap: "4px", color: dbStatus === "Healthy" ? "#047857" : "#BE123C", fontWeight: "600" }}>
               {dbStatus === "Healthy" ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
               {dbStatus}
             </span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "#64748b", marginBottom: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "#64748B", marginBottom: "8px" }}>
             <span>Version:</span>
-            <span style={{ fontWeight: "600", color: "#94a3b8" }}>v{appVersion}</span>
+            <span style={{ fontWeight: "600", color: "#334155" }}>v{appVersion}</span>
           </div>
 
-          <div style={{ paddingTop: "8px", borderTop: "1px solid var(--border-subtle)", display: "flex", gap: "8px", fontSize: "11px", color: "#64748b", justifyContent: "center" }}>
-            <button onClick={() => setLegalModal("privacy")} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: "11px", cursor: "pointer", textDecoration: "underline" }}>
+          <div style={{ paddingTop: "6px", borderTop: "1px solid var(--border-subtle)", display: "flex", gap: "8px", fontSize: "11px", color: "#64748B", justifyContent: "center" }}>
+            <button onClick={() => setLegalModal("privacy")} style={{ background: "none", border: "none", color: "#475569", fontSize: "11px", cursor: "pointer", textDecoration: "underline" }}>
               Privacy Policy
             </button>
             <span>•</span>
-            <button onClick={() => setLegalModal("terms")} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: "11px", cursor: "pointer", textDecoration: "underline" }}>
+            <button onClick={() => setLegalModal("terms")} style={{ background: "none", border: "none", color: "#475569", fontSize: "11px", cursor: "pointer", textDecoration: "underline" }}>
               Terms & Conditions
             </button>
           </div>
@@ -193,30 +193,20 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
       <div className="main-wrapper">
         <header className="app-header">
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <button onClick={() => setMobileOpen(true)} className="mobile-menu-btn" style={{ background: "none", border: "none", color: "#f8fafc", cursor: "pointer" }} aria-label="Open mobile navigation menu">
-              <Menu size={24} />
+            <button onClick={() => setMobileOpen(true)} className="mobile-menu-btn" style={{ background: "none", border: "none", color: "#0F172A", cursor: "pointer" }} aria-label="Open mobile navigation menu">
+              <Menu size={22} />
             </button>
-            <h1 style={{ fontSize: "18px", fontWeight: "700", color: "#f8fafc" }}>
+            <h1 style={{ fontSize: "16px", fontWeight: "700", color: "#0F172A" }}>
               {navItems.find((n) => n.id === activeTab)?.label || "Dashboard"}
             </h1>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             {/* Offline Outbox Status Badge */}
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               {!isOnline ? (
-                <span
-                  style={{
-                    background: "rgba(234, 179, 8, 0.2)",
-                    color: "#fde047",
-                    border: "1px solid rgba(234, 179, 8, 0.4)",
-                    padding: "4px 8px",
-                    fontSize: "11px",
-                    fontWeight: "600",
-                    borderRadius: "4px"
-                  }}
-                >
-                  🟡 Offline ({queuedCount} queued)
+                <span className="badge badge-warning">
+                  Offline ({queuedCount} queued)
                 </span>
               ) : queuedCount > 0 ? (
                 <button
@@ -226,32 +216,14 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
                     replayQueue().finally(() => setIsSyncing(false));
                   }}
                   disabled={isSyncing}
-                  style={{
-                    background: "rgba(59, 130, 246, 0.2)",
-                    color: "#93c5fd",
-                    border: "1px solid rgba(59, 130, 246, 0.4)",
-                    padding: "4px 8px",
-                    fontSize: "11px",
-                    fontWeight: "600",
-                    borderRadius: "4px",
-                    cursor: "pointer"
-                  }}
+                  className="badge badge-info"
+                  style={{ cursor: "pointer" }}
                 >
-                  {isSyncing ? "🔄 Syncing..." : `🔄 Sync (${queuedCount})`}
+                  {isSyncing ? "Syncing..." : `Sync (${queuedCount})`}
                 </button>
               ) : (
-                <span
-                  style={{
-                    background: "rgba(16, 185, 129, 0.15)",
-                    color: "#34d399",
-                    border: "1px solid rgba(16, 185, 129, 0.3)",
-                    padding: "4px 8px",
-                    fontSize: "11px",
-                    fontWeight: "600",
-                    borderRadius: "4px"
-                  }}
-                >
-                  🟢 Live
+                <span className="badge badge-success">
+                  ● Live
                 </span>
               )}
             </div>
@@ -262,10 +234,10 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
               aria-label="Language selection / भाषा छनोट"
               style={{
                 display: "inline-flex",
-                background: "rgba(15, 23, 42, 0.8)",
-                padding: "3px",
-                borderRadius: "6px",
-                border: "1px solid rgba(255, 255, 255, 0.12)"
+                background: "#F1F5F9",
+                padding: "2px",
+                borderRadius: "4px",
+                border: "1px solid var(--border-color)"
               }}
             >
               <button
@@ -273,15 +245,15 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
                 onClick={() => setLocale("en")}
                 aria-label="Switch to English"
                 style={{
-                  padding: "8px 14px",
-                  fontSize: "12px",
+                  padding: "4px 10px",
+                  fontSize: "11px",
                   fontWeight: "600",
-                  borderRadius: "4px",
+                  borderRadius: "3px",
                   border: "none",
                   cursor: "pointer",
-                  background: locale === "en" ? "#2563eb" : "transparent",
-                  color: locale === "en" ? "#ffffff" : "#94a3b8",
-                  transition: "all 0.15s ease"
+                  background: locale === "en" ? "#1E3A8A" : "transparent",
+                  color: locale === "en" ? "#FFFFFF" : "#475569",
+                  transition: "all 0.12s ease"
                 }}
               >
                 EN
@@ -291,23 +263,23 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
                 onClick={() => setLocale("ne")}
                 aria-label="नेपाली भाषामा बदल्नुहोस्"
                 style={{
-                  padding: "8px 14px",
-                  fontSize: "12px",
+                  padding: "4px 10px",
+                  fontSize: "11px",
                   fontWeight: "600",
-                  borderRadius: "4px",
+                  borderRadius: "3px",
                   border: "none",
                   cursor: "pointer",
-                  background: locale === "ne" ? "#2563eb" : "transparent",
-                  color: locale === "ne" ? "#ffffff" : "#94a3b8",
-                  transition: "all 0.15s ease"
+                  background: locale === "ne" ? "#1E3A8A" : "transparent",
+                  color: locale === "ne" ? "#FFFFFF" : "#475569",
+                  transition: "all 0.12s ease"
                 }}
               >
                 नेपाली
               </button>
             </div>
 
-            <button onClick={onLogout} className="btn-secondary" style={{ padding: "6px 12px", fontSize: "13px" }} aria-label={t("logout")}>
-              <LogOut size={14} /> {t("logout")}
+            <button onClick={onLogout} className="btn-secondary" style={{ padding: "5px 10px", fontSize: "12px" }} aria-label={t("logout")}>
+              <LogOut size={13} /> {t("logout")}
             </button>
           </div>
         </header>

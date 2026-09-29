@@ -45,7 +45,26 @@ def login(request: LoginRequest, response: Response, db: Session = Depends(get_d
 
 @router.post("/logout")
 def logout(response: Response):
-    response.delete_cookie(key=COOKIE_NAME)
+    # Reverse proxy hardening (Nginx, Traefik, ALB, Cloudflare):
+    # Ensure cookie deletion matches exact flags (path, secure, httponly, samesite)
+    response.delete_cookie(
+        key=COOKIE_NAME,
+        path="/",
+        httponly=True,
+        samesite=settings.COOKIE_SAMESITE,
+        secure=settings.COOKIE_SECURE
+    )
+    # Explicit overwrite with max_age=0 and expired date ensures immediate browser eviction
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value="",
+        max_age=0,
+        expires=0,
+        path="/",
+        httponly=True,
+        samesite=settings.COOKIE_SAMESITE,
+        secure=settings.COOKIE_SECURE
+    )
     return {"message": "Logged out successfully"}
 
 @router.get("/me", response_model=UserResponse)

@@ -29,3 +29,15 @@ class Invoice(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     sales_order = relationship("SalesOrder")
+
+
+class InvoiceSequence(Base):
+    __tablename__ = "invoice_sequences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, unique=True, index=True)
+    current_sequence = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    company = relationship("Company")
+

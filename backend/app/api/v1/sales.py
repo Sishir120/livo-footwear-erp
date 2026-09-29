@@ -82,7 +82,7 @@ from contextlib import ExitStack
 from sqlalchemy import func
 from app.models.stock_snapshot import StockSnapshot
 from app.core.currency import quantize_npr
-from app.core.locks import get_stock_mutex
+from app.core.locks import get_stock_mutex, acquire_stock_advisory_lock
 
 @router.post("/orders")
 def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(require_editor), db: Session = Depends(get_db)):
@@ -94,6 +94,11 @@ def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(requ
     order_repo = TenantRepository(SalesOrder, db, current_user.company_id)
     item_repo = TenantRepository(SalesItem, db, current_user.company_id)
     movement_repo = TenantRepository(StockMovement, db, current_user.company_id)
+
+    # Acquire distributed PostgreSQL transaction-scoped advisory locks sorted by product_id
+    if data.delivered:
+        for pid in sorted(list(set(item.product_id for item in data.items))):
+            acquire_stock_advisory_lock(db, current_user.company_id, pid)
 
     # Acquire in-process mutexes sorted by product_id to prevent AB-BA deadlocks across threads
     locks = [get_stock_mutex(current_user.company_id, pid) for pid in sorted(list(set(item.product_id for item in data.items)))] if data.delivered else []

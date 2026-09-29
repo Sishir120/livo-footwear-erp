@@ -193,8 +193,8 @@ export function DailyReportView() {
             <Calendar size={18} color="#3b82f6" />
           </div>
           <div>
-            <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#94a3b8", fontWeight: "700" }}>Daily Operational Report</div>
-            <div style={{ fontWeight: "700", fontSize: "15px", color: "#f8fafc" }}>Date Scope (AD): {selectedDate}</div>
+            <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#475569", fontWeight: "700" }}>Daily Operational Report</div>
+            <div style={{ fontWeight: "700", fontSize: "15px", color: "#0F172A" }}>Date Scope (AD): {selectedDate}</div>
           </div>
         </div>
 
@@ -227,11 +227,11 @@ export function DailyReportView() {
           {/* Executive Industrial Strip */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
             {/* Panel 1: Pairs Produced vs Dispatched */}
-            <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "3px solid #10b981", display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "3px solid #059669", display: "flex", flexDirection: "column", gap: "10px", background: "#FFFFFF", border: "1px solid #CBD5E1" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <Factory size={15} color="#10b981" />
-                  <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "#94a3b8" }}>
+                  <Factory size={15} color="#059669" />
+                  <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "#475569" }}>
                     Factory Floor Velocity
                   </span>
                 </div>
@@ -242,46 +242,46 @@ export function DailyReportView() {
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", alignItems: "baseline" }}>
                 <div>
-                  <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Produced Today</div>
-                  <div className="num-mono-bold" style={{ fontSize: "22px", color: "#10b981" }}>
+                  <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase" }}>Produced Today</div>
+                  <div className="num-mono-bold" style={{ fontSize: "22px", color: "#059669" }}>
                     {reportData.production.total_pairs_produced.toLocaleString()}{" "}
-                    <span style={{ fontSize: "11px", fontWeight: "400", color: "#94a3b8" }}>prs</span>
+                    <span style={{ fontSize: "11px", fontWeight: "400", color: "#64748B" }}>prs</span>
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Dispatched Today</div>
-                  <div className="num-mono-bold" style={{ fontSize: "22px", color: "#f43f5e" }}>
+                  <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase" }}>Dispatched Today</div>
+                  <div className="num-mono-bold" style={{ fontSize: "22px", color: "#DC2626" }}>
                     {reportData.stock_movement_summary.total_stock_out_pairs.toLocaleString()}{" "}
-                    <span style={{ fontSize: "11px", fontWeight: "400", color: "#94a3b8" }}>prs</span>
+                    <span style={{ fontSize: "11px", fontWeight: "400", color: "#64748B" }}>prs</span>
                   </div>
                 </div>
               </div>
 
               {/* Ratio Bar */}
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#94a3b8", marginBottom: "4px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#475569", marginBottom: "4px" }}>
                   <span>Net Inventory Delta</span>
-                  <span className="num-mono-bold" style={{ color: reportData.stock_movement_summary.net_change_pairs >= 0 ? "#10b981" : "#f43f5e" }}>
+                  <span className="num-mono-bold" style={{ color: reportData.stock_movement_summary.net_change_pairs >= 0 ? "#059669" : "#DC2626" }}>
                     {reportData.stock_movement_summary.net_change_pairs >= 0 ? `+${reportData.stock_movement_summary.net_change_pairs}` : reportData.stock_movement_summary.net_change_pairs} pairs
                   </span>
                 </div>
-                <div style={{ height: "6px", width: "100%", background: "#1e293b", borderRadius: "3px", overflow: "hidden", display: "flex" }}>
-                  <div style={{ width: `${Math.min(100, Math.max(15, (reportData.production.total_pairs_produced / (reportData.production.total_pairs_produced + reportData.stock_movement_summary.total_stock_out_pairs || 1)) * 100))}%`, background: "#10b981" }} />
-                  <div style={{ flex: 1, background: "#f43f5e" }} />
+                <div style={{ height: "6px", width: "100%", background: "#E2E8F0", borderRadius: "3px", overflow: "hidden", display: "flex" }}>
+                  <div style={{ width: `${Math.min(100, Math.max(15, (reportData.production.total_pairs_produced / (reportData.production.total_pairs_produced + reportData.stock_movement_summary.total_stock_out_pairs || 1)) * 100))}%`, background: "#059669" }} />
+                  <div style={{ flex: 1, background: "#DC2626" }} />
                 </div>
               </div>
             </div>
 
             {/* Panel 2: Realized Cash Ratio */}
-            <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "3px solid #3b82f6", display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "3px solid #1E3A8A", display: "flex", flexDirection: "column", gap: "10px", background: "#FFFFFF", border: "1px solid #CBD5E1" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <CreditCard size={15} color="#3b82f6" />
-                  <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "#94a3b8" }}>
+                  <CreditCard size={15} color="#1E3A8A" />
+                  <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "#475569" }}>
                     Realized Cash Ratio
                   </span>
                 </div>
-                <span className="num-mono-bold" style={{ fontSize: "12px", color: "#60a5fa" }}>
+                <span className="num-mono-bold" style={{ fontSize: "12px", color: "#1E3A8A" }}>
                   {reportData.sales.total_sales_amount > 0
                     ? `${Math.round((reportData.sales.total_received_amount / reportData.sales.total_sales_amount) * 100)}% Collected`
                     : "100% Settled"}
@@ -290,14 +290,14 @@ export function DailyReportView() {
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", alignItems: "baseline" }}>
                 <div>
-                  <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Immediate Cash</div>
-                  <div className="num-mono-bold" style={{ fontSize: "20px", color: "#10b981" }}>
+                  <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase" }}>Immediate Cash</div>
+                  <div className="num-mono-bold" style={{ fontSize: "20px", color: "#059669" }}>
                     Rs. {reportData.sales.total_received_amount.toLocaleString()}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Receivable Due</div>
-                  <div className="num-mono-bold" style={{ fontSize: "20px", color: reportData.sales.total_receivable_amount > 0 ? "#f87171" : "#94a3b8" }}>
+                  <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase" }}>Receivable Due</div>
+                  <div className="num-mono-bold" style={{ fontSize: "20px", color: reportData.sales.total_receivable_amount > 0 ? "#DC2626" : "#64748B" }}>
                     Rs. {reportData.sales.total_receivable_amount.toLocaleString()}
                   </div>
                 </div>
@@ -305,30 +305,30 @@ export function DailyReportView() {
 
               {/* Ratio Bar */}
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#94a3b8", marginBottom: "4px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#475569", marginBottom: "4px" }}>
                   <span>Gross Invoiced Today</span>
-                  <span className="num-mono-bold" style={{ color: "#f8fafc" }}>
+                  <span className="num-mono-bold" style={{ color: "#0F172A" }}>
                     Rs. {reportData.sales.total_sales_amount.toLocaleString()}
                   </span>
                 </div>
-                <div style={{ height: "6px", width: "100%", background: "#1e293b", borderRadius: "3px", overflow: "hidden", display: "flex" }}>
+                <div style={{ height: "6px", width: "100%", background: "#E2E8F0", borderRadius: "3px", overflow: "hidden", display: "flex" }}>
                   <div
                     style={{
                       width: `${Math.min(100, (reportData.sales.total_received_amount / (reportData.sales.total_sales_amount || 1)) * 100)}%`,
-                      background: "#10b981"
+                      background: "#059669"
                     }}
                   />
-                  <div style={{ flex: 1, background: "#f87171" }} />
+                  <div style={{ flex: 1, background: "#DC2626" }} />
                 </div>
               </div>
             </div>
 
             {/* Panel 3: Factory Operations & Worker Productivity */}
-            <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "3px solid #f59e0b", display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "3px solid #D97706", display: "flex", flexDirection: "column", gap: "10px", background: "#FFFFFF", border: "1px solid #CBD5E1" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <Users size={15} color="#f59e0b" />
-                  <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "#94a3b8" }}>
+                  <Users size={15} color="#D97706" />
+                  <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "#475569" }}>
                     Line Efficiency & Orders
                   </span>
                 </div>
@@ -339,24 +339,24 @@ export function DailyReportView() {
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", alignItems: "baseline" }}>
                 <div>
-                  <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Active Workers</div>
-                  <div className="num-mono-bold" style={{ fontSize: "20px", color: "#f8fafc" }}>
+                  <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase" }}>Active Workers</div>
+                  <div className="num-mono-bold" style={{ fontSize: "20px", color: "#0F172A" }}>
                     {reportData.production.worker_count}{" "}
-                    <span style={{ fontSize: "11px", fontWeight: "400", color: "#94a3b8" }}>on line</span>
+                    <span style={{ fontSize: "11px", fontWeight: "400", color: "#64748B" }}>on line</span>
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Yield / Worker</div>
-                  <div className="num-mono-bold" style={{ fontSize: "20px", color: "#fbbf24" }}>
+                  <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase" }}>Yield / Worker</div>
+                  <div className="num-mono-bold" style={{ fontSize: "20px", color: "#D97706" }}>
                     {reportData.production.worker_count > 0
                       ? (reportData.production.total_pairs_produced / reportData.production.worker_count).toFixed(1)
                       : "0"}{" "}
-                    <span style={{ fontSize: "11px", fontWeight: "400", color: "#94a3b8" }}>prs</span>
+                    <span style={{ fontSize: "11px", fontWeight: "400", color: "#64748B" }}>prs</span>
                   </div>
                 </div>
               </div>
 
-              <div style={{ fontSize: "11px", color: "#64748b", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "4px" }}>
+              <div style={{ fontSize: "11px", color: "#64748B", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "4px" }}>
                 <span>Append-only ledger math</span>
                 <span className="num-mono">{reportData.stock_movement_summary.movement_count} txns</span>
               </div>
@@ -474,24 +474,24 @@ export function DailyReportView() {
           </div>
 
           {/* Section 1: Production Batches Table */}
-          <div className="glass-card" style={{ padding: "18px 20px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "14px" }}>
+          <div className="glass-card" style={{ padding: "16px 18px", background: "#FFFFFF", border: "1px solid #CBD5E1" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Factory size={18} color="#10b981" />
-                <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#f8fafc" }}>
+                <Factory size={16} color="#059669" />
+                <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#0F172A", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                   Today's Finished Production Batches ({filteredBatches.length})
                 </h3>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(15, 23, 42, 0.6)", padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--border-color)" }}>
-                  <Search size={14} color="#94a3b8" />
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "#F8FAFC", padding: "4px 8px", borderRadius: "3px", border: "1px solid #CBD5E1" }}>
+                  <Search size={13} color="#64748B" />
                   <input
                     type="text"
                     placeholder="Search batch or model..."
                     value={batchSearch}
                     onChange={(e) => setBatchSearch(e.target.value)}
-                    style={{ background: "none", border: "none", color: "#f8fafc", fontSize: "12px", outline: "none", width: "160px" }}
+                    style={{ background: "none", border: "none", color: "#0F172A", fontSize: "12px", outline: "none", width: "160px" }}
                   />
                 </div>
                 <button onClick={handleExportBatches} className="btn-export" disabled={!filteredBatches.length}>
@@ -501,7 +501,7 @@ export function DailyReportView() {
             </div>
 
             {filteredBatches.length === 0 ? (
-              <div style={{ padding: "24px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
+              <div style={{ padding: "24px", textAlign: "center", color: "#64748B", fontSize: "13px" }}>
                 No production batches recorded for this date.
               </div>
             ) : (
@@ -521,14 +521,14 @@ export function DailyReportView() {
                   <tbody>
                     {filteredBatches.map((b: any) => (
                       <tr key={b.id}>
-                        <td style={{ fontWeight: "700", color: "#3b82f6" }} className="num-mono">
+                        <td style={{ fontWeight: "700", color: "#1E3A8A" }} className="num-mono">
                           {b.batch_number}
                         </td>
-                        <td style={{ fontWeight: "500" }}>{getProductName(b.product_id)}</td>
+                        <td style={{ fontWeight: "500", color: "#0F172A" }}>{getProductName(b.product_id)}</td>
                         <td style={{ textAlign: "right" }} className="num-mono">
                           {b.target_quantity} prs
                         </td>
-                        <td style={{ textAlign: "right", color: "#10b981", fontWeight: "700" }} className="num-mono-bold">
+                        <td style={{ textAlign: "right", color: "#0F172A", fontWeight: "700" }} className="num-mono-bold">
                           {b.produced_quantity} pairs
                         </td>
                         <td style={{ textAlign: "right" }} className="num-mono">
@@ -549,24 +549,24 @@ export function DailyReportView() {
           </div>
 
           {/* Section 2: Sales Orders Table */}
-          <div className="glass-card" style={{ padding: "18px 20px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "14px" }}>
+          <div className="glass-card" style={{ padding: "16px 18px", background: "#FFFFFF", border: "1px solid #CBD5E1" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <ShoppingBag size={18} color="#3b82f6" />
-                <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#f8fafc" }}>
+                <ShoppingBag size={16} color="#1E3A8A" />
+                <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#0F172A", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                   Today's Sales Bookings & Dispatches ({filteredOrders.length})
                 </h3>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(15, 23, 42, 0.6)", padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--border-color)" }}>
-                  <Search size={14} color="#94a3b8" />
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "#F8FAFC", padding: "4px 8px", borderRadius: "3px", border: "1px solid #CBD5E1" }}>
+                  <Search size={13} color="#64748B" />
                   <input
                     type="text"
                     placeholder="Search order or client..."
                     value={orderSearch}
                     onChange={(e) => setOrderSearch(e.target.value)}
-                    style={{ background: "none", border: "none", color: "#f8fafc", fontSize: "12px", outline: "none", width: "160px" }}
+                    style={{ background: "none", border: "none", color: "#0F172A", fontSize: "12px", outline: "none", width: "160px" }}
                   />
                 </div>
                 <button onClick={handleExportOrders} className="btn-export" disabled={!filteredOrders.length}>
@@ -576,7 +576,7 @@ export function DailyReportView() {
             </div>
 
             {filteredOrders.length === 0 ? (
-              <div style={{ padding: "24px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
+              <div style={{ padding: "24px", textAlign: "center", color: "#64748B", fontSize: "13px" }}>
                 No client sales orders recorded for this date.
               </div>
             ) : (

@@ -5,7 +5,7 @@ from app.models.purchase import Supplier, RawMaterial, Purchase
 from app.models.stock import Product, StockMovement
 from app.models.production import ProductionBatch, ProductionMaterialUsage
 from app.models.sales import Client, SalesOrder, SalesItem, Payment
-from app.models.invoice import Invoice
+from app.models.invoice import Invoice, InvoiceSequence
 from app.models.stock_snapshot import StockSnapshot
 from app.models.bom import BillOfMaterials
 
@@ -25,6 +25,7 @@ __all__ = [
     "SalesItem",
     "Payment",
     "Invoice",
+    "InvoiceSequence",
     "StockSnapshot",
     "BillOfMaterials",
 ]

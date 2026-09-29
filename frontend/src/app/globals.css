@@ -1,24 +1,25 @@
 @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --bg-primary: #090d16;
-  --bg-surface: #0f172a;
-  --bg-card: #0f172a;
-  --bg-card-hover: #162036;
-  --border-color: #1e293b;
-  --border-subtle: #1e293b;
-  
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --text-dim: #64748b;
-  
-  --accent-blue: #2563eb;
-  --accent-blue-hover: #1d4ed8;
-  --accent-gold: #f59e0b;
-  --accent-emerald: #10b981;
-  --accent-rose: #f43f5e;
-  
-  --sidebar-width: 250px;
+  /* Industrial Paper Design System — Neutral Slate Tokens */
+  --bg-primary: #F8FAFC;      /* Slate 50 Base Canvas */
+  --bg-surface: #FFFFFF;      /* Pure White Surface */
+  --bg-card: #FFFFFF;         /* White Card */
+  --bg-card-hover: #F1F5F9;   /* Slate 100 Hover */
+  --border-color: #CBD5E1;    /* Slate 300 Crisp 1px Border */
+  --border-subtle: #E2E8F0;   /* Slate 200 Sub-grid line */
+
+  --text-main: #0F172A;       /* Slate 900 Primary Typography */
+  --text-muted: #475569;      /* Slate 600 Secondary Labels */
+  --text-dim: #64748B;        /* Slate 500 Tertiary Meta */
+
+  --accent-blue: #1E3A8A;     /* Deep Industrial Navy CTA */
+  --accent-blue-hover: #172554;
+  --accent-gold: #B45309;     /* Amber 700 High-Contrast */
+  --accent-emerald: #047857;  /* Emerald 700 Success */
+  --accent-rose: #BE123C;     /* Rose 700 Danger/Warning */
+
+  --sidebar-width: 240px;
 }
 
 * {
@@ -36,17 +37,33 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Industrial enterprise card utility - Crisp 1px border, 4-6px radius, no soft shadows */
+/* Enforce Tabular Monospace Globally across all tables, rates, quantities and currency */
+table, td, th, input[type="number"], input[type="date"], .num-mono, .num-mono-bold {
+  font-variant-numeric: tabular-nums;
+}
+
+.num-mono {
+  font-family: 'Fira Code', 'Roboto Mono', ui-monospace, monospace;
+  font-size: 12.5px;
+}
+
+.num-mono-bold {
+  font-family: 'Fira Code', 'Roboto Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* Industrial Paper Surface Card — 1px Solid Slate Border, Zero Soft Glows */
 .glass-card {
   background: var(--bg-card);
-  border: 1px solid #1e293b;
-  border-radius: 6px;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
   transition: border-color 0.12s ease;
 }
 
 .glass-card:hover {
-  border-color: #334155;
+  border-color: #94A3B8;
 }
 
 /* App Shell Layout */
@@ -57,8 +74,8 @@ body {
 
 .sidebar {
   width: var(--sidebar-width);
-  background: #070a12;
-  border-right: 1px solid #1e293b;
+  background: #FFFFFF;
+  border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -75,14 +92,14 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  background-color: var(--bg-primary);
 }
 
-/* Header - Compact 48px industrial bar with sticky positioning */
+/* Header — High-Contrast Industrial Header */
 .app-header {
-  height: 50px;
-  background: rgba(15, 23, 42, 0.96);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid #1e293b;
+  height: 48px;
+  background: #FFFFFF;
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -92,11 +109,11 @@ body {
   z-index: 40;
 }
 
-/* Standard Enterprise Buttons - Crisp 4px-6px Radius, Functional Borders */
+/* Buttons — Deep Industrial Navy CTA & Crisp Slate Secondary */
 .btn-primary {
-  background: #2563eb;
-  color: #ffffff;
-  border: 1px solid #1d4ed8;
+  background: var(--accent-blue);
+  color: #FFFFFF;
+  border: 1px solid #172554;
   padding: 6px 14px;
   border-radius: 4px;
   font-weight: 600;
@@ -105,18 +122,22 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  transition: background-color 0.12s ease;
 }
 
 .btn-primary:hover {
-  background: #1d4ed8;
-  border-color: #1e40af;
+  background: var(--accent-blue-hover);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .btn-secondary {
-  background: #162036;
+  background: #FFFFFF;
   color: var(--text-main);
-  border: 1px solid #1e293b;
+  border: 1px solid var(--border-color);
   padding: 6px 14px;
   border-radius: 4px;
   font-weight: 500;
@@ -125,58 +146,65 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 
 .btn-secondary:hover {
-  background: #1e293b;
-  border-color: #334155;
+  background: #F1F5F9;
+  border-color: #94A3B8;
 }
 
-/* Form Inputs - Compact, Crisp 4px Radius, Monospace-capable */
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-export {
+  background: #F8FAFC;
+  color: #047857;
+  border: 1px solid #CBD5E1;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 12.5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.btn-export:hover {
+  background: #ECFDF5;
+  border-color: #059669;
+}
+
+/* Form Inputs — High-Contrast Industrial Input */
 .input-field {
   width: 100%;
-  background: #090d16;
-  border: 1px solid #1e293b;
+  background: #FFFFFF;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   padding: 6px 10px;
   color: var(--text-main);
   font-size: 13px;
   outline: none;
-  transition: border-color 0.12s ease;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .input-field:focus {
   border-color: var(--accent-blue);
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 0 0 1px var(--accent-blue);
 }
 
-/* Enforce Monospace & Tabular Numbers globally on numbers/dates */
-input[type="number"],
-input[type="date"],
-.num-mono,
-.num-mono-bold {
-  font-family: 'Fira Code', 'Roboto Mono', ui-monospace, SFMono-Regular, monospace;
-  font-variant-numeric: tabular-nums;
-}
-
-.num-mono {
-  font-size: 12.5px;
-}
-
-.num-mono-bold {
-  font-weight: 700;
-  font-size: 13px;
-}
-
-/* Keyboard hint badge */
+/* Keyboard Shortcut Hint */
 .kbd-hint {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  background: #1e293b;
-  border: 1px solid #334155;
-  color: #94a3b8;
+  background: #F1F5F9;
+  border: 1px solid #CBD5E1;
+  color: #475569;
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 10px;
@@ -185,48 +213,15 @@ input[type="date"],
   letter-spacing: 0.04em;
 }
 
-/* Table - High-Density Enterprise Layout */
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  text-align: left;
-  font-size: 13px;
-}
-
-.data-table th {
-  background: #0f172a;
-  color: var(--text-muted);
-  font-weight: 700;
-  padding: 8px 12px;
-  border-bottom: 1px solid #1e293b;
-  text-transform: uppercase;
-  font-size: 11px;
-  letter-spacing: 0.05em;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.data-table td {
-  padding: 8px 12px;
-  border-bottom: 1px solid #1e293b;
-  color: var(--text-main);
-  height: 38px;
-}
-
-.data-table tr:hover td {
-  background: rgba(37, 99, 235, 0.04);
-}
-
-/* Enterprise High-Density Table Container */
+/* High-Density Industrial Grid (Table) — Exactly 36px Row Height */
 .table-container-dense {
   width: 100%;
   overflow-x: auto;
   overflow-y: auto;
-  max-height: 600px;
-  border: 1px solid #1e293b;
+  max-height: 620px;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
-  background: #090d16;
+  background: #FFFFFF;
 }
 
 .table-container-dense::-webkit-scrollbar {
@@ -234,14 +229,14 @@ input[type="date"],
   height: 6px;
 }
 .table-container-dense::-webkit-scrollbar-track {
-  background: #090d16;
+  background: #F8FAFC;
 }
 .table-container-dense::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #CBD5E1;
   border-radius: 3px;
 }
 .table-container-dense::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #94A3B8;
 }
 
 .table-dense {
@@ -250,22 +245,22 @@ input[type="date"],
   border-spacing: 0;
   text-align: left;
   font-size: 12.5px;
-  line-height: 1.35;
+  line-height: 1.3;
 }
 
 .table-dense thead th {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: #0f172a;
-  color: #94a3b8;
+  background: #F1F5F9;
+  color: #334155;
   font-weight: 700;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 8px 10px;
-  border-bottom: 2px solid #334155;
-  border-right: 1px solid #1e293b;
+  border-bottom: 2px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
   white-space: nowrap;
 }
 
@@ -274,12 +269,13 @@ input[type="date"],
 }
 
 .table-dense tbody td {
-  padding: 7px 10px;
-  border-bottom: 1px solid #1e293b;
-  border-right: 1px solid #1e293b;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
   color: var(--text-main);
   white-space: nowrap;
-  height: 38px;
+  height: 36px;
+  background: #FFFFFF;
 }
 
 .table-dense tbody td:last-child {
@@ -287,11 +283,11 @@ input[type="date"],
 }
 
 .table-dense tbody tr:nth-child(even) td {
-  background: rgba(255, 255, 255, 0.015);
+  background: #F8FAFC;
 }
 
 .table-dense tbody tr:hover td {
-  background: rgba(37, 99, 235, 0.08) !important;
+  background: #EFF6FF !important;
 }
 
 /* Sticky Column Utilities for High-Density Grids */
@@ -299,116 +295,92 @@ input[type="date"],
   position: sticky;
   left: 0;
   z-index: 15;
-  background: #0f172a !important;
+  background: #FFFFFF !important;
+  border-right: 1px solid var(--border-color) !important;
+}
+
+.table-dense thead th.sticky-col-left-1 {
+  background: #F1F5F9 !important;
+  z-index: 25;
 }
 
 .sticky-col-left-2 {
   position: sticky;
   left: 90px;
   z-index: 15;
-  background: #0f172a !important;
+  background: #FFFFFF !important;
+  border-right: 1px solid var(--border-color) !important;
+}
+
+.table-dense thead th.sticky-col-left-2 {
+  background: #F1F5F9 !important;
+  z-index: 25;
 }
 
 .sticky-col-right {
   position: sticky;
   right: 0;
   z-index: 15;
-  background: #0f172a !important;
+  background: #FFFFFF !important;
 }
 
-/* Sizing Matrix Pill Grid */
+.table-dense thead th.sticky-col-right {
+  background: #F1F5F9 !important;
+  z-index: 25;
+}
+
+/* Sizing Matrix Cells (Paris Points 32-43) */
 .matrix-cell {
   text-align: center;
   font-family: 'Fira Code', monospace;
   font-variant-numeric: tabular-nums;
-  font-size: 11.5px;
-  min-width: 38px;
+  font-size: 12px;
+  min-width: 40px;
   padding: 4px 6px !important;
+  border-right: 1px solid var(--border-color) !important;
 }
 
 .matrix-cell.has-stock {
   font-weight: 700;
-  color: #34d399;
-  background: rgba(16, 185, 129, 0.08) !important;
+  color: #0F172A;
+  background: #ECFDF5 !important;
 }
 
 .matrix-cell.zero-stock {
-  color: #475569;
+  color: #94A3B8;
+  font-weight: 400;
 }
 
-/* Export Button */
-.btn-export {
-  background: rgba(16, 185, 129, 0.1);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  padding: 8px 14px;
-  border-radius: 6px;
+.matrix-cell.broken-size-run {
+  color: #B45309;
   font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  background: #FFFBEB !important;
+  border-top: 1px dashed #F59E0B !important;
+  border-bottom: 1px dashed #F59E0B !important;
 }
 
-.btn-export:hover {
-  background: rgba(16, 185, 129, 0.2);
-  border-color: #34d399;
-}
-
-/* Vendor Bill Attachment Zone */
-.attachment-dropzone {
-  border: 2px dashed rgba(255, 255, 255, 0.18);
-  border-radius: 6px;
-  padding: 16px;
-  text-align: center;
-  background: rgba(15, 23, 42, 0.4);
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.attachment-dropzone:hover {
-  border-color: var(--accent-blue);
-  background: rgba(59, 130, 246, 0.05);
-}
-
-/* Status Badges */
+/* High-Contrast Status Badges */
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
-  border-radius: 4px;
+  padding: 2px 7px;
+  border-radius: 3px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 
-.badge-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
-.badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); }
-.badge-danger { background: rgba(244, 63, 94, 0.15); color: #f87171; border: 1px solid rgba(244, 63, 94, 0.25); }
-.badge-info { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.25); }
-.badge-low-stock {
-  background: rgba(245, 158, 11, 0.16);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.4);
-}
+.badge-success { background: #ECFDF5; color: #047857; border: 1px solid #A7F3D0; }
+.badge-warning { background: #FFFBEB; color: #B45309; border: 1px solid #FDE68A; }
+.badge-danger { background: #FFF1F2; color: #BE123C; border: 1px solid #FECDD3; }
+.badge-info { background: #EFF6FF; color: #1E40AF; border: 1px solid #BFDBFE; }
+.badge-low-stock { background: #FFFBEB; color: #B45309; border: 1px solid #FCD34D; }
 
-/* Keyboard Focus Visibility & Accessibility */
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid #3b82f6 !important;
-  outline-offset: 1px !important;
-}
-
-/* Enterprise Modal & High-Density Drawer - Crisp 4px Radius, 1px Border */
+/* Modal & Drawer — Clean Industrial Paper */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(2px);
+  background: rgba(15, 23, 42, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -418,41 +390,42 @@ textarea:focus-visible {
 
 .modal-drawer {
   width: 100%;
-  max-width: 560px;
+  max-width: 640px;
   max-height: 92vh;
   overflow-y: auto;
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: #FFFFFF;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.15);
 }
 
 .modal-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid #1e293b;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
   position: sticky;
   top: 0;
-  background: #0f172a;
+  background: #F8FAFC;
   z-index: 10;
 }
 
 .modal-body {
-  padding: 16px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   flex: 1;
+  background: #FFFFFF;
 }
 
 .modal-footer {
-  padding: 12px 16px;
-  border-top: 1px solid #1e293b;
-  background: #090d16;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border-color);
+  background: #F8FAFC;
   position: sticky;
   bottom: 0;
   z-index: 10;
@@ -463,32 +436,32 @@ textarea:focus-visible {
   gap: 8px;
 }
 
-/* High-Density Pagination Controls */
+/* Pagination Bar */
 .pagination-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 10px 16px;
   border-top: 1px solid var(--border-color);
-  background: rgba(15, 23, 42, 0.4);
-  font-size: 13px;
+  background: #F8FAFC;
+  font-size: 12.5px;
   color: var(--text-muted);
 }
 
 .pagination-btn {
-  background: #1e293b;
-  color: #e2e8f0;
-  border: 1px solid #334155;
+  background: #FFFFFF;
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
   padding: 4px 10px;
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background-color 0.12s;
 }
 
 .pagination-btn:hover:not(:disabled) {
-  background: #334155;
+  background: #F1F5F9;
 }
 
 .pagination-btn:disabled {
@@ -496,13 +469,13 @@ textarea:focus-visible {
   cursor: not-allowed;
 }
 
-/* Accessibility & Focus Outlines (WCAG 2.1 AA) */
+/* Accessibility Focus Ring */
 :focus-visible {
-  outline: 2px solid #3b82f6 !important;
-  outline-offset: 2px !important;
+  outline: 2px solid #1E3A8A !important;
+  outline-offset: 1px !important;
 }
 
-/* Responsive adjustments & Mobile PWA Optimization */
+/* Mobile Responsive Adjustments */
 @media (max-width: 768px) {
   .sidebar {
     transform: translateX(-100%);
@@ -527,28 +500,4 @@ textarea:focus-visible {
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
   }
-  .modal-footer {
-    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-  }
-  /* WCAG 2.1 AA 44x44px Touch Targets on Mobile Viewports */
-  .btn-primary, .btn-secondary {
-    min-height: 44px;
-    padding: 10px 16px;
-  }
-  .pagination-btn {
-    min-height: 44px;
-    min-width: 44px;
-    padding: 8px 14px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .mobile-menu-btn, .mobile-close-btn {
-    min-height: 44px;
-    min-width: 44px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
 }
-

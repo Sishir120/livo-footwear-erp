@@ -5,21 +5,23 @@ import {
   PlusCircle,
   ShoppingBag,
   Printer,
-  FileText,
   CheckCircle2,
   Search,
   Download,
   X,
-  CreditCard,
-  DollarSign,
   AlertTriangle,
   Receipt,
-  Ban
+  Ban,
+  Building2
 } from "lucide-react";
 import { exportToCSV } from "../utils/csvExport";
 import { useBarcodeScanner } from "../hooks/useBarcodeScanner";
 import { apiFetch, extractSupportReference } from "../lib/api";
 import { toPaisa, fromPaisa, calculateVatPaisa } from "../utils/currency";
+
+const COMPANY_PAN = "609823412";
+const COMPANY_NAME = "LIVO FOOTWEAR INDUSTRIES PVT. LTD.";
+const COMPANY_ADDRESS = "Balaju Industrial District, Kathmandu, Nepal";
 
 export function SalesInvoiceView({ userRole }: { userRole?: string }) {
   const [clients, setClients] = useState<any[]>([]);
@@ -29,6 +31,9 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSubTab, setActiveSubTab] = useState<"invoices" | "orders">("invoices");
+
+  // In-App Nepal IRD Physical Tax Invoice Preview Modal State
+  const [previewInvoice, setPreviewInvoice] = useState<any | null>(null);
 
   // Form State
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -59,7 +64,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
     loadData();
   }, []);
 
-  // Hardware Barcode Scanner Hook: captures rapid USB/Bluetooth scanner keystrokes (<35ms)
+  // Hardware Barcode Scanner Hook
   useBarcodeScanner((barcode) => {
     const clean = barcode.trim().toUpperCase();
     const matched = products.find(
@@ -98,16 +103,20 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
           e.preventDefault();
           setShowOrderModal(true);
         }
-      } else if (e.key === "Escape" && showOrderModal) {
-        e.preventDefault();
-        setShowOrderModal(false);
+      } else if (e.key === "Escape") {
+        if (previewInvoice) {
+          e.preventDefault();
+          setPreviewInvoice(null);
+        } else if (showOrderModal) {
+          e.preventDefault();
+          setShowOrderModal(false);
+        }
       }
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [showOrderModal, userRole]);
+  }, [showOrderModal, previewInvoice, userRole]);
 
-  // Auto-focus appropriate field when modal opens
   useEffect(() => {
     if (showOrderModal) {
       setTimeout(() => {
@@ -148,6 +157,10 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
 
   const getClientById = (id: number) => {
     return clients.find((c) => c.id === id);
+  };
+
+  const getOrderByInvoice = (salesOrderId: number) => {
+    return orders.find((o) => o.id === salesOrderId);
   };
 
   const handleProductChange = (prodId: string) => {
@@ -202,11 +215,11 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
       if (res.ok) {
         setErrorBanner(null);
         const order = await res.json();
-        // Generate Invoice for the order automatically
+        // Generate Invoice for the order automatically with VAT enabled
         const invRes = await apiFetch("/api/v1/invoices", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sales_order_id: order.id, vat_enabled: false })
+          body: JSON.stringify({ sales_order_id: order.id, vat_enabled: true })
         });
         const invData = invRes.ok ? await invRes.json() : null;
         loadData();
@@ -218,8 +231,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
           setUnitPrice("");
           setReceivedAmount("0");
         } else {
-          // Continuous Mode: Keep modal open, reset product/quantities, retain client if selected
-          const invMsg = invData?.invoice_number ? ` (Invoice #${invData.invoice_number})` : "";
+          const invMsg = invData?.invoice_number ? ` (Tax Invoice #${invData.invoice_number})` : "";
           setSuccessFeedback(`✓ Order ${orderNum}${invMsg} issued! Ready for next sale.`);
           setTimeout(() => setSuccessFeedback(""), 3500);
 
@@ -264,55 +276,6 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
     window.open(`/api/v1/invoices/${invoiceId}/printable`, "_blank");
   };
 
-  // Filtered Invoices
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter((inv) => {
-      const client = getClientByOrderId(inv.sales_order_id);
-      const clientStr = client ? `${client.name} ${client.code}`.toLowerCase() : "";
-      const q = searchQuery.toLowerCase();
-
-      return (
-        inv.invoice_number.toLowerCase().includes(q) ||
-        clientStr.includes(q) ||
-        inv.date_ad.includes(q) ||
-        inv.date_bs.includes(q)
-      );
-    });
-  }, [invoices, orders, clients, searchQuery]);
-
-  // Filtered Orders
-  const filteredOrders = useMemo(() => {
-    return orders.filter((o) => {
-      const client = getClientById(o.client_id);
-      const clientStr = client ? `${client.name} ${client.code}`.toLowerCase() : "";
-      const q = searchQuery.toLowerCase();
-
-      return (
-        o.order_number.toLowerCase().includes(q) ||
-        clientStr.includes(q) ||
-        o.order_date_ad.includes(q) ||
-        o.order_date_bs.includes(q)
-      );
-    });
-  }, [orders, clients, searchQuery]);
-
-  // Pagination for large dataset (~100+ entities)
-  const [invoicePage, setInvoicePage] = useState(1);
-  const [orderPage, setOrderPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
-
-  const totalInvoicePages = Math.ceil(filteredInvoices.length / ITEMS_PER_PAGE) || 1;
-  const paginatedInvoices = useMemo(() => {
-    const start = (invoicePage - 1) * ITEMS_PER_PAGE;
-    return filteredInvoices.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredInvoices, invoicePage]);
-
-  const totalOrderPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE) || 1;
-  const paginatedOrders = useMemo(() => {
-    const start = (orderPage - 1) * ITEMS_PER_PAGE;
-    return filteredOrders.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredOrders, orderPage]);
-
   // Nepal VAT Statutory Void Action
   const handleCancelInvoice = async (invoiceId: number) => {
     if (!confirm("Are you sure you want to void this invoice under Nepal VAT statutory rules? This action cannot be undone.")) return;
@@ -330,63 +293,126 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
     }
   };
 
+  // Monetary 2-decimal formatting helper
+  const fmtNpr = (val: number | string | undefined | null) => {
+    if (val === undefined || val === null) return "0.00";
+    const num = typeof val === "number" ? val : parseFloat(String(val).replace(/,/g, ""));
+    if (isNaN(num)) return "0.00";
+    return num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  // Filtered Invoices
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter((inv) => {
+      const client = getClientByOrderId(inv.sales_order_id);
+      const clientStr = client ? `${client.name} ${client.code} ${client.pan_number || ""}`.toLowerCase() : "";
+      const q = searchQuery.toLowerCase();
+
+      return (
+        inv.invoice_number.toLowerCase().includes(q) ||
+        clientStr.includes(q) ||
+        inv.date_ad.includes(q) ||
+        inv.date_bs.includes(q)
+      );
+    });
+  }, [invoices, orders, clients, searchQuery]);
+
+  // Filtered Orders
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      const client = getClientById(o.client_id);
+      const clientStr = client ? `${client.name} ${client.code} ${client.pan_number || ""}`.toLowerCase() : "";
+      const q = searchQuery.toLowerCase();
+
+      return (
+        o.order_number.toLowerCase().includes(q) ||
+        clientStr.includes(q) ||
+        o.order_date_ad.includes(q) ||
+        o.order_date_bs.includes(q)
+      );
+    });
+  }, [orders, clients, searchQuery]);
+
+  // Pagination
+  const [invoicePage, setInvoicePage] = useState(1);
+  const [orderPage, setOrderPage] = useState(1);
+  const ITEMS_PER_PAGE = 12;
+
+  const totalInvoicePages = Math.ceil(filteredInvoices.length / ITEMS_PER_PAGE) || 1;
+  const paginatedInvoices = useMemo(() => {
+    const start = (invoicePage - 1) * ITEMS_PER_PAGE;
+    return filteredInvoices.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredInvoices, invoicePage]);
+
+  const totalOrderPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE) || 1;
+  const paginatedOrders = useMemo(() => {
+    const start = (orderPage - 1) * ITEMS_PER_PAGE;
+    return filteredOrders.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredOrders, orderPage]);
+
   // CSV Exporters
   const handleExportInvoices = () => {
     if (!filteredInvoices.length) return;
     const headers = [
       "Invoice Number",
-      "Client / Buyer",
+      "Buyer Name",
+      "Buyer PAN",
+      "Company PAN",
       "Date AD",
       "Date BS",
-      "Subtotal (NPR)",
-      "VAT Amount (NPR)",
-      "Total Amount (NPR)",
+      "Taxable Subtotal (NPR)",
+      "13% VAT Amount (NPR)",
+      "Grand Total (NPR)",
       "Received (NPR)",
       "Receivable Balance (NPR)",
-      "Sequential Integrity Status"
+      "Status"
     ];
     const rows = filteredInvoices.map((inv) => {
       const client = getClientByOrderId(inv.sales_order_id);
+      const subtotal = inv.subtotal ?? (inv.total_amount ? (inv.total_amount / 1.13) : 0);
+      const vat = inv.vat_amount ?? (inv.total_amount - subtotal);
       return [
         inv.invoice_number,
-        client?.name || `Order #${inv.sales_order_id}`,
+        client?.name || "-",
+        client?.pan_number || "N/A",
+        COMPANY_PAN,
         inv.date_ad,
         inv.date_bs,
-        inv.subtotal_amount,
-        inv.vat_amount,
-        inv.total_amount,
-        inv.received_amount,
-        inv.receivable_amount,
-        "Immutable Sequential"
+        fmtNpr(subtotal),
+        fmtNpr(vat),
+        fmtNpr(inv.total_amount),
+        fmtNpr(inv.received_amount),
+        fmtNpr(inv.receivable_amount),
+        inv.is_void ? "VOID" : "ACTIVE"
       ];
     });
-    exportToCSV("Sales_Invoices_Ledger", headers, rows);
+    exportToCSV("Nepal_Tax_Invoices_Ledger", headers, rows);
   };
 
   const handleExportOrders = () => {
     if (!filteredOrders.length) return;
     const headers = [
       "Order Number",
-      "Client Name",
-      "Client Code",
+      "Customer Name",
+      "Customer PAN",
       "Date AD",
       "Date BS",
       "Total Amount (NPR)",
       "Received (NPR)",
-      "Receivable (NPR)",
-      "Dispatch Status"
+      "Receivable Balance (NPR)",
+      "Status"
     ];
     const rows = filteredOrders.map((o) => {
       const client = getClientById(o.client_id);
       return [
         o.order_number,
         client?.name || `Client #${o.client_id}`,
-        client?.code || "-",
+        client?.pan_number || "N/A",
         o.order_date_ad,
         o.order_date_bs,
-        o.total_amount,
-        o.received_amount,
-        o.receivable_amount,
+        fmtNpr(o.total_amount),
+        fmtNpr(o.received_amount),
+        fmtNpr(o.receivable_amount),
         o.delivered ? "Delivered" : "Pending"
       ];
     });
@@ -394,77 +420,133 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Title & Action Bar */}
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      {/* Statutory Header & Actions */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
         <div>
-          <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#f8fafc" }}>
-            Sales Orders & Issued Sequential Invoices
+          <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#0F172A", margin: 0, letterSpacing: "-0.01em" }}>
+            Wholesale Sales & Statutory Tax Invoices (कर बिजक)
           </h2>
-          <div style={{ fontSize: "12px", color: "#94a3b8" }}>
-            Non-resettable, gapless sequential invoice numbers enforced by PostgreSQL UniqueConstraint
+          <div style={{ fontSize: "12px", color: "#475569", marginTop: "2px" }}>
+            Nepal IRD Rule 23(1) Schedule-5 Compliance · Monotonic Sequential Invoices
           </div>
         </div>
 
         {userRole === "editor" && (
-          <button className="btn-primary" onClick={() => setShowOrderModal(true)} title="Shortcut: Alt+N or press 'N' on table">
-            <PlusCircle size={16} /> Record Sale & Issue Invoice <span style={{ fontSize: "11px", opacity: 0.85, marginLeft: "4px", background: "rgba(255,255,255,0.2)", padding: "1px 5px", borderRadius: "3px" }}>Alt+N</span>
+          <button
+            className="btn-primary"
+            onClick={() => setShowOrderModal(true)}
+            title="Shortcut: Alt+N"
+            style={{ background: "#1E3A8A", border: "1px solid #1E3A8A", color: "#FFFFFF", padding: "6px 12px", borderRadius: "3px", fontSize: "12px", fontWeight: "700", display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
+          >
+            <PlusCircle size={15} /> Record Sale & Issue Invoice
+            <span style={{ fontSize: "11px", opacity: 0.85, background: "rgba(255,255,255,0.2)", padding: "1px 5px", borderRadius: "3px", marginLeft: "4px" }}>
+              Alt+N
+            </span>
           </button>
         )}
       </div>
 
+      {/* STATUTORY TAX INVOICE STRIP (Nepal IRD Compliance Banner) */}
+      <div
+        style={{
+          background: "#FFFFFF",
+          border: "1px solid #CBD5E1",
+          borderRadius: "4px",
+          padding: "10px 14px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "10px"
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <Building2 size={16} color="#1E3A8A" />
+            <span style={{ fontSize: "12px", fontWeight: "700", color: "#0F172A" }}>
+              {COMPANY_NAME}
+            </span>
+          </div>
+
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#F1F5F9", border: "1px solid #CBD5E1", padding: "2px 8px", borderRadius: "3px" }}>
+            <span style={{ fontSize: "11px", fontWeight: "700", color: "#475569", textTransform: "uppercase" }}>
+              COMPANY PAN:
+            </span>
+            <span style={{ fontFamily: "monospace", fontSize: "13px", fontWeight: "700", color: "#1E3A8A", letterSpacing: "0.08em" }}>
+              {COMPANY_PAN}
+            </span>
+          </div>
+
+          <span style={{ fontSize: "11px", color: "#475569" }}>
+            VAT Act 2052 · IRD Registered
+          </span>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "11px", color: "#475569" }}>
+          <span>Breakdown: <strong style={{ color: "#0F172A" }}>Subtotal</strong> → <strong style={{ color: "#1E3A8A" }}>13% Nepal VAT</strong> → <strong style={{ color: "#0F172A" }}>Grand Total NPR</strong></span>
+        </div>
+      </div>
+
       {/* Tabs & Search Filter Bar */}
-      <div className="glass-card" style={{ padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+      <div style={{ background: "#FFFFFF", border: "1px solid #CBD5E1", borderRadius: "4px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
         {/* Sub-tabs */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <button
             onClick={() => setActiveSubTab("invoices")}
             style={{
-              padding: "6px 14px",
-              borderRadius: "6px",
-              border: "none",
-              fontSize: "13px",
-              fontWeight: "600",
+              padding: "5px 12px",
+              borderRadius: "3px",
+              border: "1px solid",
+              borderColor: activeSubTab === "invoices" ? "#1E3A8A" : "#CBD5E1",
+              fontSize: "12px",
+              fontWeight: "700",
               cursor: "pointer",
-              background: activeSubTab === "invoices" ? "#3b82f6" : "rgba(255,255,255,0.05)",
-              color: activeSubTab === "invoices" ? "#ffffff" : "#94a3b8",
+              background: activeSubTab === "invoices" ? "#1E3A8A" : "#FFFFFF",
+              color: activeSubTab === "invoices" ? "#FFFFFF" : "#475569",
               display: "inline-flex",
               alignItems: "center",
               gap: "6px"
             }}
           >
-            <Receipt size={14} /> Issued Invoices ({invoices.length})
+            <Receipt size={13} /> Issued Tax Invoices ({invoices.length})
           </button>
           <button
             onClick={() => setActiveSubTab("orders")}
             style={{
-              padding: "6px 14px",
-              borderRadius: "6px",
-              border: "none",
-              fontSize: "13px",
-              fontWeight: "600",
+              padding: "5px 12px",
+              borderRadius: "3px",
+              border: "1px solid",
+              borderColor: activeSubTab === "orders" ? "#1E3A8A" : "#CBD5E1",
+              fontSize: "12px",
+              fontWeight: "700",
               cursor: "pointer",
-              background: activeSubTab === "orders" ? "#3b82f6" : "rgba(255,255,255,0.05)",
-              color: activeSubTab === "orders" ? "#ffffff" : "#94a3b8",
+              background: activeSubTab === "orders" ? "#1E3A8A" : "#FFFFFF",
+              color: activeSubTab === "orders" ? "#FFFFFF" : "#475569",
               display: "inline-flex",
               alignItems: "center",
               gap: "6px"
             }}
           >
-            <ShoppingBag size={14} /> Sales Orders ({orders.length})
+            <ShoppingBag size={13} /> Sales Orders ({orders.length})
           </button>
+
+          {/* Dual-Unit Packaging Floor Hint */}
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "3px", padding: "4px 8px", fontSize: "11px", fontWeight: "700", color: "#1E3A8A" }}>
+            <span>१ कार्टुन = १२ जोर (1 Carton = 12 Pairs)</span>
+          </div>
         </div>
 
         {/* Search & Export */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(15, 23, 42, 0.6)", padding: "4px 10px", borderRadius: "6px", border: "1px solid var(--border-color)" }}>
-            <Search size={14} color="#94a3b8" />
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "#F8FAFC", padding: "4px 8px", borderRadius: "3px", border: "1px solid #CBD5E1" }}>
+            <Search size={13} color="#64748B" />
             <input
               type="text"
-              placeholder="Search invoice number, client..."
+              placeholder="Search invoice #, PAN, client..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ background: "none", border: "none", color: "#f8fafc", fontSize: "12px", outline: "none", width: "180px" }}
+              style={{ background: "none", border: "none", color: "#0F172A", fontSize: "12px", outline: "none", width: "190px" }}
             />
           </div>
 
@@ -478,88 +560,132 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
       </div>
 
       {/* Main Table View */}
-      <div className="glass-card" style={{ padding: "18px 20px" }}>
+      <div style={{ background: "#FFFFFF", border: "1px solid #CBD5E1", borderRadius: "4px", padding: "14px 16px" }}>
         {loading ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>Loading records...</div>
+          <div style={{ padding: "40px", textAlign: "center", color: "#64748B" }}>Loading records...</div>
         ) : activeSubTab === "invoices" ? (
-          /* INVOICES TABLE */
+          /* INVOICES TABLE (Statutory Nepal IRD 2-Decimal Grid) */
           filteredInvoices.length === 0 ? (
-            <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
-              No sales invoices found matching criteria.
+            <div style={{ padding: "30px", textAlign: "center", color: "#64748B", fontSize: "13px" }}>
+              No tax invoices found matching criteria.
             </div>
           ) : (
             <div className="table-container-dense">
               <table className="table-dense">
                 <thead>
                   <tr>
-                    <th className="sticky-col-left-1" style={{ width: "130px" }}>Invoice No.</th>
-                    <th className="sticky-col-left-2" style={{ minWidth: "160px" }}>Billed Customer</th>
-                    <th style={{ width: "140px" }}>Date (AD / BS)</th>
-                    <th style={{ textAlign: "right", width: "130px" }}>Invoice Total</th>
-                    <th style={{ textAlign: "right", width: "120px" }}>Cash Received</th>
-                    <th style={{ textAlign: "right", width: "130px" }}>Receivable</th>
-                    <th style={{ width: "130px", textAlign: "center" }}>Print Action</th>
+                    <th className="sticky-col-left-1" style={{ width: "120px" }}>Invoice No.</th>
+                    <th className="sticky-col-left-2" style={{ minWidth: "150px" }}>Buyer / Entity</th>
+                    <th style={{ width: "105px" }}>Buyer PAN</th>
+                    <th style={{ width: "120px" }}>Date (AD / BS)</th>
+                    <th style={{ textAlign: "right", width: "105px" }}>Subtotal (NPR)</th>
+                    <th style={{ textAlign: "right", width: "95px" }}>13% VAT</th>
+                    <th style={{ textAlign: "right", width: "110px" }}>Grand Total</th>
+                    <th style={{ textAlign: "right", width: "100px" }}>Received</th>
+                    <th style={{ textAlign: "right", width: "105px" }}>Balance Due</th>
+                    <th style={{ width: "130px", textAlign: "center" }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedInvoices.map((inv) => {
                     const client = getClientByOrderId(inv.sales_order_id);
+                    const subtotal = inv.subtotal ?? (inv.total_amount ? Math.round((inv.total_amount / 1.13) * 100) / 100 : 0);
+                    const vatAmount = inv.vat_amount ?? (inv.total_amount - subtotal);
+
                     return (
-                      <tr key={inv.id} style={{ opacity: inv.is_void ? 0.75 : 1 }}>
-                        <td className="sticky-col-left-1 num-mono" style={{ fontWeight: "700", color: inv.is_void ? "#94a3b8" : "#3b82f6", textDecoration: inv.is_void ? "line-through" : "none" }}>
+                      <tr key={inv.id} style={{ opacity: inv.is_void ? 0.65 : 1 }}>
+                        <td className="sticky-col-left-1 num-mono" style={{ fontWeight: "700", color: inv.is_void ? "#94A3B8" : "#1E3A8A", textDecoration: inv.is_void ? "line-through" : "none" }}>
                           {inv.invoice_number}
                           {inv.is_void && (
-                            <span style={{ marginLeft: "6px", fontSize: "10px", color: "#f43f5e", background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: "3px", padding: "1px 4px", textDecoration: "none", display: "inline-block" }}>
+                            <span style={{ marginLeft: "4px", fontSize: "9px", color: "#DC2626", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: "2px", padding: "1px 3px", textDecoration: "none", display: "inline-block" }}>
                               VOID
                             </span>
                           )}
                         </td>
-                        <td className="sticky-col-left-2" style={{ fontWeight: "600", color: "#f8fafc" }}>
+                        <td className="sticky-col-left-2" style={{ fontWeight: "600", color: "#0F172A" }}>
                           {client ? (
                             <>
-                              {client.name} <span style={{ fontSize: "11px", color: "#94a3b8" }}>({client.code})</span>
+                              {client.name} <span style={{ fontSize: "11px", color: "#64748B" }}>({client.code})</span>
                             </>
                           ) : (
                             `Order #${inv.sales_order_id}`
                           )}
                         </td>
-                        <td style={{ fontSize: "12px", color: "#94a3b8" }}>
-                          {inv.date_ad} <span style={{ fontSize: "11px", color: "#64748b" }}>({inv.date_bs})</span>
+                        <td style={{ fontFamily: "monospace", fontSize: "12px", color: client?.pan_number ? "#0F172A" : "#94A3B8", fontWeight: client?.pan_number ? "700" : "400" }}>
+                          {client?.pan_number || "N/A"}
                         </td>
-                        <td style={{ textAlign: "right", fontWeight: "700" }} className="num-mono-bold">
-                          Rs. {inv.total_amount?.toLocaleString()}
+                        <td style={{ fontSize: "12px", color: "#475569" }}>
+                          {inv.date_ad} <span style={{ fontSize: "11px", color: "#64748B" }}>({inv.date_bs})</span>
                         </td>
-                        <td style={{ textAlign: "right", color: "#10b981", fontWeight: "600" }} className="num-mono">
-                          Rs. {inv.received_amount?.toLocaleString()}
+                        <td style={{ textAlign: "right" }} className="num-mono">
+                          Rs. {fmtNpr(subtotal)}
+                        </td>
+                        <td style={{ textAlign: "right", color: "#475569" }} className="num-mono">
+                          Rs. {fmtNpr(vatAmount)}
+                        </td>
+                        <td style={{ textAlign: "right", fontWeight: "700", color: "#0F172A" }} className="num-mono-bold">
+                          Rs. {fmtNpr(inv.total_amount)}
+                        </td>
+                        <td style={{ textAlign: "right", color: "#059669", fontWeight: "600" }} className="num-mono">
+                          Rs. {fmtNpr(inv.received_amount)}
                         </td>
                         <td
                           style={{
                             textAlign: "right",
-                            color: inv.receivable_amount > 0 ? "#f87171" : "#94a3b8",
-                            fontWeight: "600"
+                            color: inv.receivable_amount > 0 ? "#DC2626" : "#64748B",
+                            fontWeight: "700"
                           }}
                           className="num-mono"
                         >
-                          Rs. {inv.receivable_amount?.toLocaleString()}
+                          Rs. {fmtNpr(inv.receivable_amount)}
                         </td>
                         <td style={{ textAlign: "center" }}>
-                          <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
+                          <div style={{ display: "inline-flex", gap: "4px", alignItems: "center" }}>
                             <button
-                              className="btn-secondary"
-                              style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px" }}
-                              onClick={() => openPrintableInvoice(inv.id)}
-                              title="Open printable tax invoice"
+                              type="button"
+                              onClick={() => {
+                                const ord = getOrderByInvoice(inv.sales_order_id);
+                                setPreviewInvoice({
+                                  ...inv,
+                                  client,
+                                  order: ord,
+                                  subtotal,
+                                  vatAmount
+                                });
+                              }}
+                              style={{
+                                background: "#FFFFFF",
+                                border: "1px solid #CBD5E1",
+                                color: "#1E3A8A",
+                                padding: "2px 6px",
+                                borderRadius: "3px",
+                                fontSize: "11px",
+                                fontWeight: "700",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "3px"
+                              }}
+                              title="Preview Nepal IRD Tax Invoice (कर बिजक)"
                             >
-                              <Printer size={12} /> Tax Invoice
+                              <Printer size={11} /> कर बिजक
                             </button>
                             {userRole === "editor" && !inv.is_void && (
                               <button
-                                className="btn-secondary"
-                                style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px", color: "#f43f5e", borderColor: "rgba(244,63,94,0.3)" }}
+                                type="button"
                                 onClick={() => handleCancelInvoice(inv.id)}
+                                style={{
+                                  background: "#FFFFFF",
+                                  border: "1px solid #FECACA",
+                                  color: "#DC2626",
+                                  padding: "2px 5px",
+                                  borderRadius: "3px",
+                                  fontSize: "11px",
+                                  cursor: "pointer"
+                                }}
                                 title="Void invoice per Nepal statutory VAT rules"
                               >
-                                <Ban size={12} /> Void
+                                <Ban size={11} />
                               </button>
                             )}
                           </div>
@@ -583,7 +709,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     >
                       Previous
                     </button>
-                    <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                    <span style={{ fontSize: "12px", color: "#475569" }}>
                       Page {invoicePage} of {totalInvoicePages}
                     </span>
                     <button
@@ -601,7 +727,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
         ) : (
           /* ORDERS TABLE */
           filteredOrders.length === 0 ? (
-            <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
+            <div style={{ padding: "30px", textAlign: "center", color: "#64748B", fontSize: "13px" }}>
               No sales orders found matching criteria.
             </div>
           ) : (
@@ -611,11 +737,12 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                   <tr>
                     <th style={{ width: "130px" }}>Order Number</th>
                     <th>Customer Name</th>
-                    <th style={{ width: "140px" }}>Date (AD / BS)</th>
-                    <th style={{ textAlign: "right", width: "130px" }}>Total Amount</th>
+                    <th style={{ width: "110px" }}>Buyer PAN</th>
+                    <th style={{ width: "130px" }}>Date (AD / BS)</th>
+                    <th style={{ textAlign: "right", width: "130px" }}>Total Amount (NPR)</th>
                     <th style={{ textAlign: "right", width: "120px" }}>Received</th>
                     <th style={{ textAlign: "right", width: "130px" }}>Balance Due</th>
-                    <th style={{ width: "110px", textAlign: "center" }}>Dispatch</th>
+                    <th style={{ width: "95px", textAlign: "center" }}>Dispatch</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -623,36 +750,39 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     const client = getClientById(o.client_id);
                     return (
                       <tr key={o.id}>
-                        <td style={{ fontWeight: "700", color: "#3b82f6" }} className="num-mono">
+                        <td style={{ fontWeight: "700", color: "#1E3A8A" }} className="num-mono">
                           {o.order_number}
                         </td>
-                        <td style={{ fontWeight: "600" }}>
+                        <td style={{ fontWeight: "600", color: "#0F172A" }}>
                           {client ? (
                             <>
-                              {client.name} <span style={{ fontSize: "11px", color: "#94a3b8" }}>({client.code})</span>
+                              {client.name} <span style={{ fontSize: "11px", color: "#64748B" }}>({client.code})</span>
                             </>
                           ) : (
                             `Client #${o.client_id}`
                           )}
                         </td>
-                        <td style={{ fontSize: "12px", color: "#94a3b8" }}>
-                          {o.order_date_ad} <span style={{ fontSize: "11px", color: "#64748b" }}>({o.order_date_bs} BS)</span>
+                        <td style={{ fontFamily: "monospace", fontSize: "12px", color: client?.pan_number ? "#0F172A" : "#94A3B8" }}>
+                          {client?.pan_number || "N/A"}
                         </td>
-                        <td style={{ textAlign: "right", fontWeight: "700" }} className="num-mono-bold">
-                          Rs. {o.total_amount?.toLocaleString()}
+                        <td style={{ fontSize: "12px", color: "#475569" }}>
+                          {o.order_date_ad} <span style={{ fontSize: "11px", color: "#64748B" }}>({o.order_date_bs} BS)</span>
                         </td>
-                        <td style={{ textAlign: "right", color: "#10b981", fontWeight: "600" }} className="num-mono">
-                          Rs. {o.received_amount?.toLocaleString()}
+                        <td style={{ textAlign: "right", fontWeight: "700", color: "#0F172A" }} className="num-mono-bold">
+                          Rs. {fmtNpr(o.total_amount)}
+                        </td>
+                        <td style={{ textAlign: "right", color: "#059669", fontWeight: "600" }} className="num-mono">
+                          Rs. {fmtNpr(o.received_amount)}
                         </td>
                         <td
                           style={{
                             textAlign: "right",
-                            color: o.receivable_amount > 0 ? "#f87171" : "#94a3b8",
-                            fontWeight: "600"
+                            color: o.receivable_amount > 0 ? "#DC2626" : "#64748B",
+                            fontWeight: "700"
                           }}
                           className="num-mono"
                         >
-                          Rs. {o.receivable_amount?.toLocaleString()}
+                          Rs. {fmtNpr(o.receivable_amount)}
                         </td>
                         <td style={{ textAlign: "center" }}>
                           <span className={`badge ${o.delivered ? "badge-success" : "badge-warning"}`}>
@@ -678,14 +808,13 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     >
                       Previous
                     </button>
-                    <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                    <span style={{ fontSize: "12px", color: "#475569" }}>
                       Page {orderPage} of {totalOrderPages}
                     </span>
                     <button
                       className="pagination-btn"
                       onClick={() => setOrderPage((p) => Math.min(totalOrderPages, p + 1))}
                       disabled={orderPage === totalOrderPages}
-                      aria-label="Next page of sales orders"
                     >
                       Next
                     </button>
@@ -697,15 +826,232 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
         )}
       </div>
 
+      {/* NEPAL IRD PHYSICAL TAX INVOICE (कर बिजक) PREVIEW MODAL */}
+      {previewInvoice && (
+        <div className="modal-overlay" role="presentation" style={{ zIndex: 9999 }}>
+          <div
+            className="modal-drawer"
+            role="dialog"
+            aria-modal="true"
+            style={{
+              maxWidth: "760px",
+              background: "#FFFFFF",
+              border: "1px solid #CBD5E1",
+              borderRadius: "4px",
+              padding: "0"
+            }}
+          >
+            {/* Action Bar */}
+            <div style={{ background: "#F1F5F9", borderBottom: "1px solid #CBD5E1", padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Receipt size={16} color="#1E3A8A" />
+                <span style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A", textTransform: "uppercase" }}>
+                  Nepal IRD Statutory Tax Invoice (कर बिजक)
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => openPrintableInvoice(previewInvoice.id)}
+                  style={{
+                    background: "#1E3A8A",
+                    color: "#FFFFFF",
+                    border: "none",
+                    padding: "4px 10px",
+                    borderRadius: "3px",
+                    fontSize: "12px",
+                    fontWeight: "700",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    cursor: "pointer"
+                  }}
+                >
+                  <Printer size={13} /> Print Official Copy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewInvoice(null)}
+                  style={{ background: "none", border: "none", color: "#64748B", cursor: "pointer", padding: "4px" }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Tax Invoice Paper Body */}
+            <div style={{ padding: "24px 30px", background: "#FFFFFF", color: "#0F172A", fontFamily: "'Inter', sans-serif" }}>
+              {/* Header Box */}
+              <div style={{ textAlign: "center", borderBottom: "2px solid #0F172A", paddingBottom: "12px", marginBottom: "14px" }}>
+                <div style={{ fontSize: "11px", fontWeight: "600", color: "#475569" }}>
+                  नेपाल सरकार · आन्तरिक राजस्व विभाग (Government of Nepal · Inland Revenue Department)
+                </div>
+                <h1 style={{ fontSize: "20px", fontWeight: "800", color: "#0F172A", margin: "4px 0 2px 0", letterSpacing: "0.02em" }}>
+                  कर बिजक (TAX INVOICE)
+                </h1>
+                <div style={{ fontSize: "11px", color: "#64748B" }}>
+                  नियम २३ को उपनियम (१) सँग सम्बन्धित (Schedule-5, Value Added Tax Rules, 2053)
+                </div>
+              </div>
+
+              {/* Seller & Buyer Grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "16px", marginBottom: "16px", fontSize: "12px" }}>
+                {/* Seller Info */}
+                <div style={{ border: "1px solid #CBD5E1", borderRadius: "3px", padding: "10px 12px" }}>
+                  <div style={{ fontWeight: "700", fontSize: "13px", color: "#0F172A" }}>{COMPANY_NAME}</div>
+                  <div style={{ color: "#475569", marginTop: "2px" }}>ठेगाना (Address): {COMPANY_ADDRESS}</div>
+                  
+                  {/* Seller PAN Grid */}
+                  <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontWeight: "700", color: "#0F172A" }}>विक्रेताको स्थायी लेखा नं. (PAN):</span>
+                    <div style={{ display: "inline-flex", gap: "2px" }}>
+                      {COMPANY_PAN.split("").map((digit, i) => (
+                        <span key={i} style={{ width: "18px", height: "20px", border: "1px solid #1E3A8A", background: "#EFF6FF", color: "#1E3A8A", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: "800", fontFamily: "monospace", fontSize: "12px" }}>
+                          {digit}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Invoice Metadata & Buyer Info */}
+                <div style={{ border: "1px solid #CBD5E1", borderRadius: "3px", padding: "10px 12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                    <span style={{ color: "#475569" }}>बिजक नं. (Invoice No):</span>
+                    <strong style={{ fontFamily: "monospace", color: "#1E3A8A" }}>{previewInvoice.invoice_number}</strong>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                    <span style={{ color: "#475569" }}>मिति (Date AD):</span>
+                    <strong>{previewInvoice.date_ad}</strong>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                    <span style={{ color: "#475569" }}>मिति (Date BS):</span>
+                    <strong>{previewInvoice.date_bs} BS</strong>
+                  </div>
+
+                  {/* Buyer PAN */}
+                  <div style={{ marginTop: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontWeight: "700", color: "#0F172A" }}>खरिदकर्ताको PAN:</span>
+                    <div style={{ display: "inline-flex", gap: "2px" }}>
+                      {(previewInvoice.client?.pan_number || "---------").padEnd(9, "-").slice(0, 9).split("").map((digit: string, i: number) => (
+                        <span key={i} style={{ width: "16px", height: "18px", border: "1px solid #CBD5E1", background: "#F8FAFC", color: digit === "-" ? "#CBD5E1" : "#0F172A", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: "700", fontFamily: "monospace", fontSize: "11px" }}>
+                          {digit}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ marginTop: "4px", fontSize: "11.5px", color: "#475569" }}>
+                    खरिदकर्ता (Buyer): <strong style={{ color: "#0F172A" }}>{previewInvoice.client?.name || "Cash Customer"}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Items Table */}
+              <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid #0F172A", marginBottom: "14px", fontSize: "12px" }}>
+                <thead>
+                  <tr style={{ background: "#F1F5F9", borderBottom: "1px solid #0F172A" }}>
+                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "40px", textAlign: "center" }}>क्र.सं.</th>
+                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", textAlign: "left" }}>विवरण (Particulars)</th>
+                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "80px", textAlign: "right" }}>परिमाण (Qty)</th>
+                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "95px", textAlign: "right" }}>दर (Rate Rs.)</th>
+                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "115px", textAlign: "right" }}>जम्मा रकम (Rs.)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(previewInvoice.order?.items && previewInvoice.order.items.length > 0) ? (
+                    previewInvoice.order.items.map((it: any, idx: number) => {
+                      const prod = products.find((p) => p.id === it.product_id);
+                      return (
+                        <tr key={idx} style={{ height: "32px" }}>
+                          <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "center" }}>{idx + 1}</td>
+                          <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", fontWeight: "600" }}>
+                            {prod ? `${prod.name} (${prod.code} · Size ${prod.size || "-"})` : `Product #${it.product_id}`}
+                          </td>
+                          <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace" }}>
+                            {it.quantity} pairs
+                          </td>
+                          <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace" }}>
+                            {fmtNpr(it.unit_price)}
+                          </td>
+                          <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "700" }}>
+                            {fmtNpr(it.total_price || (it.quantity * it.unit_price))}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr style={{ height: "32px" }}>
+                      <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "center" }}>1</td>
+                      <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", fontWeight: "600" }}>Wholesale Finished Footwear Dispatch</td>
+                      <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace" }}>1 lot</td>
+                      <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace" }}>{fmtNpr(previewInvoice.subtotal)}</td>
+                      <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "700" }}>{fmtNpr(previewInvoice.subtotal)}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              {/* Statutory Calculation Breakdown Strip */}
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
+                <table style={{ width: "320px", borderCollapse: "collapse", fontSize: "12px" }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: "4px 8px", color: "#475569" }}>कुल करयोग्य रकम (Taxable Subtotal):</td>
+                      <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "600" }}>
+                        Rs. {fmtNpr(previewInvoice.subtotal)}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: "4px 8px", color: "#475569" }}>मूल्य अभिवृद्धि कर १३% (13% VAT):</td>
+                      <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "600", color: "#1E3A8A" }}>
+                        Rs. {fmtNpr(previewInvoice.vatAmount)}
+                      </td>
+                    </tr>
+                    <tr style={{ borderTop: "2px solid #0F172A", borderBottom: "2px solid #0F172A", background: "#F8FAFC" }}>
+                      <td style={{ padding: "6px 8px", fontWeight: "800", color: "#0F172A" }}>कूल जम्मा रकम (Grand Total NPR):</td>
+                      <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "800", fontSize: "13px", color: "#0F172A" }}>
+                        Rs. {fmtNpr(previewInvoice.total_amount)}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: "4px 8px", color: "#059669", fontWeight: "600" }}>प्राप्त रकम (Amount Received):</td>
+                      <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "600", color: "#059669" }}>
+                        Rs. {fmtNpr(previewInvoice.received_amount)}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: "4px 8px", color: "#DC2626", fontWeight: "700" }}>बाँकी बक्यौता (Receivable Balance):</td>
+                      <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "700", color: "#DC2626" }}>
+                        Rs. {fmtNpr(previewInvoice.receivable_amount)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Statutory Signature Block */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "40px", paddingTop: "10px", fontSize: "11px", color: "#475569" }}>
+                <div style={{ textAlign: "center", width: "180px", borderTop: "1px dashed #64748B", paddingTop: "4px" }}>
+                  खरिदकर्ताको दस्तखत (Buyer Signature)
+                </div>
+                <div style={{ textAlign: "center", width: "180px", borderTop: "1px dashed #64748B", paddingTop: "4px" }}>
+                  आधिकारिक दस्तखत (Authorized Signature)
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Record Sale Modal Drawer with Sequential Keyboard Navigation */}
       {showOrderModal && (
         <div className="modal-overlay" role="presentation">
           <div className="modal-drawer" role="dialog" aria-modal="true" aria-labelledby="sales-drawer-title">
             <div className="modal-header">
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <ShoppingBag size={16} color="#3b82f6" />
-                <h3 id="sales-drawer-title" style={{ fontSize: "15px", fontWeight: "700", color: "#f8fafc" }}>
-                  Record Footwear Sale & Issue Invoice
+                <ShoppingBag size={16} color="#1E3A8A" />
+                <h3 id="sales-drawer-title" style={{ fontSize: "14px", fontWeight: "700", color: "#0F172A", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  Record Footwear Sale & Issue Tax Invoice
                 </h3>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -713,7 +1059,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                   <span className="kbd-hint">Ctrl+Enter ↵</span>
                   <span className="kbd-hint">Esc</span>
                 </div>
-                <button onClick={() => setShowOrderModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", marginLeft: "4px" }} aria-label="Close sales order dialog">
+                <button onClick={() => setShowOrderModal(false)} style={{ background: "none", border: "none", color: "#64748B", cursor: "pointer", marginLeft: "4px" }} aria-label="Close sales order dialog">
                   <X size={18} />
                 </button>
               </div>
@@ -723,19 +1069,19 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
               <div className="modal-body">
                 {/* Support Reference Error Banner */}
                 {errorBanner && (
-                  <div role="alert" style={{ background: "rgba(220, 38, 38, 0.15)", border: "1px solid #ef4444", borderRadius: "4px", padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", color: "#fca5a5" }}>
+                  <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #EF4444", borderRadius: "3px", padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", color: "#991B1B" }}>
                     <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
-                      <AlertTriangle size={16} style={{ color: "#ef4444", flexShrink: 0, marginTop: "2px" }} />
+                      <AlertTriangle size={16} style={{ color: "#DC2626", flexShrink: 0, marginTop: "2px" }} />
                       <div>
-                        <div style={{ fontSize: "12px", fontWeight: "700", color: "#fee2e2" }}>
+                        <div style={{ fontSize: "12px", fontWeight: "700", color: "#991B1B" }}>
                           Transaction failed. Support reference: [{errorBanner.refCode || "req_unknown"}]
                         </div>
-                        <div style={{ fontSize: "11.5px", color: "#fca5a5", marginTop: "2px" }}>
+                        <div style={{ fontSize: "11.5px", color: "#B91C1C", marginTop: "2px" }}>
                           {errorBanner.message}
                         </div>
                       </div>
                     </div>
-                    <button type="button" onClick={() => setErrorBanner(null)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", padding: "0" }}>
+                    <button type="button" onClick={() => setErrorBanner(null)} style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", padding: "0" }}>
                       <X size={15} />
                     </button>
                   </div>
@@ -743,35 +1089,45 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
 
                 {/* Success Feedback Toast for Continuous Entry */}
                 {successFeedback && (
-                  <div role="status" aria-live="polite" style={{ background: "rgba(37, 99, 235, 0.15)", border: "1px solid #2563eb", borderRadius: "4px", padding: "8px 12px", display: "flex", alignItems: "center", gap: "8px", color: "#93c5fd", fontSize: "12.5px", fontWeight: "600" }}>
-                    <CheckCircle2 size={15} />
+                  <div role="status" aria-live="polite" style={{ background: "#ECFDF5", border: "1px solid #10B981", borderRadius: "3px", padding: "8px 12px", display: "flex", alignItems: "center", gap: "8px", color: "#065F46", fontSize: "12.5px", fontWeight: "600" }}>
+                    <CheckCircle2 size={15} color="#059669" />
                     <span>{successFeedback}</span>
                   </div>
                 )}
 
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px", background: "#090d16", padding: "8px 10px", borderRadius: "4px", border: "1px solid #1e293b" }}>
+                {/* Company & Client PAN Banner */}
+                <div style={{ background: "#F8FAFC", border: "1px solid #CBD5E1", borderRadius: "3px", padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "11px", fontWeight: "700", color: "#475569" }}>
+                    COMPANY PAN: <strong style={{ color: "#1E3A8A", fontFamily: "monospace" }}>{COMPANY_PAN}</strong>
+                  </span>
+                  <span style={{ fontSize: "11px", color: "#64748B" }}>
+                    Nepal 13% Statutory VAT Auto-Calculated
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", background: "#FFFFFF", padding: "8px 10px", borderRadius: "3px", border: "1px solid #CBD5E1" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#e2e8f0", cursor: "pointer", userSelect: "none" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#0F172A", cursor: "pointer", userSelect: "none" }}>
                       <input
                         type="checkbox"
                         checked={continuousMode}
                         onChange={(e) => setContinuousMode(e.target.checked)}
-                        style={{ accentColor: "#3b82f6", cursor: "pointer" }}
+                        style={{ accentColor: "#1E3A8A", cursor: "pointer" }}
                       />
                       <span style={{ fontWeight: "600" }}>Continuous Rapid Entry Mode</span>
                     </label>
-                    <span style={{ fontSize: "11px", color: "#64748b" }}>
+                    <span style={{ fontSize: "11px", color: "#64748B" }}>
                       Hands-free line entry
                     </span>
                   </div>
 
                   {continuousMode && (
-                    <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#94a3b8", cursor: "pointer", userSelect: "none", marginLeft: "22px" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#475569", cursor: "pointer", userSelect: "none", marginLeft: "22px" }}>
                       <input
                         type="checkbox"
                         checked={keepClient}
                         onChange={(e) => setKeepClient(e.target.checked)}
-                        style={{ accentColor: "#3b82f6", cursor: "pointer" }}
+                        style={{ accentColor: "#1E3A8A", cursor: "pointer" }}
                       />
                       <span>Retain selected client for multiple lines</span>
                     </label>
@@ -779,7 +1135,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                 </div>
 
                 <div>
-                  <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#94a3b8", fontWeight: "700" }}>Client / Customer</label>
+                  <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Client / Customer (Buyer PAN)</label>
                   <select
                     ref={clientRef}
                     className="input-field"
@@ -791,7 +1147,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     <option value="">-- Select Client / Distributor --</option>
                     {clients.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name} ({c.code}) - PAN: {c.pan_number || "N/A"}
+                        {c.name} ({c.code}) — PAN: {c.pan_number || "N/A"}
                       </option>
                     ))}
                   </select>
@@ -799,15 +1155,15 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
 
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#94a3b8", fontWeight: "700" }}>Footwear SKU</label>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Footwear SKU</label>
                     {productId && (() => {
                       const p = products.find((x) => String(x.id) === productId);
                       return p ? (
                         <div style={{ display: "flex", gap: "6px", fontSize: "11px" }}>
-                          <span style={{ padding: "1px 6px", background: "rgba(37,99,235,0.15)", color: "#60a5fa", borderRadius: "3px", fontWeight: "600" }}>
+                          <span style={{ padding: "1px 5px", background: "#EFF6FF", color: "#1E3A8A", borderRadius: "3px", fontWeight: "700", border: "1px solid #BFDBFE" }}>
                             Sz {p.size || "Std"}
                           </span>
-                          <span style={{ padding: "1px 6px", background: "#1e293b", color: "#cbd5e1", borderRadius: "3px" }}>
+                          <span style={{ padding: "1px 5px", background: "#F1F5F9", color: "#475569", borderRadius: "3px", border: "1px solid #CBD5E1" }}>
                             {p.color || "Black"}
                           </span>
                         </div>
@@ -825,7 +1181,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     <option value="">-- Select Product Item --</option>
                     {products.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.code} - {p.name} (Wholesale: Rs. {p.unit_price?.toLocaleString()})
+                        {p.code} - {p.name} (Wholesale: Rs. {fmtNpr(p.unit_price)})
                       </option>
                     ))}
                   </select>
@@ -833,7 +1189,14 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                   <div>
-                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#94a3b8", fontWeight: "700" }}>Quantity (Pairs)</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "3px" }}>
+                      <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>
+                        Quantity (Pairs / जोर)
+                      </label>
+                      <span style={{ fontSize: "10px", color: "#1E3A8A", fontWeight: "700", background: "#EFF6FF", padding: "1px 5px", borderRadius: "3px", border: "1px solid #BFDBFE" }}>
+                        १ कार्टुन = १२ जोर
+                      </span>
+                    </div>
                     <input
                       ref={quantityRef}
                       type="number"
@@ -843,9 +1206,12 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                       onKeyDown={(e) => handleKeyDown(e, unitPriceRef)}
                       required
                     />
+                    <div style={{ fontSize: "10.5px", color: "#64748B", marginTop: "2px", textAlign: "right" }}>
+                      Packaging: <strong style={{ color: "#0F172A" }}>{(Math.max(0, parseFloat(quantity) || 0) / 12).toFixed(1)} Cartons</strong> ({quantity || 0} Pairs)
+                    </div>
                   </div>
                   <div>
-                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#94a3b8", fontWeight: "700" }}>Wholesale Unit Rate (Rs.)</label>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Wholesale Unit Rate (Rs.)</label>
                     <input
                       ref={unitPriceRef}
                       type="number"
@@ -867,29 +1233,29 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                   const rcvPaisa = toPaisa(receivedAmount || "0");
                   const duePaisa = Math.max(0, grandTotalPaisa - rcvPaisa);
                   return (
-                    <div style={{ background: "#090d16", border: "1px solid #1e293b", borderRadius: "4px", padding: "8px 12px", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", textAlign: "center" }}>
+                    <div style={{ background: "#F8FAFC", border: "1px solid #CBD5E1", borderRadius: "3px", padding: "8px 12px", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", textAlign: "center" }}>
                       <div>
-                        <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Subtotal</div>
-                        <div className="num-mono-bold" style={{ fontSize: "12px", color: "#f8fafc" }}>Rs. {fromPaisa(subtotalPaisa)}</div>
+                        <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase", fontWeight: "700" }}>Subtotal</div>
+                        <div className="num-mono-bold" style={{ fontSize: "12px", color: "#0F172A" }}>Rs. {fromPaisa(subtotalPaisa)}</div>
                       </div>
                       <div>
-                        <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>13% Nepal VAT</div>
-                        <div className="num-mono" style={{ fontSize: "12px", color: "#94a3b8" }}>Rs. {fromPaisa(vatPaisa)}</div>
+                        <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase", fontWeight: "700" }}>13% VAT</div>
+                        <div className="num-mono" style={{ fontSize: "12px", color: "#475569" }}>Rs. {fromPaisa(vatPaisa)}</div>
                       </div>
                       <div>
-                        <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Grand Total</div>
-                        <div className="num-mono-bold" style={{ fontSize: "12px", color: "#60a5fa" }}>Rs. {fromPaisa(grandTotalPaisa)}</div>
+                        <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase", fontWeight: "700" }}>Grand Total</div>
+                        <div className="num-mono-bold" style={{ fontSize: "12px", color: "#1E3A8A" }}>Rs. {fromPaisa(grandTotalPaisa)}</div>
                       </div>
                       <div>
-                        <div style={{ fontSize: "10px", color: "#64748b", textTransform: "uppercase" }}>Receivable Due</div>
-                        <div className="num-mono-bold" style={{ fontSize: "12px", color: duePaisa > 0 ? "#f87171" : "#10b981" }}>Rs. {fromPaisa(duePaisa)}</div>
+                        <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase", fontWeight: "700" }}>Balance Due</div>
+                        <div className="num-mono-bold" style={{ fontSize: "12px", color: duePaisa > 0 ? "#DC2626" : "#059669" }}>Rs. {fromPaisa(duePaisa)}</div>
                       </div>
                     </div>
                   );
                 })()}
 
                 <div>
-                  <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#94a3b8", fontWeight: "700" }}>Initial Cash Received (Rs.)</label>
+                  <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Initial Cash Received (Rs.)</label>
                   <input
                     ref={receivedAmountRef}
                     type="number"
@@ -903,7 +1269,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                   <div>
-                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#94a3b8", fontWeight: "700" }}>Order Date (AD)</label>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Order Date (AD)</label>
                     <input
                       ref={orderDateAdRef}
                       type="date"
@@ -915,7 +1281,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#94a3b8", fontWeight: "700" }}>Order Date (BS)</label>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Order Date (BS)</label>
                     <input
                       ref={orderDateBsRef}
                       type="text"
@@ -930,7 +1296,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
               </div>
 
               <div className="modal-footer">
-                <span style={{ fontSize: "11px", color: "#64748b" }}>
+                <span style={{ fontSize: "11px", color: "#64748B" }}>
                   <span className="kbd-hint">Esc</span> close • <span className="kbd-hint">Ctrl+Enter</span> commit • <span className="kbd-hint">Enter</span> next
                 </span>
 
@@ -943,7 +1309,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                       Save & Close
                     </button>
                   )}
-                  <button ref={submitButtonRef} type="submit" className="btn-primary" disabled={submitting}>
+                  <button ref={submitButtonRef} type="submit" className="btn-primary" disabled={submitting} style={{ background: "#1E3A8A", borderColor: "#1E3A8A" }}>
                     {submitting ? "Writing to Ledger..." : continuousMode ? "Commit & Next Sale ↵" : "Commit Sale & Issue Invoice"}
                   </button>
                 </div>

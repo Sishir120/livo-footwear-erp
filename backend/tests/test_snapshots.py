@@ -28,6 +28,10 @@ def client():
             role="editor",
             active=True
         )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
     token = create_access_token({"user_id": user.id, "company_id": comp.id, "role": "editor"})
     db.close()
 

@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     STORAGE_BUCKET_NAME: str = os.getenv("STORAGE_BUCKET_NAME", "livo-erp-storage")
 
     model_config = {
-        "env_file": ".env",
+        "env_file": [".env", "backend/.env", "../backend/.env"],
         "extra": "allow"
     }
 

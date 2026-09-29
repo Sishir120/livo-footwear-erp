@@ -144,8 +144,8 @@ export default function Home() {
   // Render Login Screen if unauthenticated
   if (!user) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#090d16", padding: "20px" }}>
-        <div className="glass-card" style={{ width: "100%", maxWidth: "440px", padding: "36px", borderRadius: "8px", background: "#0f172a", border: "1px solid rgba(255, 255, 255, 0.12)", position: "relative" }}>
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#F8FAFC", padding: "20px" }}>
+        <div className="glass-card" style={{ width: "100%", maxWidth: "440px", padding: "36px", borderRadius: "4px", background: "#FFFFFF", border: "1px solid #CBD5E1", position: "relative" }}>
           
           {/* Bilingual Language Switcher (EN | नेपाली) */}
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
@@ -154,10 +154,10 @@ export default function Home() {
               aria-label="Language selection / भाषा छनोट"
               style={{
                 display: "inline-flex",
-                background: "rgba(15, 23, 42, 0.8)",
-                padding: "3px",
-                borderRadius: "6px",
-                border: "1px solid rgba(255, 255, 255, 0.12)"
+                background: "#F1F5F9",
+                padding: "2px",
+                borderRadius: "4px",
+                border: "1px solid #CBD5E1"
               }}
             >
               <button
@@ -165,15 +165,15 @@ export default function Home() {
                 onClick={() => setLocale("en")}
                 aria-label="Switch to English"
                 style={{
-                  padding: "3px 8px",
+                  padding: "4px 10px",
                   fontSize: "11px",
                   fontWeight: "600",
-                  borderRadius: "4px",
+                  borderRadius: "3px",
                   border: "none",
                   cursor: "pointer",
-                  background: locale === "en" ? "#2563eb" : "transparent",
-                  color: locale === "en" ? "#ffffff" : "#94a3b8",
-                  transition: "all 0.15s ease"
+                  background: locale === "en" ? "#1E3A8A" : "transparent",
+                  color: locale === "en" ? "#FFFFFF" : "#475569",
+                  transition: "all 0.12s ease"
                 }}
               >
                 EN
@@ -183,15 +183,15 @@ export default function Home() {
                 onClick={() => setLocale("ne")}
                 aria-label="नेपाली भाषामा बदल्नुहोस्"
                 style={{
-                  padding: "3px 8px",
+                  padding: "4px 10px",
                   fontSize: "11px",
                   fontWeight: "600",
-                  borderRadius: "4px",
+                  borderRadius: "3px",
                   border: "none",
                   cursor: "pointer",
-                  background: locale === "ne" ? "#2563eb" : "transparent",
-                  color: locale === "ne" ? "#ffffff" : "#94a3b8",
-                  transition: "all 0.15s ease"
+                  background: locale === "ne" ? "#1E3A8A" : "transparent",
+                  color: locale === "ne" ? "#FFFFFF" : "#475569",
+                  transition: "all 0.12s ease"
                 }}
               >
                 नेपाली
@@ -199,53 +199,53 @@ export default function Home() {
             </div>
           </div>
 
-          <div style={{ textAlign: "center", marginBottom: "28px" }}>
-            <div style={{ width: "52px", height: "52px", background: "rgba(59, 130, 246, 0.12)", border: "1px solid rgba(59, 130, 246, 0.3)", borderRadius: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: "12px" }}>
-              <Building2 size={28} color="#3b82f6" />
+          <div style={{ textAlign: "center", marginBottom: "24px" }}>
+            <div style={{ width: "48px", height: "48px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "4px", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: "12px" }}>
+              <Building2 size={24} color="#1E3A8A" />
             </div>
-            <h1 style={{ fontSize: "20px", fontWeight: "700", color: "#f8fafc", letterSpacing: "0.02em" }}>{t("login_title")}</h1>
-            <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>{t("login_subtitle")}</p>
+            <h1 style={{ fontSize: "20px", fontWeight: "700", color: "#0F172A", letterSpacing: "0.01em" }}>{t("login_title")}</h1>
+            <p style={{ fontSize: "12px", color: "#475569", marginTop: "4px" }}>{t("login_subtitle")}</p>
           </div>
 
           {loginError && (
             <div
               role="alert"
               aria-live="polite"
-              style={{ background: "rgba(244, 63, 94, 0.15)", border: "1px solid rgba(244, 63, 94, 0.3)", padding: "10px 14px", borderRadius: "6px", color: "#f87171", fontSize: "13px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}
+              style={{ background: "#FFF1F2", border: "1px solid #FECDD3", padding: "10px 14px", borderRadius: "4px", color: "#BE123C", fontSize: "12.5px", marginBottom: "18px", display: "flex", alignItems: "center", gap: "8px" }}
             >
               <ShieldAlert size={16} /> {loginError}
             </div>
           )}
 
-          <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             <div>
-              <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600", display: "block", marginBottom: "6px" }}>{t("username")}</label>
+              <label style={{ fontSize: "12px", color: "#334155", fontWeight: "600", display: "block", marginBottom: "5px" }}>{t("username")}</label>
               <input type="text" className="input-field" value={username} onChange={(e) => setUsername(e.target.value)} required aria-label={t("username")} />
             </div>
 
             <div>
-              <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600", display: "block", marginBottom: "6px" }}>{t("password")}</label>
+              <label style={{ fontSize: "12px", color: "#334155", fontWeight: "600", display: "block", marginBottom: "5px" }}>{t("password")}</label>
               <input type="password" className="input-field" value={password} onChange={(e) => setPassword(e.target.value)} required aria-label={t("password")} />
             </div>
 
-            <button type="submit" className="btn-primary" style={{ width: "100%", justifyContent: "center", padding: "11px", marginTop: "8px", borderRadius: "6px" }} disabled={loginSubmitting}>
-              <Lock size={16} /> {loginSubmitting ? "Authenticating..." : t("login_button")}
+            <button type="submit" className="btn-primary" style={{ width: "100%", justifyContent: "center", padding: "10px", marginTop: "6px" }} disabled={loginSubmitting}>
+              <Lock size={15} /> {loginSubmitting ? "Authenticating..." : t("login_button")}
             </button>
           </form>
 
           {/* Role Fill Shortcuts */}
-          <div style={{ marginTop: "24px", paddingTop: "20px", borderTop: "1px solid var(--border-color)", textAlign: "center" }}>
-            <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "10px" }}>Role Access Preset:</div>
-            <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
-              <button className="btn-secondary" style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "6px" }} onClick={() => quickFillLogin("editor")}>
-                <UserCheck size={12} color="#34d399" /> Editor Admin
+          <div style={{ marginTop: "20px", paddingTop: "18px", borderTop: "1px solid #CBD5E1", textAlign: "center" }}>
+            <div style={{ fontSize: "11.5px", color: "#475569", marginBottom: "8px" }}>Role Access Preset:</div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+              <button className="btn-secondary" style={{ fontSize: "12px", padding: "5px 12px" }} onClick={() => quickFillLogin("editor")}>
+                <UserCheck size={12} color="#047857" /> Editor Admin
               </button>
-              <button className="btn-secondary" style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "6px" }} onClick={() => quickFillLogin("viewer")}>
-                <UserCheck size={12} color="#60a5fa" /> Viewer Only
+              <button className="btn-secondary" style={{ fontSize: "12px", padding: "5px 12px" }} onClick={() => quickFillLogin("viewer")}>
+                <UserCheck size={12} color="#1E40AF" /> Viewer Only
               </button>
             </div>
-            <div style={{ marginTop: "16px", padding: "8px 12px", background: "rgba(15, 23, 42, 0.8)", border: "1px solid var(--border-subtle)", borderRadius: "6px", fontSize: "11px", color: "#94a3b8", textAlign: "left", display: "flex", alignItems: "flex-start", gap: "8px" }}>
-              <Info size={14} color="#60a5fa" style={{ flexShrink: 0, marginTop: "2px" }} />
+            <div style={{ marginTop: "14px", padding: "8px 12px", background: "#F8FAFC", border: "1px solid #CBD5E1", borderRadius: "4px", fontSize: "11px", color: "#475569", textAlign: "left", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+              <Info size={14} color="#1E40AF" style={{ flexShrink: 0, marginTop: "2px" }} />
               <div>
                 <strong>Infrastructure Notice:</strong> Cloud backend operates on standard container scaling. If sleeping after inactivity, initial connection takes ~45s.
               </div>
@@ -254,18 +254,18 @@ export default function Home() {
         </div>
 
         {/* Compliance & Legal Footer */}
-        <div style={{ marginTop: "20px", textAlign: "center", fontSize: "12px", color: "#64748b", display: "flex", flexDirection: "column", gap: "6px" }}>
+        <div style={{ marginTop: "16px", textAlign: "center", fontSize: "12px", color: "#64748B", display: "flex", flexDirection: "column", gap: "4px" }}>
           <div style={{ display: "flex", gap: "16px", justifyContent: "center" }}>
             <button
               onClick={() => setLegalModal("privacy")}
-              style={{ background: "none", border: "none", color: "#94a3b8", fontSize: "12px", cursor: "pointer", textDecoration: "underline" }}
+              style={{ background: "none", border: "none", color: "#475569", fontSize: "12px", cursor: "pointer", textDecoration: "underline" }}
             >
               Privacy Policy
             </button>
             <span>•</span>
             <button
               onClick={() => setLegalModal("terms")}
-              style={{ background: "none", border: "none", color: "#94a3b8", fontSize: "12px", cursor: "pointer", textDecoration: "underline" }}
+              style={{ background: "none", border: "none", color: "#475569", fontSize: "12px", cursor: "pointer", textDecoration: "underline" }}
             >
               Terms & Conditions
             </button>

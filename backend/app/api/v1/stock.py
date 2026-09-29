@@ -34,7 +34,7 @@ def list_stock_movements(
         return repo.filter(StockMovement.product_id == product_id)
     return repo.get_all()
 
-from app.core.locks import get_stock_mutex
+from app.core.locks import get_stock_mutex, acquire_stock_advisory_lock
 
 @router.post("/movements")
 def create_stock_movement(
@@ -53,6 +53,8 @@ def create_stock_movement(
 
     # Before appending any outbound stock movement (direction = -1):
     if payload.direction == -1:
+        # Acquire PostgreSQL distributed transaction-scoped advisory lock: (company_id << 32) | product_id
+        acquire_stock_advisory_lock(db, current_user.company_id, payload.product_id)
         mutex = get_stock_mutex(current_user.company_id, payload.product_id)
         with mutex:
             # 1. Acquire an explicit pessimistic row lock on the target product variant inside current transaction:

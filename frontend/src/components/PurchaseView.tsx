@@ -284,40 +284,43 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
       {/* Header bar */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
         <div>
-          <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#f8fafc" }}>Raw Material Procurement & Vendor Bills</h2>
-          <div style={{ fontSize: "12px", color: "#94a3b8" }}>Inward factory supplies recorded into material ledgers with invoice audit trails</div>
+          <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#0F172A", margin: 0, letterSpacing: "-0.01em" }}>
+            Raw Material Procurement & Vendor Bills
+          </h2>
+          <div style={{ fontSize: "12px", color: "#475569", marginTop: "2px" }}>
+            Inward factory supplies recorded into material ledgers with invoice audit trails
+          </div>
         </div>
 
         {userRole === "editor" && (
-          <button className="btn-primary" onClick={() => setShowModal(true)} title="Shortcut: Alt+N or press 'N' on table">
-            <PlusCircle size={16} /> Record New Purchase <span style={{ fontSize: "11px", opacity: 0.85, marginLeft: "4px", background: "rgba(255,255,255,0.2)", padding: "1px 5px", borderRadius: "3px" }}>Alt+N</span>
+          <button className="btn-primary" onClick={() => setShowModal(true)} title="Shortcut: Alt+N or press 'N' on table" style={{ background: "#1E3A8A", borderColor: "#1E3A8A" }}>
+            <PlusCircle size={15} /> Record New Purchase <span style={{ fontSize: "11px", opacity: 0.85, marginLeft: "4px", background: "rgba(255,255,255,0.2)", padding: "1px 5px", borderRadius: "3px" }}>Alt+N</span>
           </button>
         )}
       </div>
 
       {/* Filter and Quick Search Bar */}
-      <div className="glass-card" style={{ padding: "14px 20px", display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: "220px", background: "rgba(15, 23, 42, 0.6)", padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--border-color)" }}>
-          <Search size={16} color="#94a3b8" />
+      <div className="glass-card" style={{ padding: "10px 14px", display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", border: "1px solid #CBD5E1" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: "220px", background: "#F8FAFC", padding: "4px 8px", borderRadius: "3px", border: "1px solid #CBD5E1" }}>
+          <Search size={14} color="#64748B" />
           <input
             type="text"
             placeholder="Search supplier, material name, date, or invoice note..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ background: "none", border: "none", color: "#f8fafc", fontSize: "13px", outline: "none", width: "100%" }}
+            style={{ background: "none", border: "none", color: "#0F172A", fontSize: "12px", outline: "none", width: "100%" }}
           />
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Supplier:</span>
+            <span style={{ fontSize: "11px", color: "#475569", fontWeight: "700", textTransform: "uppercase" }}>Supplier:</span>
             <select
-              className="input-field"
-              style={{ width: "170px", padding: "6px 10px", fontSize: "12px", cursor: "pointer" }}
+              style={{ background: "#FFFFFF", border: "1px solid #CBD5E1", borderRadius: "3px", width: "170px", padding: "4px 8px", fontSize: "12px", color: "#0F172A", cursor: "pointer" }}
               value={supplierFilter}
               onChange={(e) => setSupplierFilter(e.target.value)}
             >
@@ -331,27 +334,27 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
           </div>
 
           <button onClick={handleExportCSV} className="btn-export" disabled={!filteredPurchases.length}>
-            <Download size={14} /> Export to CSV
+            <Download size={13} /> Export to CSV
           </button>
         </div>
       </div>
 
       {/* Purchases List Table */}
-      <div className="glass-card" style={{ padding: "18px 20px" }}>
+      <div className="glass-card" style={{ padding: "14px 16px", background: "#FFFFFF", border: "1px solid #CBD5E1" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <FileText size={18} color="#3b82f6" />
-            <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#f8fafc" }}>
+            <FileText size={16} color="#1E3A8A" />
+            <h3 style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
               Inward Raw Material Ledger ({filteredPurchases.length} Records)
             </h3>
           </div>
-          <span style={{ fontSize: "12px", color: "#64748b" }}>Audited FIFO inventory entries</span>
+          <span style={{ fontSize: "11px", color: "#64748B" }}>Audited FIFO inventory entries</span>
         </div>
 
         {loading ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>Loading records...</div>
+          <div style={{ padding: "40px", textAlign: "center", color: "#64748B" }}>Loading records...</div>
         ) : filteredPurchases.length === 0 ? (
-          <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
+          <div style={{ padding: "30px", textAlign: "center", color: "#64748B", fontSize: "13px" }}>
             No purchase records found matching criteria.
           </div>
         ) : (
@@ -377,35 +380,35 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
 
                   return (
                     <tr key={p.id}>
-                      <td style={{ fontSize: "12px", color: "#94a3b8" }}>
+                      <td style={{ fontSize: "12px", color: "#475569" }}>
                         {p.purchase_date_ad}{" "}
-                        <span style={{ fontSize: "11px", color: "#64748b" }}>({p.purchase_date_bs} BS)</span>
+                        <span style={{ fontSize: "11px", color: "#64748B" }}>({p.purchase_date_bs} BS)</span>
                       </td>
-                      <td style={{ fontWeight: "600" }}>
+                      <td style={{ fontWeight: "600", color: "#0F172A" }}>
                         {sup ? (
                           <>
-                            {sup.name} <span style={{ fontSize: "11px", color: "#3b82f6" }}>[{sup.code}]</span>
+                            {sup.name} <span style={{ fontSize: "11px", color: "#1E3A8A" }}>[{sup.code}]</span>
                           </>
                         ) : (
                           `Supplier #${p.supplier_id}`
                         )}
                       </td>
-                      <td style={{ fontWeight: "500" }}>
+                      <td style={{ fontWeight: "500", color: "#0F172A" }}>
                         {mat ? (
                           <>
-                            {mat.name} <span style={{ fontSize: "11px", color: "#94a3b8" }}>({mat.unit})</span>
+                            {mat.name} <span style={{ fontSize: "11px", color: "#64748B" }}>({mat.unit})</span>
                           </>
                         ) : (
                           `Material #${p.raw_material_id}`
                         )}
                       </td>
-                      <td style={{ textAlign: "right", fontWeight: "600" }} className="num-mono">
+                      <td style={{ textAlign: "right", fontWeight: "600", color: "#0F172A" }} className="num-mono">
                         {p.quantity} {mat?.unit || ""}
                       </td>
-                      <td style={{ textAlign: "right" }} className="num-mono">
+                      <td style={{ textAlign: "right", color: "#475569" }} className="num-mono">
                         Rs. {p.unit_price?.toLocaleString()}
                       </td>
-                      <td style={{ textAlign: "right", fontWeight: "700", color: "#10b981" }} className="num-mono-bold">
+                      <td style={{ textAlign: "right", fontWeight: "700", color: "#0F172A" }} className="num-mono-bold">
                         Rs. {p.total_amount?.toLocaleString()}
                       </td>
                       <td style={{ textAlign: "center" }}>
@@ -418,12 +421,13 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
                               })
                             }
                             style={{
-                              background: "rgba(59, 130, 246, 0.15)",
-                              border: "1px solid rgba(59, 130, 246, 0.3)",
-                              color: "#60a5fa",
-                              borderRadius: "4px",
+                              background: "#EFF6FF",
+                              border: "1px solid #BFDBFE",
+                              color: "#1E3A8A",
+                              borderRadius: "3px",
                               padding: "2px 8px",
                               fontSize: "11px",
+                              fontWeight: "600",
                               cursor: "pointer",
                               display: "inline-flex",
                               alignItems: "center",
@@ -433,7 +437,7 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
                             <Paperclip size={11} /> View Bill
                           </button>
                         ) : (
-                          <span style={{ color: "#64748b", fontSize: "11px" }}>No slip</span>
+                          <span style={{ color: "#64748B", fontSize: "11px" }}>No slip</span>
                         )}
                       </td>
                       <td style={{ textAlign: "center" }}>
@@ -482,47 +486,49 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
           <div className="modal-drawer" role="dialog" aria-modal="true" aria-labelledby="purchase-drawer-title">
             <div className="modal-header">
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Truck size={18} color="#3b82f6" />
-                <h3 id="purchase-drawer-title" style={{ fontSize: "16px", fontWeight: "700", color: "#f8fafc" }}>Record Raw Material Purchase</h3>
+                <Truck size={16} color="#1E3A8A" />
+                <h3 id="purchase-drawer-title" style={{ fontSize: "14px", fontWeight: "700", color: "#0F172A", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  Record Raw Material Purchase
+                </h3>
               </div>
-              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }} aria-label="Close raw material purchase dialog">
+              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "#64748B", cursor: "pointer" }} aria-label="Close raw material purchase dialog">
                 <X size={18} />
               </button>
             </div>
 
             {/* Success Feedback Alert for Continuous Entry */}
             {successFeedback && (
-              <div role="status" aria-live="polite" style={{ background: "rgba(59, 130, 246, 0.15)", border: "1px solid #3b82f6", borderRadius: "6px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "8px", color: "#93c5fd", fontSize: "13px", fontWeight: "600" }}>
-                <CheckCircle2 size={16} />
+              <div role="status" aria-live="polite" style={{ background: "#ECFDF5", border: "1px solid #10B981", borderRadius: "3px", padding: "8px 12px", display: "flex", alignItems: "center", gap: "8px", color: "#065F46", fontSize: "12.5px", fontWeight: "600" }}>
+                <CheckCircle2 size={15} color="#059669" />
                 <span>{successFeedback}</span>
               </div>
             )}
 
             <form onSubmit={(e) => handleCreatePurchase(e, false)} onKeyDown={handleFormKeyDown} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-              <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px", background: "rgba(15, 23, 42, 0.5)", padding: "10px 12px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.08)" }}>
+              <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", background: "#FFFFFF", padding: "8px 10px", borderRadius: "3px", border: "1px solid #CBD5E1" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#e2e8f0", cursor: "pointer", userSelect: "none" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#0F172A", cursor: "pointer", userSelect: "none" }}>
                       <input
                         type="checkbox"
                         checked={continuousMode}
                         onChange={(e) => setContinuousMode(e.target.checked)}
-                        style={{ accentColor: "#3b82f6", cursor: "pointer" }}
+                        style={{ accentColor: "#1E3A8A", cursor: "pointer" }}
                       />
-                      <span>Continuous Rapid Inward Mode</span>
+                      <span style={{ fontWeight: "600" }}>Continuous Rapid Inward Mode</span>
                     </label>
-                    <span style={{ fontSize: "11px", color: "#64748b" }}>
+                    <span style={{ fontSize: "11px", color: "#64748B" }}>
                       Rapid material procurement entry
                     </span>
                   </div>
 
                   {continuousMode && (
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "#94a3b8", cursor: "pointer", userSelect: "none", marginLeft: "22px" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#475569", cursor: "pointer", userSelect: "none", marginLeft: "22px" }}>
                       <input
                         type="checkbox"
                         checked={keepSupplier}
                         onChange={(e) => setKeepSupplier(e.target.checked)}
-                        style={{ accentColor: "#3b82f6", cursor: "pointer" }}
+                        style={{ accentColor: "#1E3A8A", cursor: "pointer" }}
                       />
                       <span>Retain selected supplier for multi-material shipment</span>
                     </label>
@@ -530,7 +536,7 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
                 </div>
 
                 <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Supplier / Vendor</label>
+                  <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Supplier / Vendor</label>
                   <select
                     ref={supplierRef}
                     className="input-field"
@@ -549,7 +555,7 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
                 </div>
 
                 <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Raw Material Item</label>
+                  <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Raw Material Item</label>
                   <select
                     ref={materialRef}
                     className="input-field"
@@ -567,9 +573,9 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
                   </select>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                   <div>
-                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Quantity</label>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Quantity</label>
                     <input
                       ref={quantityRef}
                       type="number"
@@ -583,7 +589,7 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Unit Rate (Rs.)</label>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Unit Rate (Rs.)</label>
                     <input
                       ref={unitPriceRef}
                       type="number"
@@ -612,7 +618,7 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Purchase Date (BS)</label>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Purchase Date (BS)</label>
                     <input
                       ref={dateBsRef}
                       type="text"
@@ -627,7 +633,7 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
 
                 {/* Vendor Bill / Receipt Attachment Component */}
                 <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700", display: "flex", alignItems: "center", gap: "6px" }}>
                     <Paperclip size={13} /> Supplier Physical Bill / Receipt (Photo or PDF)
                   </label>
                   <input
@@ -642,13 +648,13 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
                     <div
                       className="attachment-dropzone"
                       onClick={() => fileInputRef.current?.click()}
-                      style={{ marginTop: "6px" }}
+                      style={{ marginTop: "6px", background: "#F8FAFC", border: "1px dashed #CBD5E1", borderRadius: "3px", padding: "12px", textAlign: "center", cursor: "pointer" }}
                     >
-                      <Upload size={20} color="#3b82f6" style={{ margin: "0 auto 6px" }} />
-                      <div style={{ fontSize: "13px", color: "#f8fafc", fontWeight: "600" }}>
+                      <Upload size={18} color="#1E3A8A" style={{ margin: "0 auto 4px" }} />
+                      <div style={{ fontSize: "12px", color: "#0F172A", fontWeight: "600" }}>
                         Click to upload physical vendor bill / voucher
                       </div>
-                      <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
+                      <div style={{ fontSize: "11px", color: "#64748B", marginTop: "2px" }}>
                         PNG, JPG, or PDF up to 10MB for visual audit verification
                       </div>
                     </div>
@@ -659,32 +665,32 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
-                        padding: "8px 12px",
-                        background: "rgba(59, 130, 246, 0.1)",
-                        border: "1px solid rgba(59, 130, 246, 0.3)",
-                        borderRadius: "6px"
+                        padding: "6px 10px",
+                        background: "#EFF6FF",
+                        border: "1px solid #BFDBFE",
+                        borderRadius: "3px"
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <ImageIcon size={16} color="#3b82f6" />
+                        <ImageIcon size={15} color="#1E3A8A" />
                         <div>
-                          <div style={{ fontSize: "12px", fontWeight: "600", color: "#f8fafc" }}>{attachedFile.name}</div>
-                          <div style={{ fontSize: "10px", color: "#94a3b8" }}>{attachedFile.size} - Ready for audit archive</div>
+                          <div style={{ fontSize: "12px", fontWeight: "600", color: "#0F172A" }}>{attachedFile.name}</div>
+                          <div style={{ fontSize: "10px", color: "#64748B" }}>{attachedFile.size} - Ready for audit archive</div>
                         </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => setAttachedFile(null)}
-                        style={{ background: "none", border: "none", color: "#f43f5e", cursor: "pointer", padding: "4px" }}
+                        style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", padding: "4px" }}
                       >
-                        <X size={16} />
+                        <X size={15} />
                       </button>
                     </div>
                   )}
                 </div>
 
                 <div>
-                  <label style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600" }}>Remarks / Gate Pass No.</label>
+                  <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Remarks / Gate Pass No.</label>
                   <input
                     type="text"
                     className="input-field"
@@ -696,11 +702,11 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
               </div>
 
               <div className="modal-footer">
-                <span style={{ fontSize: "11px", color: "#64748b" }}>
-                  <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "2px 5px", borderRadius: "3px" }}>Esc</kbd> close • <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "2px 5px", borderRadius: "3px" }}>Ctrl+Enter</kbd> quick commit
+                <span style={{ fontSize: "11px", color: "#64748B" }}>
+                  <span className="kbd-hint">Esc</span> close • <span className="kbd-hint">Ctrl+Enter</span> quick commit
                 </span>
 
-                <div style={{ display: "flex", gap: "10px" }}>
+                <div style={{ display: "flex", gap: "8px" }}>
                   <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>
                     Close
                   </button>
@@ -709,7 +715,7 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
                       Commit & Close
                     </button>
                   )}
-                  <button ref={submitButtonRef} type="submit" className="btn-primary" disabled={submitting}>
+                  <button ref={submitButtonRef} type="submit" className="btn-primary" disabled={submitting} style={{ background: "#1E3A8A", borderColor: "#1E3A8A" }}>
                     {submitting ? "Writing to Ledger..." : continuousMode ? "Commit & Next Purchase ↵" : "Commit Purchase"}
                   </button>
                 </div>
@@ -721,14 +727,14 @@ export function PurchaseView({ userRole }: { userRole?: string }) {
 
       {/* Bill Attachment Preview Modal */}
       {previewAttachment && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 110, padding: "20px" }}>
-          <div className="glass-card" style={{ maxWidth: "600px", width: "100%", padding: "20px", background: "#0f172a" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 110, padding: "20px" }}>
+          <div className="glass-card" style={{ maxWidth: "600px", width: "100%", padding: "16px 20px", background: "#FFFFFF", border: "1px solid #CBD5E1", borderRadius: "4px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", borderBottom: "1px solid #E2E8F0", paddingBottom: "8px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Paperclip size={18} color="#3b82f6" />
-                <h4 style={{ fontSize: "15px", fontWeight: "700", color: "#f8fafc" }}>{previewAttachment.title}</h4>
+                <Paperclip size={16} color="#1E3A8A" />
+                <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#0F172A", margin: 0 }}>{previewAttachment.title}</h4>
               </div>
-              <button onClick={() => setPreviewAttachment(null)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}>
+              <button onClick={() => setPreviewAttachment(null)} style={{ background: "none", border: "none", color: "#64748B", cursor: "pointer" }}>
                 <X size={18} />
               </button>
             </div>

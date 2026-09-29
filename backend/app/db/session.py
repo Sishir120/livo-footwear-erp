@@ -27,11 +27,22 @@ elif db_url.startswith("postgresql"):
 
 from sqlalchemy import event
 
-engine = create_engine(
-            db_url,
-            connect_args=connect_args,
-            pool_pre_ping=True
-)
+if db_url.startswith("sqlite"):
+    engine = create_engine(
+        db_url,
+        connect_args=connect_args,
+        pool_pre_ping=True
+    )
+else:
+    engine = create_engine(
+        db_url,
+        connect_args=connect_args,
+        pool_size=20,
+        max_overflow=30,
+        pool_timeout=10,
+        pool_recycle=1800,
+        pool_pre_ping=True
+    )
 
 if db_url.startswith("sqlite"):
     @event.listens_for(engine, "connect")
