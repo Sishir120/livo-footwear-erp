@@ -32,14 +32,16 @@ export function ProductionView({ userRole }: { userRole?: string }) {
   });
   const [batchPrefix, setBatchPrefix] = useState("BATCH");
   const [selectedModelKey, setSelectedModelKey] = useState<string>("");
+  const [productionLine, setProductionLine] = useState("Line 1 (मुख्य एसेम्बली)");
+  const [productionShift, setProductionShift] = useState("Shift 1 (बिहानी 06:00 - 14:00)");
   const [workerCount, setWorkerCount] = useState("4");
   const [dateAd, setDateAd] = useState(new Date().toISOString().split("T")[0]);
   const [dateBs, setDateBs] = useState("2083-06-09");
   
-  // Horizontal size quantities map: size -> quantity string
+  // Horizontal size quantities map: size -> quantity string (default "0")
   const [sizeQuantities, setSizeQuantities] = useState<Record<number, string>>(() => {
     const init: Record<number, string> = {};
-    SIZES.forEach((s) => { init[s] = ""; });
+    SIZES.forEach((s) => { init[s] = "0"; });
     return init;
   });
 
@@ -58,6 +60,20 @@ export function ProductionView({ userRole }: { userRole?: string }) {
   const sizeInputRefs = useRef<{ [key: number]: HTMLInputElement | null }>({});
   const modelSelectRef = useRef<HTMLSelectElement>(null);
   const workerInputRef = useRef<HTMLInputElement>(null);
+
+  // Deterministic focus on initial view mount -> Auto-focus Size 32 with text auto-selected
+  useEffect(() => {
+    if (userRole === "editor") {
+      const timer = setTimeout(() => {
+        const el = sizeInputRefs.current[32];
+        if (el) {
+          el.focus();
+          el.select();
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [userRole]);
 
   useEffect(() => {
     loadData();
@@ -122,10 +138,21 @@ export function ProductionView({ userRole }: { userRole?: string }) {
     return modelGroups.find((g) => g.key === selectedModelKey) || modelGroups[0] || null;
   }, [modelGroups, selectedModelKey]);
 
+  // Whole-pairs-only validation: every non-empty size string must be purely non-negative digits /^\d+$/
+  const hasInvalidSizeInput = useMemo(() => {
+    return SIZES.some((sz) => {
+      const raw = sizeQuantities[sz];
+      if (!raw || raw === "" || raw === "0") return false;
+      return !/^\d+$/.test(raw.trim());
+    });
+  }, [sizeQuantities]);
+
   // Calculate total batch pairs entered across the unbroken horizontal row
   const totalBatchPairs = useMemo(() => {
     return SIZES.reduce((sum, sz) => {
-      const q = parseFloat(sizeQuantities[sz] || "0");
+      const raw = sizeQuantities[sz];
+      if (!raw || !/^\d+$/.test(raw.trim())) return sum;
+      const q = parseInt(raw.trim(), 10);
       return sum + (isNaN(q) ? 0 : q);
     }, 0);
   }, [sizeQuantities]);
@@ -134,25 +161,71 @@ export function ProductionView({ userRole }: { userRole?: string }) {
     return products.find((p) => p.id === id);
   };
 
-  // Traversal across horizontal size inputs: Tab or Enter cycles 32 -> 43
+  // Client-Side Input Sanitization & Focus/Blur Handlers
+  const handleSizeChange = (sz: number, val: string) => {
+    setSizeQuantities((prev) => ({ ...prev, [sz]: val }));
+  };
+
+  const handleSizeFocus = (sz: number, e: React.FocusEvent<HTMLInputElement>) => {
+    // Clear on focus for quick overwrite if currently "0"
+    if (sizeQuantities[sz] === "0" || sizeQuantities[sz] === "") {
+      setSizeQuantities((prev) => ({ ...prev, [sz]: "" }));
+    }
+    e.target.select();
+  };
+
+  const handleSizeBlur = (sz: number) => {
+    // Render empty or non-digit fields as 0 on blur
+    const raw = sizeQuantities[sz];
+    if (!raw || raw.trim() === "" || !/^\d+$/.test(raw.trim())) {
+      setSizeQuantities((prev) => ({ ...prev, [sz]: "0" }));
+    }
+  };
+
+  // Traversal across horizontal size inputs:
+  // Tab or Enter cycles 32 -> 43; Shift+Tab moves backward 43 -> 32; Ctrl+Enter commits
   const handleSizeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, currentSize: number) => {
+    // 1. Immediate Batch Submission from any field on Ctrl+Enter or Cmd+Enter
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleCommitBatch();
       return;
     }
 
-    if (e.key === "Enter") {
+    // 2. Block keystrokes for '-', '.', scientific notation 'e'/'E', and '+'
+    if (["-", ".", "e", "E", "+"].includes(e.key)) {
       e.preventDefault();
-      const currentIndex = SIZES.indexOf(currentSize as any);
+      return;
+    }
+
+    const currentIndex = SIZES.indexOf(currentSize as any);
+
+    // 3. Shift+Tab: move focus backward (43 -> 42 -> ... -> 32) and auto-select
+    if (e.key === "Tab" && e.shiftKey) {
+      if (currentIndex > 0) {
+        e.preventDefault();
+        const prevSize = SIZES[currentIndex - 1];
+        const el = sizeInputRefs.current[prevSize];
+        el?.focus();
+        el?.select();
+      }
+      return;
+    }
+
+    // 4. Tab or Enter (without Ctrl): validate, auto-select next input, move forward (32 -> 33 -> ... -> 43)
+    if ((e.key === "Tab" && !e.shiftKey) || e.key === "Enter") {
       if (currentIndex >= 0 && currentIndex < SIZES.length - 1) {
+        e.preventDefault();
         const nextSize = SIZES[currentIndex + 1];
-        sizeInputRefs.current[nextSize]?.focus();
-        sizeInputRefs.current[nextSize]?.select();
-      } else {
-        // Last size (43) - submit
+        const el = sizeInputRefs.current[nextSize];
+        el?.focus();
+        el?.select();
+      } else if (e.key === "Enter" && currentIndex === SIZES.length - 1) {
+        // Last size (43) + Enter triggers batch submission
+        e.preventDefault();
         handleCommitBatch();
       }
+      return;
     }
   };
 
@@ -165,13 +238,19 @@ export function ProductionView({ userRole }: { userRole?: string }) {
 
   // Commit Batch & Cycle
   const handleCommitBatch = async () => {
-    if (userRole !== "editor") return;
+    if (userRole !== "editor" || submitting) return;
+
+    if (hasInvalidSizeInput) {
+      setErrorMessage("कृपया पूर्ण जोर संख्या मात्र राख्नुहोस् (Whole pairs only)");
+      return;
+    }
 
     // Check if at least one size has quantity > 0
-    const activeEntries = SIZES.map((sz) => ({
-      size: sz,
-      qty: parseFloat(sizeQuantities[sz] || "0")
-    })).filter((item) => !isNaN(item.qty) && item.qty > 0);
+    const activeEntries = SIZES.map((sz) => {
+      const raw = sizeQuantities[sz];
+      const q = raw && /^\d+$/.test(raw.trim()) ? parseInt(raw.trim(), 10) : 0;
+      return { size: sz, qty: q };
+    }).filter((item) => item.qty > 0);
 
     if (activeEntries.length === 0) {
       setErrorMessage("Enter pairs in at least one size column before committing.");
@@ -237,7 +316,8 @@ export function ProductionView({ userRole }: { userRole?: string }) {
               produced_quantity: item.qty,
               worker_count: parseInt(workerCount) || 1,
               date_ad: dateAd,
-              date_bs: dateBs
+              date_bs: dateBs,
+              notes: `Line: ${productionLine} | Shift: ${productionShift} | Workers: ${workerCount}`
             })
           });
 
@@ -252,10 +332,9 @@ export function ProductionView({ userRole }: { userRole?: string }) {
         }
       }
 
-      // Success sequence
-      const committedPairs = totalBatchPairs;
-      setSuccessFeedback(`✓ ${currentBatchNumber} committed (${committedPairs} pairs, ${createdCount} size variants). Ledger updated.`);
-      setTimeout(() => setSuccessFeedback(""), 4000);
+      // Ephemeral 2-second confirmation: "ब्याच सुरक्षित भयो (Batch BATCH-XXXX Recorded)"
+      setSuccessFeedback(`ब्याच सुरक्षित भयो (Batch ${currentBatchNumber} Recorded)`);
+      setTimeout(() => setSuccessFeedback(""), 2000);
 
       // Setup thermal label data for the committed batch
       if (lastProductId) {
@@ -270,21 +349,27 @@ export function ProductionView({ userRole }: { userRole?: string }) {
         });
       }
 
-      // Increment sequence number and clear input fields
+      // Automatically increment sequence number and clear ONLY the 12 size quantity inputs
+      // Model, Line, Shift, Workers, Date are preserved intact!
       setBatchSeq((prev) => prev + 1);
       const resetMap: Record<number, string> = {};
-      SIZES.forEach((s) => { resetMap[s] = ""; });
+      SIZES.forEach((s) => { resetMap[s] = "0"; });
       setSizeQuantities(resetMap);
 
-      // Refocus first size field (Size 32) without touching the mouse
+      // Programmatically return focus to Size 32 with text auto-selected, ready for next entry
       setTimeout(() => {
-        sizeInputRefs.current[32]?.focus();
-        sizeInputRefs.current[32]?.select();
+        const el = sizeInputRefs.current[32];
+        if (el) {
+          el.focus();
+          el.select();
+        }
       }, 50);
 
       loadData();
     } catch (e: any) {
-      setErrorMessage(e?.message || "Error saving production batch");
+      // Preserve all entered numbers intact, display exact server error message with retry shortcut
+      const errMsg = e?.message || "Error saving production batch";
+      setErrorMessage(`${errMsg} — पुनः प्रयास गर्न Ctrl+Enter थिच्नुहोस् (Press Ctrl+Enter to retry)`);
     } finally {
       setSubmitting(false);
     }
@@ -430,6 +515,7 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                   ref={modelSelectRef}
                   value={selectedModelKey}
                   onChange={(e) => setSelectedModelKey(e.target.value)}
+                  onKeyDown={handleGlobalCtrlEnter}
                   style={{
                     background: "#FFFFFF",
                     border: "1px solid #CBD5E1",
@@ -438,7 +524,7 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                     fontSize: "12px",
                     fontWeight: "600",
                     color: "#0F172A",
-                    minWidth: "220px",
+                    minWidth: "190px",
                     cursor: "pointer"
                   }}
                 >
@@ -450,6 +536,54 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                 </select>
               </div>
 
+              {/* Assembly Line Selector */}
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", textTransform: "uppercase" }}>Line:</label>
+                <select
+                  value={productionLine}
+                  onChange={(e) => setProductionLine(e.target.value)}
+                  onKeyDown={handleGlobalCtrlEnter}
+                  style={{
+                    background: "#FFFFFF",
+                    border: "1px solid #CBD5E1",
+                    borderRadius: "3px",
+                    padding: "4px 6px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    color: "#0F172A",
+                    cursor: "pointer"
+                  }}
+                >
+                  <option value="Line 1">Line 1 (मुख्य)</option>
+                  <option value="Line 2">Line 2 (दोस्रो)</option>
+                  <option value="Line 3">Line 3 (सोल)</option>
+                </select>
+              </div>
+
+              {/* Shift Selector */}
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", textTransform: "uppercase" }}>Shift:</label>
+                <select
+                  value={productionShift}
+                  onChange={(e) => setProductionShift(e.target.value)}
+                  onKeyDown={handleGlobalCtrlEnter}
+                  style={{
+                    background: "#FFFFFF",
+                    border: "1px solid #CBD5E1",
+                    borderRadius: "3px",
+                    padding: "4px 6px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    color: "#0F172A",
+                    cursor: "pointer"
+                  }}
+                >
+                  <option value="Shift 1">Shift 1 (बिहानी)</option>
+                  <option value="Shift 2">Shift 2 (दिउँसो)</option>
+                  <option value="Shift 3">Shift 3 (रात्री)</option>
+                </select>
+              </div>
+
               {/* Workers Count */}
               <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                 <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", textTransform: "uppercase" }}>Workers:</label>
@@ -458,6 +592,7 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                   type="number"
                   value={workerCount}
                   onChange={(e) => setWorkerCount(e.target.value)}
+                  onKeyDown={handleGlobalCtrlEnter}
                   style={{
                     width: "48px",
                     background: "#FFFFFF",
@@ -497,6 +632,14 @@ export function ProductionView({ userRole }: { userRole?: string }) {
             </div>
           )}
 
+          {/* Whole Pairs Error Hint if operator pasted non-integers */}
+          {hasInvalidSizeInput && (
+            <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #EF4444", borderRadius: "3px", padding: "6px 12px", color: "#991B1B", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}>
+              <AlertCircle size={14} color="#DC2626" />
+              <span>कृपया पूर्ण जोर संख्या मात्र राख्नुहोस् (Whole pairs only)</span>
+            </div>
+          )}
+
           {/* UNBROKEN HORIZONTAL SIZE ENTRY ROW (Sizes 32 through 43) */}
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid #CBD5E1" }}>
@@ -523,59 +666,81 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                   <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", fontSize: "11px", fontWeight: "700", color: "#0F172A" }}>
                     Produced Qty
                   </td>
-                  {SIZES.map((sz) => (
-                    <td key={sz} style={{ border: "1px solid #CBD5E1", padding: "2px", textAlign: "center" }}>
-                      <input
-                        ref={(el) => { sizeInputRefs.current[sz] = el; }}
-                        type="number"
-                        min="0"
-                        placeholder="-"
-                        value={sizeQuantities[sz]}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setSizeQuantities((prev) => ({ ...prev, [sz]: val }));
-                        }}
-                        onKeyDown={(e) => handleSizeKeyDown(e, sz)}
-                        style={{
-                          width: "100%",
-                          height: "32px",
-                          border: "none",
-                          background: sizeQuantities[sz] ? "#EFF6FF" : "#FFFFFF",
-                          color: sizeQuantities[sz] ? "#1E3A8A" : "#0F172A",
-                          fontWeight: sizeQuantities[sz] ? "700" : "500",
-                          fontFamily: "monospace",
-                          fontSize: "13px",
-                          textAlign: "center",
-                          outline: "none"
-                        }}
-                      />
-                    </td>
-                  ))}
-                  <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "700", fontSize: "13px", color: totalBatchPairs > 0 ? "#1E3A8A" : "#64748B" }}>
+                  {SIZES.map((sz) => {
+                    const rawVal = sizeQuantities[sz] ?? "0";
+                    const isInvalid = rawVal !== "" && rawVal !== "0" && !/^\d+$/.test(rawVal.trim());
+                    const isFilled = rawVal !== "" && rawVal !== "0" && !isInvalid;
+                    return (
+                      <td key={sz} style={{ border: "1px solid #CBD5E1", padding: "2px", textAlign: "center" }}>
+                        <input
+                          ref={(el) => { sizeInputRefs.current[sz] = el; }}
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={rawVal}
+                          onChange={(e) => handleSizeChange(sz, e.target.value)}
+                          onFocus={(e) => handleSizeFocus(sz, e)}
+                          onBlur={() => handleSizeBlur(sz)}
+                          onKeyDown={(e) => handleSizeKeyDown(e, sz)}
+                          style={{
+                            width: "100%",
+                            height: "32px",
+                            border: isInvalid ? "2px solid #DC2626" : "none",
+                            background: isInvalid ? "#FEF2F2" : isFilled ? "#EFF6FF" : "#FFFFFF",
+                            color: isInvalid ? "#DC2626" : isFilled ? "#1E3A8A" : "#0F172A",
+                            fontWeight: isFilled ? "700" : "500",
+                            fontFamily: "'Fira Code', 'Roboto Mono', ui-monospace, monospace",
+                            fontVariantNumeric: "tabular-nums",
+                            fontSize: "13px",
+                            textAlign: "center",
+                            outline: "none"
+                          }}
+                        />
+                      </td>
+                    );
+                  })}
+                  <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontVariantNumeric: "tabular-nums", fontWeight: "700", fontSize: "13px", color: totalBatchPairs > 0 ? "#1E3A8A" : "#64748B" }}>
                     {totalBatchPairs} prs
                   </td>
                   <td style={{ border: "1px solid #CBD5E1", padding: "3px 6px", textAlign: "center" }}>
                     <button
                       type="button"
                       onClick={handleCommitBatch}
-                      disabled={submitting || totalBatchPairs === 0}
+                      disabled={submitting || totalBatchPairs === 0 || hasInvalidSizeInput}
                       style={{
                         width: "100%",
                         height: "30px",
-                        background: submitting || totalBatchPairs === 0 ? "#94A3B8" : "#1E3A8A",
+                        background: submitting || totalBatchPairs === 0 || hasInvalidSizeInput ? "#94A3B8" : "#1E3A8A",
                         color: "#FFFFFF",
                         border: "none",
                         borderRadius: "3px",
                         fontSize: "11px",
                         fontWeight: "700",
-                        cursor: submitting || totalBatchPairs === 0 ? "not-allowed" : "pointer",
+                        cursor: submitting || totalBatchPairs === 0 || hasInvalidSizeInput ? "not-allowed" : "pointer",
                         display: "inline-flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        gap: "4px"
+                        gap: "6px"
                       }}
                     >
-                      {submitting ? "Writing..." : <>Commit <kbd style={{ fontFamily: "inherit", opacity: 0.85 }}>↵</kbd></>}
+                      {submitting ? (
+                        <>
+                          <span
+                            style={{
+                              width: "12px",
+                              height: "12px",
+                              border: "2px solid #FFFFFF",
+                              borderTopColor: "transparent",
+                              borderRadius: "50%",
+                              display: "inline-block",
+                              animation: "spin 0.6s linear infinite"
+                            }}
+                          />
+                          <span>सुरक्षित गर्दै...</span>
+                        </>
+                      ) : (
+                        <>Commit <kbd style={{ fontFamily: "inherit", opacity: 0.85 }}>↵</kbd></>
+                      )}
                     </button>
                   </td>
                 </tr>
