@@ -16,7 +16,8 @@ import {
   AlertCircle,
   UserCheck,
   CreditCard,
-  ShieldAlert
+  ShieldAlert,
+  Users
 } from "lucide-react";
 
 import { LegalModal } from "./LegalModal";
@@ -95,6 +96,7 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
     { id: "receivables", label: t("ar_aging"), icon: CreditCard },
     { id: "production", label: t("production_batches"), icon: Factory },
     { id: "purchase", label: t("purchase_raw_materials"), icon: FileText },
+    { id: "hr", label: t("hr_management"), icon: Users },
     ...(user?.role === "admin" ? [{ id: "ops_cockpit", label: t("ops_cockpit"), icon: ShieldAlert }] : []),
     { id: "settings", label: t("settings_backups"), icon: SettingsIcon },
   ];

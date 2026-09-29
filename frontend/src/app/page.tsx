@@ -40,6 +40,11 @@ const PurchaseView = dynamic(
   { loading: () => <SkeletonLoader title="Loading Purchase & Materials..." type="table" />, ssr: false }
 );
 
+const HRManagementView = dynamic(
+  () => import("@/components/HRManagementView").then((mod) => mod.HRManagementView),
+  { loading: () => <SkeletonLoader title="Loading HR & Worker Ledger..." type="table" />, ssr: false }
+);
+
 const SettingsView = dynamic(
   () => import("@/components/SettingsView").then((mod) => mod.SettingsView),
   { loading: () => <SkeletonLoader title="Loading System Settings..." type="form" />, ssr: false }
@@ -156,6 +161,12 @@ export default function Home() {
       {activeTab === "purchase" && (
         <ErrorBoundary screenName="Purchase Raw Materials">
           <PurchaseView userRole={user.role} />
+        </ErrorBoundary>
+      )}
+
+      {activeTab === "hr" && (
+        <ErrorBoundary screenName="HR & Workers">
+          <HRManagementView userRole={user.role} />
         </ErrorBoundary>
       )}
 

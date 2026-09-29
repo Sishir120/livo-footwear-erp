@@ -10,6 +10,7 @@ from app.models.stock_snapshot import StockSnapshot
 from app.models.bom import BillOfMaterials
 from app.models.receivable import ReceivableEntry, PaymentAllocation
 from app.models.sync import ProductionSyncLog
+from app.models.worker import Worker, WorkerAdvance, WorkerMonthlyRecord
 
 __all__ = [
     "Company",
@@ -33,5 +34,9 @@ __all__ = [
     "BillOfMaterials",
     "ReceivableEntry",
     "PaymentAllocation",
-    "ProductionSyncLog"
+    "ProductionSyncLog",
+    "Worker",
+    "WorkerAdvance",
+    "WorkerMonthlyRecord"
 ]
+
