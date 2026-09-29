@@ -442,6 +442,90 @@ async function removeCallouts(page) {
   await saveScreen(page, 'screen_12_settings_and_diagnostics.png');
   await removeCallouts(page);
 
+  // 14. SCREEN 14 - HR Management Directory & Advance Ledger
+  console.log('Switching to HR Management...');
+  await page.evaluate(() => {
+    const btns = Array.from(document.querySelectorAll('button'));
+    const hrTab = btns.find(b => b.textContent && (b.textContent.includes('HR') || b.textContent.includes('कर्मचारी')));
+    if (hrTab) hrTab.click();
+  });
+  await delay(2500);
+
+  await injectCallouts(page, [
+    { selector: 'button', textMatch: 'Add Worker', label: '1', position: 'top-left', offsetX: 10, offsetY: 5 },
+    { selector: 'span', textMatch: 'SALARY', label: '2', position: 'top-left', offsetX: -5, offsetY: -5 },
+    { selector: 'button', textMatch: 'Active', label: '3', position: 'top-left', offsetX: -5, offsetY: -5 },
+    { selector: 'th', textMatch: 'Advance', label: '4', position: 'top-left', offsetX: 5, offsetY: 2 },
+    { selector: 'th', textMatch: 'TWH', label: '5', position: 'top-left', offsetX: 5, offsetY: 2 },
+    { selector: 'button', textMatch: 'Settle', label: '6', position: 'top-left', offsetX: 5, offsetY: 2 }
+  ]);
+  await saveScreen(page, 'screen_14_hr_management.png');
+  await removeCallouts(page);
+
+  // 15. SCREEN 15 - Product Media Gallery & Lightbox
+  console.log('Switching to Product Gallery...');
+  await page.evaluate(() => {
+    const btns = Array.from(document.querySelectorAll('button'));
+    const galTab = btns.find(b => b.textContent && (b.textContent.includes('Gallery') || b.textContent.includes('ग्यालरी')));
+    if (galTab) galTab.click();
+  });
+  await delay(2500);
+
+  await injectCallouts(page, [
+    { selector: 'button', textMatch: 'Upload Image', label: '1', position: 'top-left', offsetX: 10, offsetY: 5 },
+    { selector: 'span.badge, span', textMatch: 'ART-', label: '2', position: 'top-left', offsetX: -5, offsetY: -5 },
+    { selector: 'div.glass-card, div', textMatch: 'ART-', label: '3', position: 'top-left', offsetX: 15, offsetY: 15 },
+    { selector: 'button', textMatch: 'Download', label: '4', position: 'top-left', offsetX: 5, offsetY: 2 },
+    { selector: 'span', textMatch: 'SKU MEDIA GALLERY', label: '5', position: 'top-left', offsetX: -5, offsetY: -5 }
+  ]);
+  await saveScreen(page, 'screen_15_product_gallery.png');
+  await removeCallouts(page);
+
+  // 16. SCREEN 16 - Production Ratio Analytics & Dual-Axis Graph
+  console.log('Switching to Production Ratio Analytics...');
+  await page.evaluate(() => {
+    const btns = Array.from(document.querySelectorAll('button'));
+    const anTab = btns.find(b => b.textContent && (b.textContent.includes('Analytics') || b.textContent.includes('ऱ्याङ्किङ') || b.textContent.includes('Leaderboards')));
+    if (anTab) anTab.click();
+  });
+  await delay(1500);
+
+  await page.evaluate(() => {
+    const btns = Array.from(document.querySelectorAll('button'));
+    const ratioSubTab = btns.find(b => b.textContent && (b.textContent.includes('Production Ratios') || b.textContent.includes('अनुपात')));
+    if (ratioSubTab) ratioSubTab.click();
+  });
+  await delay(2500);
+
+  await injectCallouts(page, [
+    { selector: 'button', textMatch: '3 Months', label: '1', position: 'top-left', offsetX: -5, offsetY: -5 },
+    { selector: 'span', textMatch: 'Total Pairs Produced', label: '2', position: 'top-left', offsetX: -10, offsetY: -5 },
+    { selector: 'span', textMatch: 'Pairs / Worker', label: '3', position: 'top-left', offsetX: -10, offsetY: -5 },
+    { selector: 'th', textMatch: 'Workers', label: '4', position: 'top-left', offsetX: 5, offsetY: 2 },
+    { selector: 'button', textMatch: 'Log Daily Shift', label: '5', position: 'top-left', offsetX: 10, offsetY: 5 }
+  ]);
+  await saveScreen(page, 'screen_16_production_analytics.png');
+  await removeCallouts(page);
+
+  // 17. SCREEN 17 - Sales & Customer Leaderboards
+  console.log('Switching to Sales Leaderboards...');
+  await page.evaluate(() => {
+    const btns = Array.from(document.querySelectorAll('button'));
+    const prodSubTab = btns.find(b => b.textContent && (b.textContent.includes('Top Selling') || b.textContent.includes('उत्पादन')));
+    if (prodSubTab) prodSubTab.click();
+  });
+  await delay(2000);
+
+  await injectCallouts(page, [
+    { selector: 'span, div', textMatch: '#1', label: '1', position: 'top-left', offsetX: -5, offsetY: -5 },
+    { selector: 'span, div', textMatch: '#2', label: '2', position: 'top-left', offsetX: -5, offsetY: -5 },
+    { selector: 'span, div', textMatch: '#3', label: '3', position: 'top-left', offsetX: -5, offsetY: -5 },
+    { selector: 'th', textMatch: 'Total Pairs', label: '4', position: 'top-left', offsetX: 5, offsetY: 2 },
+    { selector: 'th', textMatch: 'Total Revenue', label: '5', position: 'top-left', offsetX: 5, offsetY: 2 }
+  ]);
+  await saveScreen(page, 'screen_17_leaderboards.png');
+  await removeCallouts(page);
+
   // 13. SCREEN 13 - Auditor Viewer (Read-Only Mode)
   console.log('Logging out to capture Auditor Viewer mode...');
   await page.evaluate(() => {

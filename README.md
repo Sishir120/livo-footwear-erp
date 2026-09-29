@@ -3,8 +3,8 @@
 [![Live Production](https://img.shields.io/badge/Production-Live%20on%20Vercel-emerald?style=for-the-badge&logo=vercel)](https://livo-footwear-erp.vercel.app)
 [![API Engine](https://img.shields.io/badge/FastAPI%20Engine-Render%20Cloud-blue?style=for-the-badge&logo=render)](https://livo-footwear-erp-backend.onrender.com/docs)
 [![Database](https://img.shields.io/badge/Neon%20PostgreSQL-Serverless%20%2B%20PgBouncer-34d399?style=for-the-badge&logo=postgresql)](https://neon.tech)
-[![Python Tests](https://img.shields.io/badge/Pytest-31%2F31%20Passed-brightgreen?style=for-the-badge&logo=pytest)](backend/tests/)
-[![Next.js Bundle](https://img.shields.io/badge/First%20Load%20JS-103%20kB%20(%3C110%20kB)-success?style=for-the-badge&logo=nextdotjs)](frontend/)
+[![Python Tests](https://img.shields.io/badge/Pytest-64%2F64%20Passed-brightgreen?style=for-the-badge&logo=pytest)](backend/tests/)
+[![Next.js Bundle](https://img.shields.io/badge/First%20Load%20JS-109%20kB%20(%3C115%20kB)-success?style=for-the-badge&logo=nextdotjs)](frontend/)
 [![Tax Compliance](https://img.shields.io/badge/Nepal%20IRD-13%25%20VAT%20Compliant-orange?style=for-the-badge)](https://livo-footwear-erp.vercel.app)
 
 > Purpose-built footwear enterprise operating system for Nepal's manufacturing hubs, engineered for high-concurrency dispatch, factory-floor ergonomics, and statutory tax compliance.
@@ -112,7 +112,38 @@ flowchart TD
 
 ---
 
-## 3. Core Operational Capabilities (Visual Showcase)
+## 3. Manufacturing System Scope & 9-Module Operational Matrix
+
+LIVO Footwear ERP is an industrial manufacturing suite purpose-engineered for high-velocity shoe manufacturing plants in Nepal, ensuring strict Inland Revenue Department (IRD) statutory compliance, zero-inventory-leakage ledger accounting, and ergonomic shop-floor operation under plant lighting conditions.
+
+| # | Operational Module | Scope & Architecture Invariants | Key Ergonomics & Protocols |
+|---|:---|:---|:---|
+| **1** | **Production Batch Terminal** | Rapid shop-floor production logging across Continental Paris Points sizes 32 to 43. Atomic BOM consumption and finished goods addition. | "No-mouse" keyboard navigation (<kbd>Tab</kbd> / <kbd>Enter</kbd> / <kbd>Ctrl+Enter</kbd>), auto-incrementing batch sequences, and local IndexedDB offline sync. |
+| **2** | **Stock Movement Ledger & Sizing Matrix** | Strict append-only signed inventory subledger ($\sum \text{direction} \times \text{qty}$). Zero mutable stock columns; zero-floor protection against overselling. | Horizontal Paris Points grid (32–43) with sticky left SKU headers, real-time Stock Card modals, and supervisor-token authorization for adjustments. |
+| **3** | **Statutory Sales Invoicing** | Inland Revenue Department (IRD) Schedule-5 VAT invoice generation. Integer-paisa tax arithmetic, monotonic invoice sequences (`INV-01-XXXXX`). | Dual-unit packaging calculator (`1 Carton = 12 Pairs`), A4 `@media print` layout with buyer/seller PAN blocks, and duplicate invoice rejection. |
+| **4** | **Accounts Receivable & Aging** | Append-only AR debtor subledger tracking invoices, cash/bank receipts, and disputes. Dynamic as-of aging buckets: Current, 31–60d, 61–90d, >90d. | Customer credit-hold dispatch lock, real-time party account statements, and dispute flag isolation without altering statutory tax obligations. |
+| **5** | **HR Management & Worker Payroll (Point 4)** | Multi-tenant staff directory supporting 50+ workers across two shifts. Distinguishes Monthly Salaried personnel and Daily/Hourly Wage staff. | Real-time Advance (पेश्की) ledger ($\sum \text{Issued} - \sum \text{Recovered}$), automatic advance deduction upon payroll finalization, TWH and $1.5\times$ Overtime logging, and Active/Inactive status toggle. |
+| **6** | **Product Media Gallery (Point 5)** | High-resolution SKU-linked product image library for marketing and wholesale line sheets. Base64/cloud asset storage with size capping ($\le 5\text{MB}$). | Lightbox full-screen preview, one-click binary file download for local galleries and dealer WhatsApp sharing, and read-only auditor lockdown. |
+| **7** | **Production Trends & Ratio Analytics (Points 6 & 9)** | Production intelligence dashboard correlating daily finished pairs against workforce labor inputs (worker count and total shift hours). | Interactive dual-axis SVG graph (Finished Pairs bars vs. Pairs/Worker ratio line), selectable time horizons (`1 Month`, `3 Months`, `1 Year`), and shift log audits. |
+| **8** | **Sales & Customer Leaderboards (Points 7 & 8)** | Commercial performance intelligence ranking top products and wholesale clients. | Top-selling footwear models ranked on top with Gold (#1), Silver (#2), and Bronze (#3) podium badges; Top Customers ranked serially highest to lowest with pair totals, revenue, and reliability scoring. |
+| **9** | **Supervisor Exception Cockpit & Telemetry** | Centralized manufacturing oversight and diagnostic center. Live monitors stockouts, credit-holds, broken core curves (sizes 39–41), and offline sync queues. | Real-time `X-Correlation-ID` request tracking, automated database backup integrity drills, and instant single-click seed/diagnostic telemetry. |
+
+---
+
+## 4. Key Technical Metrics & Compliance Profile
+
+| Parameter | Production Specification | Architectural Rationale |
+|:---|:---|:---|
+| **Database Migrations** | **9 Linear Alembic Revisions** (`001_initial` &rarr; `009_gallery_and_analytics`) | Zero schema drifts; reversible, reproducible database lineage across cloud instances. |
+| **Automated Test Suite** | **64/64 Tests Passing (100%)** (`pytest backend/tests/ -v`) | Comprehensive test coverage across security, multi-tenant isolation, inventory locks, VAT math, HR payroll, and analytics. |
+| **Frontend Bundle Budget** | **109 kB First Load JS** (`next build`) | Strictly within factory edge performance budget (<115 kB) for instantaneous loading on 3G cellular and plant Wi-Fi. |
+| **Visual Design System** | **Industrial Paper Palette** (`#F8FAFC` base, `#CBD5E1` borders, `#0F172A` ink) | Eliminates ocular glare under 500-lux factory fluorescent lamps; strictly uses tabular numerals (`font-mono`) for zero alignment drift. |
+| **Statutory Compliance** | **Nepal Inland Revenue Department (IRD)** Schedule-5 VAT Compliant | Exact integer-paisa tax calculation, 9-digit PAN validation, gapless monotonic numbering, and immutable audit trails. |
+| **Concurrency Safeguards** | **64-bit PostgreSQL Advisory Locks** (`pg_advisory_xact_lock`) | Transaction-scoped row-level mutexes eliminate race conditions during concurrent wholesale dispatch checkout surges. |
+
+---
+
+## 5. Core Operational Capabilities (Visual Showcase)
 
 ### 1. Industrial Paper High-Contrast Canvas
 High-contrast neutral theme (`#F8FAFC` base, `#FFFFFF` surfaces, `#0F172A` primary text) designed to eliminate screen reflection glare under 500-lux factory fluorescent lamps while saving operator ocular fatigue.
@@ -172,7 +203,7 @@ Role-based immutable view ensuring external tax auditors, revenue inspectors, an
 
 ---
 
-## 4. Architectural Invariants & Production Hardening
+## 6. Architectural Invariants & Production Hardening
 
 ### 1. Strict Append-Only Stock Ledger (Zero Inventory Leakage)
 - The database schema contains **no mutable `stock_qty` column** on product tables.
@@ -201,7 +232,7 @@ Role-based immutable view ensuring external tax auditors, revenue inspectors, an
 
 ---
 
-## 5. Operational Triage & Engineering Documentation
+## 7. Operational Triage & Engineering Documentation
 
 ### Single 10-Second Operational Triage Reference
 
@@ -219,6 +250,7 @@ Role-based immutable view ensuring external tax auditors, revenue inspectors, an
 | Operational Document | Scope & Specification |
 | :--- | :--- |
 | [`docs/OPERATIONAL_HANDOVER.md`](docs/OPERATIONAL_HANDOVER.md) | Factory standard operating procedures, operator role matrix, and backup topologies. |
+| [`docs/LIVO_ERP_Visual_Operations_Manual_and_Playbook.md`](docs/LIVO_ERP_Visual_Operations_Manual_and_Playbook.md) | Comprehensive 13-chapter visual operations manual, DOM screenshots, callouts, and SOPs. |
 | [`docs/SECURITY_ARCHITECTURE.md`](docs/SECURITY_ARCHITECTURE.md) | JWT specifications, Argon2 password hashing, RBAC scopes, and TLS encryption. |
 | [`docs/RESTORE_PROCEDURE.md`](docs/RESTORE_PROCEDURE.md) | Point-in-time recovery (PITR) protocols and database failover verification tests. |
 | [`docs/CRITICAL_DEBUGGING_RUNBOOK.md`](docs/CRITICAL_DEBUGGING_RUNBOOK.md) | Component-by-component triage guide, recovery runbooks, and disaster recovery procedures. |
@@ -227,7 +259,7 @@ Role-based immutable view ensuring external tax auditors, revenue inspectors, an
 
 ---
 
-## 6. Local Setup & Verification
+## 8. Local Setup & Verification
 
 <details>
 <summary><b>Click to view Local Setup & Test Suite Commands</b></summary>
@@ -249,7 +281,7 @@ pip install -r requirements.txt
 alembic upgrade head
 python -m app.db.seed
 
-# Run the automated test suite (31 passing tests)
+# Run the complete automated test suite (64 passing tests)
 pytest -v
 
 # Launch local backend server (http://localhost:8000)
@@ -265,7 +297,7 @@ cd frontend
 # Install dependencies
 npm install
 
-# Verify production bundle budget (<110 kB First Load JS)
+# Verify production bundle budget (<115 kB First Load JS budget, current: 109 kB)
 npm run build
 
 # Launch local development server (http://localhost:3000)
@@ -280,6 +312,6 @@ npm run dev
 
 - **Enterprise:** LIVO GROUP OF INDUSTRIES (Footwear Manufacturing Division)
 - **Deployment Status:** Live Production ([`livo-footwear-erp.vercel.app`](https://livo-footwear-erp.vercel.app))
-- **Production Revision:** Commit `d5afae8` (`feat(core): harden ergonomics, advisory locks, sequence counters, and invoice security`)
-- **Automated Verification:** 31/31 Passing Tests (`pytest 9.1.1`) • 103 kB First Load JS Bundle
+- **Production Architecture:** 9-Module Industrial Footwear Suite (Migrations `001` through `009`)
+- **Automated Verification:** 64/64 Passing Tests (`pytest 9.1.1`) • 109 kB First Load JS Bundle (<115 kB budget)
 - **License:** Proprietary — All Rights Reserved © 2026 LIVO GROUP OF INDUSTRIES

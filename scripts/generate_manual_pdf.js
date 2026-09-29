@@ -31,6 +31,10 @@ const images = {
   screen_11: getBase64Image('screen_11_supervisor_exception_cockpit.png'),
   screen_12: getBase64Image('screen_12_settings_and_diagnostics.png'),
   screen_13: getBase64Image('screen_13_auditor_viewer_read_only.png'),
+  screen_14: getBase64Image('screen_14_hr_management.png'),
+  screen_15: getBase64Image('screen_15_product_gallery.png'),
+  screen_16: getBase64Image('screen_16_production_analytics.png'),
+  screen_17: getBase64Image('screen_17_leaderboards.png'),
   seq_A1: getBase64Image('seq_A1_model_and_line_selection.png'),
   seq_A2: getBase64Image('seq_A2_rapid_numeric_entry.png'),
   seq_A3: getBase64Image('seq_A3_live_strip_variance_update.png'),
@@ -426,6 +430,31 @@ const htmlContent = `<!DOCTYPE html>
     </tr>
     <tr>
       <td><strong>Chapter 9</strong></td>
+      <td>Supervisor Exception Cockpit & Factory Diagnostics (Live Floor Friction)</td>
+      <td>Floor Supervisors & IT Admins</td>
+    </tr>
+    <tr>
+      <td><strong>Chapter 10</strong></td>
+      <td>HR Management, Advance Ledger & Worker Payroll (50+ Staff, Overtime & Peshki)</td>
+      <td><strong>Gita</strong> (HR Officer & Timekeeper)</td>
+    </tr>
+    <tr>
+      <td><strong>Chapter 11</strong></td>
+      <td>Product Media Gallery & Wholesale Line Sheets (Image Upload & Local Downloads)</td>
+      <td><strong>Sita</strong> & Wholesale Sales Reps</td>
+    </tr>
+    <tr>
+      <td><strong>Chapter 12</strong></td>
+      <td>Production Ratio Analytics & Efficiency Graphs (Pairs/Worker Output & Trends)</td>
+      <td><strong>Dambar Shrestha</strong> (Factory GM)</td>
+    </tr>
+    <tr>
+      <td><strong>Chapter 13</strong></td>
+      <td>Sales & Customer Leaderboards (Top-Selling Shoe Podiums & Top Clients)</td>
+      <td>Sales Director & Factory GM</td>
+    </tr>
+    <tr>
+      <td><strong>Chapter 14</strong></td>
       <td>10-Second Quick Troubleshooting Guide (Cold Boots, Sync & Stock Errors)</td>
       <td>All Shift Staff & Dispatchers</td>
     </tr>
@@ -433,7 +462,7 @@ const htmlContent = `<!DOCTYPE html>
 </table>
 
 <h2>Factory Personas: "A Day on the Factory Floor"</h2>
-<p>To eliminate confusing technical jargon, all procedures in this manual are explained through the real-life tasks of three dedicated employees at Livo Footwear Industries:</p>
+<p>To eliminate confusing technical jargon, all procedures in this manual are explained through the real-life tasks of dedicated employees at Livo Footwear Industries:</p>
 
 <div class="persona-box">
   <div class="persona-header">
@@ -460,6 +489,24 @@ const htmlContent = `<!DOCTYPE html>
   </div>
   <p><strong>Environment & Habits:</strong> Skeptical, detail-oriented, checks balance arithmetic down to the exact paisa, ensures no staff member has altered historical records, and audits customer credit limits.</p>
   <p><strong>Daily Mission:</strong> Log in using the read-only <code>viewer_demo</code> profile to examine stock movements, inspect overdue accounts receivable (31–60d, 61–90d, >90d), verify dispute notes, and export CSV audit reports.</p>
+</div>
+
+<div class="persona-box">
+  <div class="persona-header">
+    <span class="persona-title">4. Gita — HR Officer & Shift Timekeeper</span>
+    <span class="badge badge-blue">Administrative Desk & Timekeeper Gate</span>
+  </div>
+  <p><strong>Environment & Habits:</strong> Tracks shift attendance across morning and night shifts, manages cash advance requests (पेश्की), and executes monthly payroll calculations without spreadsheet discrepancies.</p>
+  <p><strong>Daily Mission:</strong> Maintain profiles for 50+ staff, issue cash advances with automatic real-time deduction, log monthly hours and $1.5\times$ overtime, and execute wage settlements.</p>
+</div>
+
+<div class="persona-box">
+  <div class="persona-header">
+    <span class="persona-title">5. Dambar Shrestha — Factory General Manager & Line Superintendent</span>
+    <span class="badge badge-green">Plant Executive Office & Floor Catwalk</span>
+  </div>
+  <p><strong>Environment & Habits:</strong> Evaluates output-per-worker ratios, diagnoses machine bottlenecks, and aligns production schedules with wholesale demand curves.</p>
+  <p><strong>Daily Mission:</strong> Inspect daily dual-axis production efficiency charts across 1-month, 3-month, and 1-year horizons, monitor top-selling footwear podiums, and evaluate customer payment reliability.</p>
 </div>
 
 <!-- ========================================================================= -->
@@ -1106,11 +1153,325 @@ const htmlContent = `<!DOCTYPE html>
 </ul>
 
 <!-- ========================================================================= -->
-<!-- CHAPTER 9: 10-SECOND QUICK TROUBLESHOOTING GUIDE -->
+<!-- CHAPTER 9: SUPERVISOR EXCEPTION COCKPIT & FACTORY DIAGNOSTICS -->
 <!-- ========================================================================= -->
 <div class="page-break"></div>
 
-<h1>Chapter 9: 10-Second Quick Troubleshooting Guide</h1>
+<h1>Chapter 9: Supervisor Exception Cockpit & Diagnostics</h1>
+<p>The Exception Cockpit is the floor superintendent's central nerve center for diagnosing friction across production lines and wholesale dispatch docks in real time.</p>
+
+<div class="screenshot-card">
+  <img src="${images.screen_11}" alt="Screen 11 - Supervisor Exception Cockpit">
+  <div class="screenshot-caption">
+    <span>SCREEN 11: Supervisor Exception Cockpit (/cockpit)</span>
+    <span>Callouts: [1] Blocked Dispatches [2] Over-Limit Orders [3] Broken Core Runs [4] Outbox Backlog</span>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width: 12%;">Callout</th>
+      <th style="width: 28%;">Telemetry Metric</th>
+      <th style="width: 25%;">Operational Threshold</th>
+      <th style="width: 35%;">Required Intervention</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge badge-red">[1]</span></td>
+      <td><strong>Blocked Dispatches</strong></td>
+      <td>Count &gt; 0 halts wholesale loading</td>
+      <td>Check underlying root cause: credit limit freeze or insufficient shelf inventory.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">[2]</span></td>
+      <td><strong>Over-Limit Orders</strong></td>
+      <td>Balance exceeds credit ceiling</td>
+      <td>Obtain finance supervisor token or collect bank deposit wire from distributor.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">[3]</span></td>
+      <td><strong>Broken Core Runs</strong></td>
+      <td>Sizes 39–41 depleted</td>
+      <td>Prioritize injection molding and assembly lines for depleted Paris points.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">[4]</span></td>
+      <td><strong>Outbox Backlog</strong></td>
+      <td>Unsynced IndexedDB mutations</td>
+      <td>Verify factory Wi-Fi gateway and restore network synchronization.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>9.1 Factory Settings & Diagnostic Integrity</h3>
+<div class="screenshot-card">
+  <img src="${images.screen_12}" alt="Screen 12 - Factory Settings & Diagnostics">
+  <div class="screenshot-caption">
+    <span>SCREEN 12: Factory Settings & Diagnostics (/settings)</span>
+    <span>Callouts: [1] Entity Profile [2] IRD Verified [3] Local Cache [4] Backup Verification [5] Run Diagnostics</span>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- CHAPTER 10: HR MANAGEMENT, ADVANCE LEDGER & WORKER PAYROLL (POINT 4) -->
+<!-- ========================================================================= -->
+<div class="page-break"></div>
+
+<h1>Chapter 10: HR Management, Advance Ledger & Worker Payroll</h1>
+<p>This chapter introduces <strong>Gita (HR Officer & Timekeeper)</strong> and explains how LIVO Footwear ERP manages 50+ staff across two shifts with airtight cash advance recovery and statutory overtime math.</p>
+
+<div class="screenshot-card">
+  <img src="${images.screen_14}" alt="Screen 14 - HR Management Directory & Advance Ledger">
+  <div class="screenshot-caption">
+    <span>SCREEN 14: HR Management Directory & Advance Ledger (/hr)</span>
+    <span>Callouts: [1] Add Worker [2] Pay Type Badge [3] Active Switch [4] Advance Due [5] TWH / OT [6] Settle Payroll</span>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width: 10%;">Callout</th>
+      <th style="width: 25%;">Control Element</th>
+      <th style="width: 25%;">Functional Purpose</th>
+      <th style="width: 40%;">Operator Action (Gita's SOP)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge badge-red">[1]</span></td>
+      <td><strong>+ Add Worker Modal</strong></td>
+      <td>Registers new assembly personnel.</td>
+      <td>Enter unique Worker Code (<code>EMP-XXX</code>), Name, Join Date, Pay Type (<code>SALARY</code> vs <code>WAGE</code>), and Base Rate.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">[2]</span></td>
+      <td><strong>Worker Pay Type Badge</strong></td>
+      <td>Distinguishes salaried and wage staff.</td>
+      <td>Blue <code>SALARY</code> badge: fixed monthly pay. Amber <code>WAGE</code> badge: calculated from logged working hours.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">[3]</span></td>
+      <td><strong>Active / Inactive Switch</strong></td>
+      <td>Toggles worker deployment status.</td>
+      <td>Toggle <code>Inactive</code> when worker takes leave or resigns to exclude from active shift logs.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">[4]</span></td>
+      <td><strong>Advance (पेश्की) Balance</strong></td>
+      <td>Real-time outstanding cash advance (&sum; Issued - &sum; Recovered).</td>
+      <td>Click <code>+ Advance</code> to disburse cash; system prevents advances exceeding monthly base earnings.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">[5]</span></td>
+      <td><strong>Hours & Overtime Tally</strong></td>
+      <td>Monthly Total Working Hours (TWH) and Overtime (OT).</td>
+      <td>Logs regular hours and overtime; system automatically calculates statutory $1.5\times$ overtime rate.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">[6]</span></td>
+      <td><strong>Settle Monthly Payroll</strong></td>
+      <td>Computes net salary and settles advance.</td>
+      <td>Auto-deducts outstanding advance from gross earnings: $\text{Net Payout} = \text{Gross} - \text{Advance}$.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="info-box info-box-tip">
+  <strong>Gita's Standard Operating Procedure: Monthly Payroll Finalization</strong><br>
+  1. Log mid-month cash advances via <code>+ Advance</code> as cash is disbursed from the factory safe.<br>
+  2. At month-end, click <code>Log Hours</code> and enter Total Working Hours (e.g. 208 hrs) and Overtime (e.g. 24 hrs).<br>
+  3. Click <code>Settle Payroll</code>: Gross pay is computed with 1.5&times; OT, previous advances are deducted to the exact paisa, and net disbursement vouchers are printed.
+</div>
+
+<!-- ========================================================================= -->
+<!-- CHAPTER 11: PRODUCT MEDIA GALLERY & WHOLESALE LINE SHEETS (POINT 5) -->
+<!-- ========================================================================= -->
+<div class="page-break"></div>
+
+<h1>Chapter 11: Product Media Gallery & Wholesale Line Sheets</h1>
+<p>This chapter explains how <strong>Sita</strong> and commercial wholesale sales representatives upload and distribute high-resolution product photographs to footwear stockists across Nepal.</p>
+
+<div class="screenshot-card">
+  <img src="${images.screen_15}" alt="Screen 15 - Product Media Gallery & Lightbox">
+  <div class="screenshot-caption">
+    <span>SCREEN 15: Product Media Gallery & Lightbox (/gallery)</span>
+    <span>Callouts: [1] Upload Image [2] SKU Code Tag [3] Lightbox Card [4] Download Button [5] Catalog Scope</span>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width: 10%;">Callout</th>
+      <th style="width: 25%;">Control Element</th>
+      <th style="width: 25%;">Functional Purpose</th>
+      <th style="width: 40%;">Operator Action (Sita's SOP)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge badge-red">[1]</span></td>
+      <td><strong>+ Upload Image Modal</strong></td>
+      <td>Uploads sample footwear photos (&le; 5MB).</td>
+      <td>Select target SKU from dropdown, choose JPEG/PNG/WEBP photo, and commit to media library.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">[2]</span></td>
+      <td><strong>Product Code Tag</strong></td>
+      <td>Direct linkage to master catalog SKU.</td>
+      <td>Ensures photos correspond to physical warehouse racks and carton labels (e.g., <code>ART-URBAN-01</code>).</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">[3]</span></td>
+      <td><strong>Lightbox Preview</strong></td>
+      <td>Full-screen high-contrast inspection.</td>
+      <td>Click any thumbnail to inspect stitch quality, tread pattern, and colorway before bulk dispatch.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">[4]</span></td>
+      <td><strong>Download Button</strong></td>
+      <td>Direct binary asset download.</td>
+      <td>One-click download saves photo to phone or PC gallery for WhatsApp sharing with distributors.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">[5]</span></td>
+      <td><strong>Auditor Lockdown</strong></td>
+      <td>Read-only viewer security.</td>
+      <td>Under <code>viewer_demo</code>, upload and delete buttons are stripped; auditors cannot alter catalog media.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ========================================================================= -->
+<!-- CHAPTER 12: PRODUCTION RATIO ANALYTICS & EFFICIENCY GRAPHS (POINTS 6 & 9) -->
+<!-- ========================================================================= -->
+<div class="page-break"></div>
+
+<h1>Chapter 12: Production Ratio Analytics & Efficiency Graphs</h1>
+<p>This chapter guides <strong>Dambar Shrestha (Factory General Manager)</strong> in evaluating daily line efficiency, labor output ratios, and seasonal manufacturing capacity.</p>
+
+<div class="screenshot-card">
+  <img src="${images.screen_16}" alt="Screen 16 - Production Ratio Analytics & Dual-Axis Graph">
+  <div class="screenshot-caption">
+    <span>SCREEN 16: Production Ratio Analytics & Dual-Axis Graph (/analytics &rarr; Ratios)</span>
+    <span>Callouts: [1] Timeframe Filter [2] Pairs Produced (Bars) [3] Pairs/Worker (Line) [4] Shift Logs [5] Log Daily Shift</span>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width: 10%;">Callout</th>
+      <th style="width: 25%;">Control Element</th>
+      <th style="width: 25%;">Factory Metric</th>
+      <th style="width: 40%;">Analytical Significance</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge badge-red">[1]</span></td>
+      <td><strong>Timeframe Filter</strong></td>
+      <td><code>1 Month</code>, <code>3 Months</code>, <code>1 Year</code>.</td>
+      <td>Toggles between short-term shift troubleshooting and multi-quarter seasonal demand planning.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">[2]</span></td>
+      <td><strong>Pairs Produced (Bars)</strong></td>
+      <td>Navy vertical bars (Pairs/Day).</td>
+      <td>Displays gross finished footwear output from daily assembly line runs.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">[3]</span></td>
+      <td><strong>Pairs / Worker (Line)</strong></td>
+      <td>Emerald trajectory line (Pairs/Worker).</td>
+      <td>Core labor productivity metric. A dip below 8.0 pairs/worker indicates line bottlenecks or absenteeism.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">[4]</span></td>
+      <td><strong>Shift Log Audit Table</strong></td>
+      <td>Date, workers, hours, pairs, ratios.</td>
+      <td>Verifies supervisor daily submissions against raw ledger batch additions.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-red">[5]</span></td>
+      <td><strong>+ Log Daily Shift Modal</strong></td>
+      <td>Shift headcount and hours entry.</td>
+      <td>Supervisors enter daily active headcount and shift hours at the end of each shift.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="info-box info-box-warn">
+  <strong>Factory Productivity Formulae & Benchmarks:</strong><br>
+  &bull; $\text{Worker Productivity Ratio} = \frac{\text{Total Finished Pairs}}{\text{Active Shift Workers}}$ (Benchmark: &ge; 10.0 pairs/worker/shift)<br>
+  &bull; $\text{Hourly Output Rate} = \frac{\text{Total Finished Pairs}}{\text{Total Working Hours}}$ (Benchmark: &ge; 40.0 pairs/hour across Line 1 & Line 2)
+</div>
+
+<!-- ========================================================================= -->
+<!-- CHAPTER 13: SALES & CUSTOMER LEADERBOARDS (POINTS 7 & 8) -->
+<!-- ========================================================================= -->
+<div class="page-break"></div>
+
+<h1>Chapter 13: Sales & Customer Leaderboards</h1>
+<p>The Leaderboards module provides factory leadership with instant visual clarity on flagship footwear articles and wholesale distributor commercial reliability.</p>
+
+<div class="screenshot-card">
+  <img src="${images.screen_17}" alt="Screen 17 - Sales & Customer Leaderboards">
+  <div class="screenshot-caption">
+    <span>SCREEN 17: Sales & Customer Leaderboards (/analytics &rarr; Top Products)</span>
+    <span>Callouts: [1] #1 Gold Badge [2] #2 Silver Badge [3] #3 Bronze Badge [4] Dispatched Pairs [5] Total Revenue</span>
+  </div>
+</div>
+
+<h3>13.1 Top-Selling Footwear Articles (Point 7)</h3>
+<p>Shoes are ranked automatically by sales volume with commemorative podium badges:</p>
+<ul>
+  <li>🥇 <strong>#1 Gold Podium:</strong> Factory flagship model. Requires continuous raw material safety stock.</li>
+  <li>🥈 <strong>#2 Silver Podium:</strong> High-velocity runner. Buffer minimum 100 cartons in warehouse.</li>
+  <li>🥉 <strong>#3 Bronze Podium:</strong> Core wholesale demand driver across regional dealers.</li>
+</ul>
+
+<h3>13.2 Top Customer Rankings & Reliability Scoring (Point 8)</h3>
+<table>
+  <thead>
+    <tr>
+      <th style="width: 15%;">Serial Rank</th>
+      <th style="width: 30%;">Distributor & PAN</th>
+      <th style="width: 25%;">Billed Volume & Pairs</th>
+      <th style="width: 30%;">Reliability Score (%) & Terms</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Rank #1</strong></td>
+      <td>Annapurna Shoes, Pokhara (PAN: 601294821)</td>
+      <td>Rs. 1,450,000 / 1,200 Pairs</td>
+      <td><span class="badge badge-green">94.2% Reliability</span> &bull; 45-Day Terms</td>
+    </tr>
+    <tr>
+      <td><strong>Rank #2</strong></td>
+      <td>Himalayan Footwear, New Road (PAN: 602819382)</td>
+      <td>Rs. 980,000 / 800 Pairs</td>
+      <td><span class="badge badge-green">91.0% Reliability</span> &bull; 45-Day Terms</td>
+    </tr>
+    <tr>
+      <td><strong>Rank #3</strong></td>
+      <td>Terai Traders, Biratnagar (PAN: 603928174)</td>
+      <td>Rs. 620,000 / 520 Pairs</td>
+      <td><span class="badge badge-blue">82.5% Reliability</span> &bull; 30-Day Terms</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ========================================================================= -->
+<!-- CHAPTER 14: 10-SECOND QUICK TROUBLESHOOTING GUIDE -->
+<!-- ========================================================================= -->
+<div class="page-break"></div>
+
+<h1>Chapter 14: 10-Second Quick Troubleshooting Guide</h1>
 <p>Keep this page pinned near factory computer terminals for immediate problem resolution.</p>
 
 <table>

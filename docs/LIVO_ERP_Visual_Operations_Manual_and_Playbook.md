@@ -30,8 +30,13 @@ LIVO Footwear ERP is an industrial manufacturing and inventory execution system 
 6. [Chapter 6: Wholesale Dispatch & Nepal Tax Invoices (Carton Math & Schedule-5)](#chapter-6-wholesale-dispatch--nepal-tax-invoices-कर-बिजक)
 7. [Chapter 7: Party Accounts & Customer Aging (Managing Credit Limits & Cash Receipts)](#chapter-7-party-accounts--customer-aging-पार्टी-बाँकी)
 8. [Chapter 8: Auditor Read-Only Mode (Hari Prasad's Verification Workflow)](#chapter-8-auditor-read-only-mode-निरीक्षण-मोड)
-9. [Chapter 9: 10-Second Quick Troubleshooting Guide](#chapter-9-10-second-quick-troubleshooting-guide)
-10. [Appendix: Critical Safety & Resilience Demonstrations](#appendix-critical-safety--resilience-demonstrations)
+9. [Chapter 9: Supervisor Exception Cockpit & Factory Diagnostics](#chapter-9-supervisor-exception-cockpit--factory-diagnostics)
+10. [Chapter 10: HR Management, Advance Ledger & Worker Payroll (Point 4)](#chapter-10-hr-management-advance-ledger--worker-payroll)
+11. [Chapter 11: Product Media Gallery & Wholesale Line Sheets (Point 5)](#chapter-11-product-media-gallery--wholesale-line-sheets)
+12. [Chapter 12: Production Ratio Analytics & Efficiency Graphs (Points 6 & 9)](#chapter-12-production-ratio-analytics--efficiency-graphs)
+13. [Chapter 13: Sales & Customer Leaderboards (Points 7 & 8)](#chapter-13-sales--customer-leaderboards)
+14. [Chapter 14: 10-Second Quick Troubleshooting Guide](#chapter-14-10-second-quick-troubleshooting-guide)
+15. [Appendix: Critical Safety & Resilience Demonstrations](#appendix-critical-safety--resilience-demonstrations)
 
 ---
 
@@ -51,6 +56,16 @@ LIVO Footwear ERP is an industrial manufacturing and inventory execution system 
 - **Environment:** Accounts and internal audit office.
 - **Habits:** Skeptical, looks for ledger gaps, double-checks arithmetic down to the exact paisa.
 - **Daily Task:** Log in via `viewer_demo` to audit stock cards, inspect overdue aging buckets (61–90d, >90d), and export CSV reconciliation reports.
+
+### 4. Gita — HR Officer & Shift Timekeeper
+- **Environment:** Factory administrative desk and floor checkpoint.
+- **Habits:** Tracks worker attendance across shifts, monitors cash advance requests (पेश्की), and ensures error-free payroll.
+- **Daily Task:** Maintain worker profiles for 50+ staff, issue cash advances with automatic real-time deduction, log monthly hours and $1.5\times$ overtime, and execute wage settlements.
+
+### 5. Dambar Shrestha — Factory General Manager & Line Superintendent
+- **Environment:** Plant executive office and line inspection catwalks.
+- **Habits:** Evaluates output-per-worker ratios, diagnoses production bottlenecks, and aligns production schedules with wholesale demand.
+- **Daily Task:** Inspect daily dual-axis production efficiency charts across 1-month, 3-month, and 1-year horizons, monitor top-selling footwear podiums, and evaluate customer payment reliability.
 
 ---
 
@@ -198,24 +213,141 @@ Normal staff cannot simply edit or overwrite inventory numbers. Any physical cou
 
 ---
 
-## Chapter 8: Auditor Read-Only Mode (निरीक्षण मोड)
+## Chapter 9: Supervisor Exception Cockpit & Factory Diagnostics
 
-![Screen 13 - Auditor Read-Only Interface](./screenshots/screen_13_auditor_viewer_read_only.png)
+![Screen 11 - Supervisor Exception Cockpit](./screenshots/screen_11_supervisor_exception_cockpit.png)
 
-When logging in as `viewer_demo`:
-1. `[1]` **Viewer Role Indicator:** Header confirms read-only audit status.
-2. `[2]` **Export CSV Available:** Raw data tables can be exported to Excel/CSV for statutory tax filing.
-3. `[3]` **Absence of Mutation Buttons:** All buttons (`+ New Batch`, `+ Stock Adjustment`, `+ Record Payment`) vanish from the interface. Shortcuts like <kbd>Ctrl+Enter</kbd> are disabled.
+The Exception Cockpit is the floor superintendent's central nerve center for diagnosing friction across the production floor and dispatch docks:
+
+| Callout | Telemetry Metric | Operational Threshold | Required Intervention |
+|:---:|:---|:---|:---|
+| `[1]` | **Blocked Dispatches** | Value $> 0$ indicates dispatch halts. | Check underlying cause (Credit-Hold or Zero Stock). |
+| `[2]` | **Over-Limit Orders** | Accounts exceeding credit ceilings. | Obtain finance token or require partial bank wire deposit. |
+| `[3]` | **Broken Core Runs** | Missing sizes in core curve (39–41). | Prioritize molding and assembly lines for depleted Paris points. |
+| `[4]` | **Outbox Backlog** | Unsynced IndexedDB mutation queue. | Verify factory Wi-Fi gateway and restore network sync. |
+
+### Factory System Settings & Diagnostics
+![Screen 12 - Factory Settings & Diagnostics](./screenshots/screen_12_settings_and_diagnostics.png)
+
+- `[1]` **Legal Entity & PAN:** Registered corporate credentials (`PAN: 609823412`) for Nepal IRD compliance.
+- `[2]` **IRD Verification Badge:** Confirms Schedule-5 VAT invoice sequence integrity.
+- `[3]` **Local Outbox Storage:** IndexedDB cache footprint and pending mutations.
+- `[4]` **Automated Backup Verification:** Hourly snapshot status and point-in-time recovery health.
+- `[5]` **Run Diagnostics:** One-click full system probe testing database connection pool, sequence monotonicity, and advisory lock latency.
 
 ---
 
-## Chapter 9: 10-Second Quick Troubleshooting Guide
+## Chapter 10: HR Management, Advance Ledger & Worker Payroll (Point 4)
+
+![Screen 14 - HR Management Directory & Advance Ledger](./screenshots/screen_14_hr_management.png)
+
+### Persona Context: Gita (HR Officer & Timekeeper)
+Gita manages 50+ factory staff working across morning and night shifts. Her priorities are fast worker registration, airtight cash advance (पेश्की) recovery, and equitable compensation calculation without spreadsheet errors.
+
+| Callout | Control Element | Functional Purpose | Operator SOP / Action |
+|:---:|:---|:---|:---|
+| `[1]` | **+ Add Worker Modal** | Registers new manufacturing personnel. | Enter Worker Code (`EMP-XXX`), Name, Join Date, Pay Type (`SALARY` vs `WAGE`), and Base Rate. |
+| `[2]` | **Worker Pay Type Badge** | Distinguishes Monthly Salaried from Daily/Hourly Wage staff. | Blue `SALARY` badge: fixed monthly payout. Amber `WAGE` badge: rate-per-hour calculation. |
+| `[3]` | **Active / Inactive Switch** | Toggles worker deployment status. | Toggle `Inactive` when worker takes extended leave or resigns to exclude from active shift logs. |
+| `[4]` | **Advance (पेश्की) Balance** | Real-time outstanding cash advance ($\sum \text{Issued} - \sum \text{Recovered}$). | Click `+ Advance` to disburse cash; system blocks over-advancing beyond monthly base rate. |
+| `[5]` | **Hours & Overtime Tally** | Monthly Total Working Hours (TWH) and Overtime (OT). | Logs regular hours and overtime; automatically computes statutory $1.5\times$ rate for overtime. |
+| `[6]` | **Settle Monthly Payroll** | Computes net salary and settles advance. | Auto-deducts outstanding advance from gross earnings: $\text{Net Payout} = \text{Gross} - \text{Advance}$. |
+
+### Standard Operating Procedure (SOP): Gita's Monthly Payroll Settlement
+1. **Advance Logging:** When an employee requests mid-month cash, click **+ Advance**, enter NPR amount (e.g., `Rs. 5,000`), and select Disbursed Date. The worker's card immediately updates its outstanding balance.
+2. **Shift Hours Logging:** At month-end, click **Log Hours**, enter Total Working Hours (e.g., `208 hrs`) and Overtime Hours (e.g., `24 hrs`).
+3. **Statutory Overtime Calculation:** The system computes overtime pay at $1.5\times$ standard hourly rate ($\text{Hourly Rate} = \text{Base} / 208$).
+4. **Final Payroll Settlement:** Click **Settle Payroll**. The system calculates gross pay, subtracts outstanding advances to the exact paisa, marks advance records as recovered, and prints the disbursement voucher.
+
+---
+
+## Chapter 11: Product Media Gallery & Wholesale Line Sheets (Point 5)
+
+![Screen 15 - Product Media Gallery & Lightbox](./screenshots/screen_15_product_gallery.png)
+
+### Persona Context: Sita (Warehouse Dispatcher & Line Sheet Coordinator)
+Sita and commercial sales reps coordinate wholesale shipments with footwear distributors across Pokhara, Narayangarh, Biratnagar, and the Kathmandu Valley. Distributors frequently request high-resolution product photographs to verify stitching, sole tread patterns, and colorways before placing 50-carton bulk purchase orders.
+
+| Callout | Control Element | Functional Purpose | Operator SOP / Action |
+|:---:|:---|:---|:---|
+| `[1]` | **+ Upload Image Modal** | Uploads high-res product photos ($\le 5\text{MB}$). | Select SKU from dropdown, choose JPEG/PNG/WEBP photo, and click Save. |
+| `[2]` | **Product Code Tag** | Direct linkage to master catalog SKU. | Ensures photos match exact physical inventory records and carton labels. |
+| `[3]` | **Lightbox Preview** | Full-screen high-contrast inspection. | Click any thumbnail to expand image for sole texture and stitch verification. |
+| `[4]` | **Download Button** | Direct binary asset download to local device. | Click `Download` to save photo directly to phone gallery or laptop for WhatsApp line sheet distribution. |
+| `[5]` | **Auditor Lockdown** | Read-only enforcement under `viewer_demo`. | Upload and Delete controls are stripped from the DOM; external auditors cannot manipulate catalog media. |
+
+### Standard Operating Procedure (SOP): Generating WhatsApp Wholesale Line Sheets
+1. Open the **Product Gallery** tab.
+2. Locate the target footwear model using the SKU search bar.
+3. Click the **Download** button on the card. The image saves instantly with the filename `[SKU]_[ModelName].jpg`.
+4. Attach the downloaded image directly into WhatsApp Web or email alongside the current Paris Points availability curve from the Stock Ledger.
+
+---
+
+## Chapter 12: Production Ratio Analytics & Efficiency Graphs (Points 6 & 9)
+
+![Screen 16 - Production Ratio Analytics & Dual-Axis Graph](./screenshots/screen_16_production_analytics.png)
+
+### Persona Context: Dambar Shrestha (General Manager & Line Superintendent)
+Dambar inspects plant efficiency daily to detect line slowdowns, evaluate labor output, and optimize workforce allocation between the cutting, stitching, and sole-bonding conveyor lines.
+
+| Callout | Control Element | Factory Metric | Analytical Significance |
+|:---:|:---|:---|:---|
+| `[1]` | **Timeframe Filter** | Horizon selector: `1 Month`, `3 Months`, `1 Year`. | Toggles between short-term shift troubleshooting and multi-quarter seasonal demand planning. |
+| `[2]` | **Total Pairs Produced (Bars)** | Navy vertical bars ($\text{Pairs} / \text{Day}$). | Displays gross finished footwear output from daily assembly line runs. |
+| `[3]` | **Pairs / Worker Ratio (Line)** | Emerald trajectory line ($\text{Pairs} / \text{Worker}$). | Primary factory productivity metric. A dip below $8.0\text{ pairs/worker}$ signals a machine jam or high absenteeism. |
+| `[4]` | **Shift Log Audit Worklist** | Daily table of active workers, hours, and output. | Tabular breakdown showing Date, Shift Worker Count, Cumulative Shift Hours, and Output Efficiency. |
+| `[5]` | **+ Log Daily Shift Modal** | Floor supervisor shift submission. | Supervisors enter daily active headcount and operating hours at the end of each shift. |
+
+### Mathematical Formulae & Productivity Benchmarks
+$$\text{Worker Productivity Ratio} = \frac{\text{Total Finished Pairs Produced}}{\text{Active Shift Workers}}$$
+
+$$\text{Hourly Output Rate} = \frac{\text{Total Finished Pairs Produced}}{\text{Total Shift Working Hours}}$$
+
+- **Healthy Factory Benchmark:** $\ge 10.0\text{ pairs / worker / shift}$.
+- **Investigative Threshold:** $< 7.5\text{ pairs / worker / shift}$ triggers automatic supervisor notification to check sole-injection machines and raw material cutting delays.
+
+---
+
+## Chapter 13: Sales & Customer Leaderboards (Points 7 & 8)
+
+![Screen 17 - Sales & Customer Leaderboards](./screenshots/screen_17_leaderboards.png)
+
+### Commercial Intelligence Overview
+The Leaderboards module provides factory management with real-time clarity on which shoe articles generate the highest production velocity and which wholesale customers demonstrate the strongest commercial reliability.
+
+### 13.1 Top-Selling Footwear Models (Point 7)
+The Top-Selling Footwear section automatically ranks every active shoe model from highest to lowest by total pairs dispatched and cumulative revenue:
+
+| Callout | Element | Badge / Indicator | Strategic Value |
+|:---:|:---|:---|:---|
+| `[1]` | **#1 Best Seller** | 🥇 **Gold Podium Badge** | Factory flagship model. Requires continuous raw material safety stock. |
+| `[2]` | **#2 Runner-Up** | 🥈 **Silver Podium Badge** | High-velocity runner. Buffer minimum 100 cartons in warehouse. |
+| `[3]` | **#3 Volume Driver** | 🥉 **Bronze Podium Badge** | Core wholesale demand driver across regional dealers. |
+| `[4]` | **Dispatched Pairs Total** | Tabular pair counter. | Cumulative physical volume sold during the current fiscal year. |
+| `[5]` | **Gross Revenue (NPR)** | Integer-paisa revenue total. | Total sales turnover generated by this footwear article. |
+
+### 13.2 Top Customer Rankings & Reliability Scoring (Point 8)
+Wholesale distributors and regional stockists are ranked serially from highest to lowest commercial volume:
+
+| Callout | Element | Metric Tracked | Credit Evaluation Rule |
+|:---:|:---|:---|:---|
+| `[1]` | **Serial Ranking (#1 to #N)** | Overall commercial volume order. | Identifies tier-1 wholesale accounts eligible for volume discounts. |
+| `[2]` | **Customer Name & PAN** | Buyer identity and tax credentials. | Verifies Schedule-5 compliance and registered distributor branch. |
+| `[3]` | **Total Pairs Dispatched** | Cumulative footwear purchase volume. | Measures commercial throughput. |
+| `[4]` | **Total Billed Volume (NPR)** | Cumulative billed invoice turnover. | Measures financial contribution to factory revenue. |
+| `[5]` | **Payment Reliability Score (%)** | $\frac{\text{Total Payments Received}}{\text{Total Billed Value}} \times 100$ | **$\ge 90\%$ (Green):** Prime credit rating; eligible for 45-day terms.<br>**$75\%-89\%$ (Amber):** Standard 30-day terms.<br>**$< 75\%$ (Red):** Cash-on-delivery only; automatic credit freeze. |
+
+---
+
+## Chapter 14: 10-Second Quick Troubleshooting Guide
 
 | Problem | Root Cause | Immediate Solution |
 |:---|:---|:---|
 | **"504 Gateway Timeout" or slow initial load** | Free backend server on Render goes to sleep after inactivity. | Wait 30 seconds for the backend to wake up, then press <kbd>Ctrl+F5</kbd>. |
 | **"Insufficient stock in Size 41" on invoice** | Zero-Floor Protection: Selling more pairs than exist on warehouse racks. | Check Stock Card. Verify physical pairs on shelf. Ensure production batch was entered. |
 | **Customer has red [HOLD] badge** | Credit Limit Lockdown: Unpaid balance exceeds approved ceiling. | Collect bank payment. Once accountant records receipt, hold clears automatically. |
+| **Worker advance button disabled** | Advance limit protection: Requested amount exceeds monthly wage ceiling. | Review worker card; clear previous advance or settle current pay cycle first. |
 | **Orange Status Badge: "अफलाइन (Offline)"** | Factory Wi-Fi or router connection dropped. | Continue working! Batches save to browser IndexedDB and sync automatically when internet returns. |
 | **Printer cuts off right invoice margin** | Browser print margins misconfigured. | In Chrome print dialog, set Paper Size to `A4`, Margins to `Default`, and check `Background Graphics`. |
 
@@ -239,3 +371,4 @@ When logging in as `viewer_demo`:
 ---
 *LIVO Footwear ERP • Standard Operating Procedure & Client Implementation Playbook*  
 *Quality & Systems Engineering Division • Livo Group of Industries Pvt. Ltd.*
+
