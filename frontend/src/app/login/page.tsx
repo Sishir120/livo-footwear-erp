@@ -1,13 +1,15 @@
 "use client";
 
 import React, { useState } from "react";
-import { Building2, Lock, UserCheck, ShieldAlert, Info } from "lucide-react";
+import { Building2, Lock, UserCheck, ShieldAlert, Info, Eye, EyeOff } from "lucide-react";
 import { LegalModal } from "@/components/LegalModal";
 import { useLocale } from "@/context/LocaleContext";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("admin_demo");
   const [password, setPassword] = useState("LivoAdmin2026!");
+  const [showPassword, setShowPassword] = useState(false);
+  const [clipboardNotice, setClipboardNotice] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginSubmitting, setLoginSubmitting] = useState(false);
   const [legalModal, setLegalModal] = useState<"privacy" | "terms" | null>(null);
@@ -133,8 +135,63 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label style={{ fontSize: "12px", color: "#334155", fontWeight: "600", display: "block", marginBottom: "5px" }}>{t("password")}</label>
-            <input type="password" className="input-field" value={password} onChange={(e) => setPassword(e.target.value)} required aria-label={t("password")} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "5px" }}>
+              <label style={{ fontSize: "12px", color: "#334155", fontWeight: "600" }}>{t("password")}</label>
+              <span style={{ fontSize: "11px", color: "#64748B" }}>Protected Field</span>
+            </div>
+            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                className="input-field"
+                style={{ paddingRight: "42px" }}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onCopy={(e) => {
+                  e.preventDefault();
+                  setClipboardNotice("Clipboard copying is disabled for password security.");
+                  setTimeout(() => setClipboardNotice(""), 3500);
+                }}
+                onCut={(e) => {
+                  e.preventDefault();
+                  setClipboardNotice("Clipboard cutting is disabled for password security.");
+                  setTimeout(() => setClipboardNotice(""), 3500);
+                }}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  setClipboardNotice("Direct paste is disabled for credential protection. Please type or use Presets.");
+                  setTimeout(() => setClipboardNotice(""), 3500);
+                }}
+                autoComplete="current-password"
+                required
+                aria-label={t("password")}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                title={showPassword ? "Hide password" : "Show password"}
+                style={{
+                  position: "absolute",
+                  right: "6px",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "6px",
+                  color: "#64748B",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "4px"
+                }}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            {clipboardNotice && (
+              <div style={{ fontSize: "11px", color: "#B45309", marginTop: "4px", display: "flex", alignItems: "center", gap: "5px", background: "#FEF3C7", padding: "4px 8px", borderRadius: "3px" }}>
+                <ShieldAlert size={12} color="#B45309" /> {clipboardNotice}
+              </div>
+            )}
           </div>
 
           <button type="submit" className="btn-primary" style={{ width: "100%", justifyContent: "center", padding: "10px", marginTop: "6px" }} disabled={loginSubmitting}>
@@ -146,10 +203,10 @@ export default function LoginPage() {
         <div style={{ marginTop: "20px", paddingTop: "18px", borderTop: "1px solid #CBD5E1", textAlign: "center" }}>
           <div style={{ fontSize: "11.5px", color: "#475569", marginBottom: "8px" }}>Role Access Preset:</div>
           <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
-            <button className="btn-secondary" style={{ fontSize: "12px", padding: "5px 12px" }} onClick={() => quickFillLogin("admin")}>
+            <button type="button" className="btn-secondary" style={{ fontSize: "12px", padding: "5px 12px" }} onClick={() => quickFillLogin("admin")}>
               <UserCheck size={12} color="#047857" /> Admin Operator
             </button>
-            <button className="btn-secondary" style={{ fontSize: "12px", padding: "5px 12px" }} onClick={() => quickFillLogin("viewer")}>
+            <button type="button" className="btn-secondary" style={{ fontSize: "12px", padding: "5px 12px" }} onClick={() => quickFillLogin("viewer")}>
               <UserCheck size={12} color="#1E40AF" /> Auditor Viewer
             </button>
           </div>

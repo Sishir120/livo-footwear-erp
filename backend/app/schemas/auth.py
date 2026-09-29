@@ -14,7 +14,7 @@ class UserResponse(BaseModel):
     email: Optional[str] = None
     role: str
     active: bool
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

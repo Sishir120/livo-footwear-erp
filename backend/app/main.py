@@ -51,6 +51,34 @@ async def lifespan(app: FastAPI):
                 db.commit()
                 db.refresh(company)
 
+            # Seed admin_demo user (Executive Admin / Operator)
+            admin_demo = db.query(User).filter(User.username == "admin_demo").first()
+            if not admin_demo:
+                admin_demo = User(
+                    company_id=company.id,
+                    name="LIVO System Administrator",
+                    username="admin_demo",
+                    email="admin@livogroup.com",
+                    password_hash=get_password_hash("LivoAdmin2026!"),
+                    role="admin",
+                    active=True
+                )
+                db.add(admin_demo)
+
+            # Seed viewer_demo user (Compliance Auditor)
+            viewer_demo = db.query(User).filter(User.username == "viewer_demo").first()
+            if not viewer_demo:
+                viewer_demo = User(
+                    company_id=company.id,
+                    name="LIVO Compliance Auditor",
+                    username="viewer_demo",
+                    email="auditor@livogroup.com",
+                    password_hash=get_password_hash("LivoViewer2026!"),
+                    role="viewer",
+                    active=True
+                )
+                db.add(viewer_demo)
+
             # Seed editor user
             editor = db.query(User).filter(User.username == "editor_admin").first()
             if not editor:
