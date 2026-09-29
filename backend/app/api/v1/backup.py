@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from app.api.deps import get_current_user, require_editor
+from app.api.deps import get_current_user, require_admin
 from app.models.user import User
 from app.services.backup_service import run_database_backup, get_latest_backup_status
 
@@ -11,7 +11,7 @@ def get_backup_status(current_user: User = Depends(get_current_user)):
     return get_latest_backup_status()
 
 @router.post("/run")
-def trigger_backup(current_user: User = Depends(require_editor)):
+def trigger_backup(current_user: User = Depends(require_admin)):
     """Triggers an immediate database backup (pg_dump + cloud upload if configured)."""
     result = run_database_backup()
     if result.get("status") == "failed":

@@ -481,3 +481,78 @@ def test_boundary_integers_and_negative_quantities(setup_audit_env):
         })
         assert res5.status_code == 422
 
+
+def test_owasp_security_hardening(setup_audit_env):
+    """
+    Automated verification of strategic security patches:
+    1. HTTP Security Response Headers (X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy).
+    2. Broken Function Level Authorization: /diagnostics/download restricted strictly to admin.
+    3. Supervisor bypass tokens: trivial strings like 'SUPERVISOR' are rejected.
+    """
+    token_viewer = setup_audit_env["tokens"]["t1_viewer"]
+    token_editor = setup_audit_env["tokens"]["t1_editor"]
+
+    # Seed an admin user for Tenant 1
+    db = SessionLocal()
+    c1_id = setup_audit_env["c1_id"]
+    admin = db.query(User).filter(User.username == "t1_admin_audit").first()
+    if not admin:
+        admin = User(
+            company_id=c1_id,
+            name="Tenant 1 Admin",
+            username="t1_admin_audit",
+            password_hash=get_password_hash("AuditAdminPass123!"),
+            role="admin",
+            active=True
+        )
+        db.add(admin)
+        db.commit()
+        db.refresh(admin)
+    token_admin = create_access_token({"user_id": admin.id, "company_id": c1_id, "role": "admin"})
+
+    prod = db.query(Product).filter(Product.company_id == c1_id).first()
+    if not prod:
+        prod = Product(company_id=c1_id, code="SEC-AUDIT-01", name="Security Audit Shoe", size="40")
+        db.add(prod)
+        db.commit()
+        db.refresh(prod)
+    prod_id = prod.id
+    db.close()
+
+    # 1. Verify HTTP Security Response Headers on any API response
+    with TestClient(app) as client:
+        res = client.get("/api/v1/health")
+        assert res.status_code == 200
+        assert res.headers.get("X-Content-Type-Options") == "nosniff"
+        assert res.headers.get("X-Frame-Options") == "DENY"
+        assert "strict-origin-when-cross-origin" in res.headers.get("Referrer-Policy", "")
+        assert "geolocation=()" in res.headers.get("Permissions-Policy", "")
+        # Check health response does not leak internal DB exception
+        assert "unhealthy:" not in res.json().get("database", "")
+
+    # 2. Verify /diagnostics/download RBAC: rejected for viewer & editor, allowed for admin
+    with TestClient(app, cookies={COOKIE_NAME: token_viewer}) as client:
+        res_v = client.get("/api/v1/diagnostics/download")
+        assert res_v.status_code == 403
+
+    with TestClient(app, cookies={COOKIE_NAME: token_editor}) as client:
+        res_e = client.get("/api/v1/diagnostics/download")
+        assert res_e.status_code == 403
+
+    with TestClient(app, cookies={COOKIE_NAME: token_admin}) as client:
+        res_a = client.get("/api/v1/diagnostics/download")
+        assert res_a.status_code == 200
+        assert res_a.headers["content-type"] == "application/zip"
+
+    # 3. Verify trivial supervisor bypass tokens are rejected for negative adjustments
+    with TestClient(app, cookies={COOKIE_NAME: token_editor}) as client:
+        res_token = client.post("/api/v1/stock/adjustments", json={
+            "product_id": prod_id,
+            "warehouse_id": 1,
+            "size": "40",
+            "quantity_delta": -1.0,
+            "reason_code": "DAMAGED",
+            "supervisor_token": "SUPERVISOR"
+        })
+        assert res_token.status_code == 403
+

@@ -9,6 +9,7 @@ from app.models.user import User
 from app.models.stock import Product, Warehouse, StockMovement
 from app.models.stock_snapshot import StockSnapshot
 from app.db.repository import TenantRepository
+from app.config import settings
 
 router = APIRouter(prefix="/stock", tags=["Stock Ledger"])
 
@@ -546,7 +547,9 @@ def create_stock_adjustment(
         if not is_recount and current_user.role != "admin":
             supervisor_valid = False
             if payload.supervisor_token:
-                if payload.supervisor_token in ("SUPERVISOR_SECRET_2026", "SUPERVISOR_AUTH_2026", "SUPERVISOR"):
+                import secrets
+                configured_token = getattr(settings, "SUPERVISOR_AUTH_TOKEN", "SUPERVISOR_AUTH_2026")
+                if secrets.compare_digest(payload.supervisor_token, configured_token):
                     supervisor_valid = True
                 else:
                     from app.core.security import verify_password

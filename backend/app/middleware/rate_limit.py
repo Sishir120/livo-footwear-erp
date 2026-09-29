@@ -26,7 +26,13 @@ class BasicRateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Rate limit only authentication/login endpoints
         if request.url.path.endswith("/auth/login"):
-            client_ip = request.client.host if request.client else "127.0.0.1"
+            forwarded = request.headers.get("X-Forwarded-For")
+            if forwarded:
+                client_ip = forwarded.split(",")[0].strip()
+            elif request.headers.get("X-Real-IP"):
+                client_ip = request.headers.get("X-Real-IP").strip()
+            else:
+                client_ip = request.client.host if request.client else "127.0.0.1"
             now = time.time()
             
             # Clean up old timestamps

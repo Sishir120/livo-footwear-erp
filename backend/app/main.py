@@ -115,8 +115,10 @@ app.add_exception_handler(Exception, global_exception_handler)
 app.add_exception_handler(HTTPException, http_exception_handler)
 
 from app.middleware.correlation import CorrelationIdMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
 
 # Middlewares
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(AuditLogMiddleware)
 app.add_middleware(BasicRateLimitMiddleware)
@@ -128,7 +130,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Request-ID"],
+    expose_headers=["X-Request-ID", "X-Correlation-ID"],
 )
 
 # Include Versioned Routers
