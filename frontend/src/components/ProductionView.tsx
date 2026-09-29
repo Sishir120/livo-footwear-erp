@@ -17,10 +17,12 @@ import { exportToCSV } from "../utils/csvExport";
 import { ThermalLabelModal, BoxLabelData } from "./ThermalLabelModal";
 import { apiFetch } from "../lib/api";
 import { saveDraft, cacheCatalogItems, getCachedCatalog } from "../lib/offlineDb";
+import { useLocale } from "../context/LocaleContext";
 
 const SIZES = [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43] as const;
 
 export function ProductionView({ userRole }: { userRole?: string }) {
+  const { locale } = useLocale();
   const [products, setProducts] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,8 +35,8 @@ export function ProductionView({ userRole }: { userRole?: string }) {
   });
   const [batchPrefix, setBatchPrefix] = useState("BATCH");
   const [selectedModelKey, setSelectedModelKey] = useState<string>("");
-  const [productionLine, setProductionLine] = useState("Line 1 (मुख्य एसेम्बली)");
-  const [productionShift, setProductionShift] = useState("Shift 1 (बिहानी 06:00 - 14:00)");
+  const [productionLine, setProductionLine] = useState("Line 1");
+  const [productionShift, setProductionShift] = useState("Shift 1");
   const [workerCount, setWorkerCount] = useState("4");
   const [dateAd, setDateAd] = useState(new Date().toISOString().split("T")[0]);
   const [dateBs, setDateBs] = useState("2083-06-09");
@@ -269,7 +271,11 @@ export function ProductionView({ userRole }: { userRole?: string }) {
     if (userRole !== "editor" || submitting) return;
 
     if (hasInvalidSizeInput) {
-      setErrorMessage("कृपया पूर्ण जोर संख्या मात्र राख्नुहोस् (Whole pairs only)");
+      setErrorMessage(
+        locale === "en"
+          ? "Whole pairs only"
+          : "कृपया पूर्ण जोर संख्या मात्र राख्नुहोस् (Whole pairs only)"
+      );
       return;
     }
 
@@ -345,7 +351,11 @@ export function ProductionView({ userRole }: { userRole?: string }) {
           const resData = await res.json();
           recordedBatchNumber = resData.batch_number || currentBatchNumber;
           syncSuccess = true;
-          setSuccessFeedback(`ब्याच सुरक्षित भयो (Batch ${recordedBatchNumber} Recorded)`);
+          setSuccessFeedback(
+            locale === "en"
+              ? `Batch saved successfully (${recordedBatchNumber})`
+              : `ब्याच सुरक्षित भयो (Batch ${recordedBatchNumber} Saved)`
+          );
           setTimeout(() => setSuccessFeedback(""), 2000);
         } else {
           const err = await res.json().catch(() => ({}));
@@ -376,7 +386,11 @@ export function ProductionView({ userRole }: { userRole?: string }) {
         });
 
         // Explicit non-blocking offline floor notice per prompt
-        setSuccessFeedback("इन्टरनेट विच्छेद: ब्याच स्थानीय रूपमा सुरक्षित भयो (Draft saved on device; not yet in live stock).");
+        setSuccessFeedback(
+          locale === "en"
+            ? "Network offline: Batch saved locally on device (pending live sync)."
+            : "इन्टरनेट विच्छेद: ब्याच स्थानीय रूपमा सुरक्षित भयो (Draft saved on device; not yet in live stock)."
+        );
         setTimeout(() => setSuccessFeedback(""), 4500);
       }
 
@@ -412,7 +426,11 @@ export function ProductionView({ userRole }: { userRole?: string }) {
       }
     } catch (e: any) {
       const errMsg = e?.message || "Error saving production batch";
-      setErrorMessage(`${errMsg} — पुनः प्रयास गर्न Ctrl+Enter थिच्नुहोस् (Press Ctrl+Enter to retry)`);
+      setErrorMessage(
+        locale === "en"
+          ? `${errMsg} — Press Ctrl+Enter to retry`
+          : `${errMsg} — पुनः प्रयास गर्न Ctrl+Enter थिच्नुहोस् (Press Ctrl+Enter to retry)`
+      );
     } finally {
       setSubmitting(false);
     }
@@ -597,9 +615,9 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                     cursor: "pointer"
                   }}
                 >
-                  <option value="Line 1">Line 1 (मुख्य)</option>
-                  <option value="Line 2">Line 2 (दोस्रो)</option>
-                  <option value="Line 3">Line 3 (सोल)</option>
+                  <option value="Line 1">{locale === "en" ? "Line 1" : "लाइन १ (Line 1 - मुख्य)"}</option>
+                  <option value="Line 2">{locale === "en" ? "Line 2" : "लाइन २ (Line 2 - दोस्रो)"}</option>
+                  <option value="Line 3">{locale === "en" ? "Line 3" : "लाइन ३ (Line 3 - सोल)"}</option>
                 </select>
               </div>
 
@@ -621,9 +639,9 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                     cursor: "pointer"
                   }}
                 >
-                  <option value="Shift 1">Shift 1 (बिहानी)</option>
-                  <option value="Shift 2">Shift 2 (दिउँसो)</option>
-                  <option value="Shift 3">Shift 3 (रात्री)</option>
+                  <option value="Shift 1">{locale === "en" ? "Shift 1" : "शिफ्ट १ (Shift 1 - बिहानी)"}</option>
+                  <option value="Shift 2">{locale === "en" ? "Shift 2" : "शिफ्ट २ (Shift 2 - दिउँसो)"}</option>
+                  <option value="Shift 3">{locale === "en" ? "Shift 3" : "शिफ्ट ३ (Shift 3 - रात्री)"}</option>
                 </select>
               </div>
 
@@ -679,7 +697,7 @@ export function ProductionView({ userRole }: { userRole?: string }) {
           {hasInvalidSizeInput && (
             <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #EF4444", borderRadius: "3px", padding: "6px 12px", color: "#991B1B", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}>
               <AlertCircle size={14} color="#DC2626" />
-              <span>कृपया पूर्ण जोर संख्या मात्र राख्नुहोस् (Whole pairs only)</span>
+              <span>{locale === "en" ? "Whole pairs only" : "कृपया पूर्ण जोर संख्या मात्र राख्नुहोस् (Whole pairs only)"}</span>
             </div>
           )}
 
@@ -689,7 +707,7 @@ export function ProductionView({ userRole }: { userRole?: string }) {
               <thead>
                 <tr style={{ background: "#F1F5F9", height: "30px" }}>
                   <th style={{ border: "1px solid #CBD5E1", padding: "4px 8px", fontSize: "11px", fontWeight: "700", color: "#475569", width: "150px", textAlign: "left" }}>
-                    जुत्ता साइज (Sizes 32–43)
+                    {locale === "en" ? "Shoe Sizes (32–43)" : "जुत्ता साइज (Sizes 32–43)"}
                   </th>
                   {SIZES.map((sz) => (
                     <th key={sz} style={{ border: "1px solid #CBD5E1", padding: "4px 2px", fontSize: "12px", fontWeight: "700", color: "#0F172A", textAlign: "center", minWidth: "48px" }}>
@@ -779,10 +797,10 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                               animation: "spin 0.6s linear infinite"
                             }}
                           />
-                          <span>सुरक्षित गर्दै...</span>
+                          <span>{locale === "en" ? "Saving..." : "सुरक्षित गर्दै..."}</span>
                         </>
                       ) : (
-                        <>Commit <kbd style={{ fontFamily: "inherit", opacity: 0.85 }}>↵</kbd></>
+                        <>{locale === "en" ? "Commit" : "दाखिला"} <kbd style={{ fontFamily: "inherit", opacity: 0.85 }}>↵</kbd></>
                       )}
                     </button>
                   </td>

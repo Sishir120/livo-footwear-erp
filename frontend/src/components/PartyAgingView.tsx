@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { fromPaisa, toPaisa } from "@/lib/currency";
 import { PartyStatementModal } from "./PartyStatementModal";
+import { useLocale } from "@/context/LocaleContext";
 
 interface PartyAgingViewProps {
   userRole: string;
@@ -63,6 +64,7 @@ interface UnpaidInvoice {
 }
 
 export function PartyAgingView({ userRole }: PartyAgingViewProps) {
+  const { isNepali } = useLocale();
   const [loading, setLoading] = useState(true);
   const [asOfDate, setAsOfDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [parties, setParties] = useState<AgingParty[]>([]);
@@ -256,7 +258,7 @@ export function PartyAgingView({ userRole }: PartyAgingViewProps) {
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <h1 style={{ fontSize: "20px", fontWeight: "800", color: "#0F172A", margin: 0, letterSpacing: "-0.01em" }}>
-              Accounts Receivable Aging Subledger
+              {isNepali ? "पार्टी बाँकी तथा उमेरगत हिसाब (Party Aging Subledger)" : "Accounts Receivable Aging Subledger"}
             </h1>
             <span
               style={{
@@ -269,11 +271,13 @@ export function PartyAgingView({ userRole }: PartyAgingViewProps) {
                 borderRadius: "3px"
               }}
             >
-              SCHEDULE-5 AUDIT
+              {isNepali ? "अनुसूची-५ अडिट (SCHEDULE-5)" : "SCHEDULE-5 AUDIT"}
             </span>
           </div>
           <p style={{ fontSize: "12.5px", color: "#475569", marginTop: "3px", margin: 0 }}>
-            Party balances derived from append-only ledger entries with exact integer paisa arithmetic.
+            {isNepali
+              ? "अपरिवर्तनीय लेजर खाताबाट तयार गरिएको शुद्ध पैसामा आधारित हिसाब।"
+              : "Party balances derived from append-only ledger entries with exact integer paisa arithmetic."}
           </p>
         </div>
 
@@ -292,7 +296,7 @@ export function PartyAgingView({ userRole }: PartyAgingViewProps) {
             }}
           >
             <Calendar size={14} color="#64748B" />
-            <span style={{ fontSize: "12px", color: "#475569", fontWeight: "500" }}>As of:</span>
+            <span style={{ fontSize: "12px", color: "#475569", fontWeight: "500" }}>{isNepali ? "मिति:" : "As of:"}</span>
             <input
               type="date"
               value={asOfDate}
@@ -316,7 +320,7 @@ export function PartyAgingView({ userRole }: PartyAgingViewProps) {
             title="Refresh Aging Subledger"
           >
             <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
-            <span>Refresh</span>
+            <span>{isNepali ? "ताजा गर्नुहोस्" : "Refresh"}</span>
           </button>
 
           <button
@@ -350,7 +354,7 @@ export function PartyAgingView({ userRole }: PartyAgingViewProps) {
               }}
             >
               <Plus size={14} />
-              <span>+ Record Payment</span>
+              <span>{isNepali ? "+ भुक्तानी प्रविष्टि (+ Record Payment)" : "+ Record Payment"}</span>
             </button>
           )}
         </div>
@@ -368,78 +372,78 @@ export function PartyAgingView({ userRole }: PartyAgingViewProps) {
         {/* Total Receivables */}
         <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "4px solid #1E3A8A" }}>
           <div style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "#64748B" }}>
-            Total Outstanding
+            {isNepali ? "कुल बाँकी रकम (Total Due)" : "Total Outstanding"}
           </div>
           <div className="erp-num" style={{ fontSize: "20px", fontWeight: "800", color: "#0F172A", marginTop: "4px" }}>
             NPR {fromPaisa(summary?.total_due_paisa ?? 0)}
           </div>
           <div style={{ fontSize: "11px", color: "#64748B", marginTop: "3px" }}>
-            {parties.length} customer accounts
+            {parties.length} {isNepali ? "ग्राहक खाताहरू" : "customer accounts"}
           </div>
         </div>
 
         {/* Current (0-30d) */}
         <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "4px solid #047857" }}>
           <div style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "#64748B" }}>
-            Current (0–30 Days)
+            {isNepali ? "चालु (०–३० दिन) (Current)" : "Current (0–30 Days)"}
           </div>
           <div className="erp-num" style={{ fontSize: "20px", fontWeight: "800", color: "#047857", marginTop: "4px" }}>
             NPR {fromPaisa(summary?.current_paisa ?? 0)}
           </div>
           <div style={{ fontSize: "11px", color: "#64748B", marginTop: "3px" }}>
-            Within payment terms
+            {isNepali ? "नियमित म्यादभित्र" : "Within payment terms"}
           </div>
         </div>
 
         {/* 31-60d Overdue */}
         <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "4px solid #D97706" }}>
           <div style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "#64748B" }}>
-            31–60 Days Overdue
+            {isNepali ? "३१–६० दिन बाँकी (Overdue)" : "31–60 Days Overdue"}
           </div>
           <div className="erp-num" style={{ fontSize: "20px", fontWeight: "800", color: "#D97706", marginTop: "4px" }}>
             NPR {fromPaisa(summary?.days_31_60_paisa ?? 0)}
           </div>
           <div style={{ fontSize: "11px", color: "#64748B", marginTop: "3px" }}>
-            Payment follow-up stage
+            {isNepali ? "ताकेता चरण" : "Payment follow-up stage"}
           </div>
         </div>
 
         {/* 61-90d Overdue (Functional Warning Border #A16207) */}
         <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "4px solid #A16207" }}>
           <div style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "#A16207" }}>
-            61–90 Days Overdue
+            {isNepali ? "६१–९० दिन बाँकी (Overdue)" : "61–90 Days Overdue"}
           </div>
           <div className="erp-num" style={{ fontSize: "20px", fontWeight: "800", color: "#A16207", marginTop: "4px" }}>
             NPR {fromPaisa(summary?.days_61_90_paisa ?? 0)}
           </div>
           <div style={{ fontSize: "11px", color: "#64748B", marginTop: "3px" }}>
-            Credit-warning alert
+            {isNepali ? "कडा ताकेता आवश्यक" : "Credit-warning alert"}
           </div>
         </div>
 
         {/* >90d Overdue (Functional Danger Border #B91C1C) */}
         <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "4px solid #B91C1C" }}>
           <div style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "#B91C1C" }}>
-            &gt; 90 Days Overdue
+            {isNepali ? "> ९० दिन नाघेको (Default Risk)" : "> 90 Days Overdue"}
           </div>
           <div className="erp-num" style={{ fontSize: "20px", fontWeight: "800", color: "#B91C1C", marginTop: "4px" }}>
             NPR {fromPaisa(summary?.over_90_paisa ?? 0)}
           </div>
           <div style={{ fontSize: "11px", color: "#B91C1C", marginTop: "3px", fontWeight: "600" }}>
-            Critical default risk
+            {isNepali ? "जोखिमपूर्ण बाँकी" : "Critical default risk"}
           </div>
         </div>
 
         {/* Unallocated Credits */}
         <div className="glass-card" style={{ padding: "14px 16px", borderLeft: "4px solid #64748B" }}>
           <div style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "#64748B" }}>
-            Unallocated Credits
+            {isNepali ? "असमायोजित अग्रिम (Unallocated)" : "Unallocated Credits"}
           </div>
           <div className="erp-num" style={{ fontSize: "20px", fontWeight: "800", color: "#475569", marginTop: "4px" }}>
             NPR {fromPaisa(summary?.unallocated_credit_paisa ?? 0)}
           </div>
           <div style={{ fontSize: "11px", color: "#64748B", marginTop: "3px" }}>
-            Unsettled receipts
+            {isNepali ? "मिलान गर्न बाँकी" : "Unsettled receipts"}
           </div>
         </div>
       </div>
@@ -463,7 +467,7 @@ export function PartyAgingView({ userRole }: PartyAgingViewProps) {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search party by name, code or PAN..."
+            placeholder={isNepali ? "पार्टी नाम, कोड वा प्यान खोज्नुहोस्..." : "Search party by name, code or PAN..."}
             style={{
               border: "none",
               outline: "none",
@@ -483,7 +487,11 @@ export function PartyAgingView({ userRole }: PartyAgingViewProps) {
         </div>
 
         <div style={{ fontSize: "12px", color: "#64748B" }}>
-          Showing <strong>{filteredParties.length}</strong> of <strong>{parties.length}</strong> debtor accounts • Click row to open Statement
+          {isNepali ? (
+            <>देखाउँदै <strong>{filteredParties.length}</strong> मध्ये <strong>{parties.length}</strong> ग्राहक • खाता हेर्न क्लिक गर्नुहोस्</>
+          ) : (
+            <>Showing <strong>{filteredParties.length}</strong> of <strong>{parties.length}</strong> debtor accounts • Click row to open Statement</>
+          )}
         </div>
       </div>
 
@@ -492,7 +500,7 @@ export function PartyAgingView({ userRole }: PartyAgingViewProps) {
         {loading ? (
           <div style={{ padding: "50px", textAlign: "center", color: "#64748B" }}>
             <RefreshCw size={24} className="animate-spin" style={{ margin: "0 auto 8px" }} />
-            <div>Loading accounts receivable aging subledger...</div>
+            <div>{isNepali ? "पार्टी बाँकी खाता लोड हुँदैछ..." : "Loading accounts receivable aging subledger..."}</div>
           </div>
         ) : error ? (
           <div style={{ padding: "40px", color: "#B91C1C", textAlign: "center" }}>
@@ -501,21 +509,21 @@ export function PartyAgingView({ userRole }: PartyAgingViewProps) {
           </div>
         ) : filteredParties.length === 0 ? (
           <div style={{ padding: "40px", textAlign: "center", color: "#64748B" }}>
-            No debtor parties matching query.
+            {isNepali ? "कुनै ग्राहक भेटिएन।" : "No debtor parties matching query."}
           </div>
         ) : (
           <table className="table-dense" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
             <thead>
               <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #CBD5E1", color: "#475569", textAlign: "left" }}>
-                <th style={{ padding: "10px 14px" }}>Party / Client</th>
-                <th style={{ padding: "10px 14px", width: "110px" }}>Credit Limit</th>
-                <th style={{ padding: "10px 14px", textAlign: "right", width: "120px" }}>Current (0-30d)</th>
-                <th style={{ padding: "10px 14px", textAlign: "right", width: "110px" }}>31–60d</th>
-                <th style={{ padding: "10px 14px", textAlign: "right", width: "110px" }}>61–90d</th>
-                <th style={{ padding: "10px 14px", textAlign: "right", width: "110px" }}>&gt; 90d</th>
-                <th style={{ padding: "10px 14px", textAlign: "right", width: "130px" }}>Total Due</th>
-                <th style={{ padding: "10px 14px", textAlign: "right", width: "110px" }}>Unallocated</th>
-                <th style={{ padding: "10px 14px", textAlign: "center", width: "80px" }}>Actions</th>
+                <th style={{ padding: "10px 14px" }}>{isNepali ? "पार्टी / ग्राहक (Party / Client)" : "Party / Client"}</th>
+                <th style={{ padding: "10px 14px", width: "110px" }}>{isNepali ? "ऋण सीमा (Limit)" : "Credit Limit"}</th>
+                <th style={{ padding: "10px 14px", textAlign: "right", width: "120px" }}>{isNepali ? "चालु (०-३० दिन)" : "Current (0-30d)"}</th>
+                <th style={{ padding: "10px 14px", textAlign: "right", width: "110px" }}>{isNepali ? "३१–६० दिन" : "31–60d"}</th>
+                <th style={{ padding: "10px 14px", textAlign: "right", width: "110px" }}>{isNepali ? "६१–९० दिन" : "61–90d"}</th>
+                <th style={{ padding: "10px 14px", textAlign: "right", width: "110px" }}>{isNepali ? "> ९० दिन" : "> 90d"}</th>
+                <th style={{ padding: "10px 14px", textAlign: "right", width: "130px" }}>{isNepali ? "कुल बाँकी (Total Due)" : "Total Due"}</th>
+                <th style={{ padding: "10px 14px", textAlign: "right", width: "110px" }}>{isNepali ? "अग्रिम (Credit)" : "Unallocated"}</th>
+                <th style={{ padding: "10px 14px", textAlign: "center", width: "80px" }}>{isNepali ? "कार्य (Actions)" : "Actions"}</th>
               </tr>
             </thead>
             <tbody>
@@ -562,12 +570,12 @@ export function PartyAgingView({ userRole }: PartyAgingViewProps) {
                             }}
                             title="Net outstanding exceeds authorized credit limit"
                           >
-                            HOLD
+                            {isNepali ? "रोक (HOLD)" : "HOLD"}
                           </span>
                         )}
                       </div>
                       <div style={{ fontSize: "11px", color: "#64748B", display: "flex", gap: "8px", marginTop: "1px" }}>
-                        <span>Code: {party.client_code}</span>
+                        <span>{isNepali ? "कोड:" : "Code:"} {party.client_code}</span>
                         {party.pan_number && <span>PAN: {party.pan_number}</span>}
                         {party.phone && <span>Ph: {party.phone}</span>}
                       </div>
@@ -575,7 +583,7 @@ export function PartyAgingView({ userRole }: PartyAgingViewProps) {
 
                     {/* Credit Limit */}
                     <td className="erp-num" style={{ padding: "8px 14px", color: "#64748B" }}>
-                      {party.credit_limit_paisa > 0 ? fromPaisa(party.credit_limit_paisa) : "No Limit"}
+                      {party.credit_limit_paisa > 0 ? fromPaisa(party.credit_limit_paisa) : (isNepali ? "सीमा छैन" : "No Limit")}
                     </td>
 
                     {/* Current (0-30d) */}
@@ -642,7 +650,7 @@ export function PartyAgingView({ userRole }: PartyAgingViewProps) {
                         className="pagination-btn"
                         style={{ padding: "3px 8px", fontSize: "11px" }}
                       >
-                        Statement
+                        {isNepali ? "खाता (Statement)" : "Statement"}
                       </button>
                     </td>
                   </tr>

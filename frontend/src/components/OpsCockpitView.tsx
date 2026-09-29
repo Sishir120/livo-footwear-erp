@@ -17,6 +17,7 @@ import {
   Lock,
   Boxes
 } from "lucide-react";
+import { useLocale } from "../context/LocaleContext";
 
 interface TelemetryData {
   db_status: {
@@ -35,6 +36,7 @@ interface TelemetryData {
 }
 
 export function OpsCockpitView() {
+  const { locale } = useLocale();
   const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -92,7 +94,7 @@ export function OpsCockpitView() {
               <ShieldAlert size={18} />
             </span>
             <h1 style={{ fontSize: "20px", fontWeight: "700", color: "#0F172A", letterSpacing: "-0.01em" }}>
-              Ops Cockpit (सुपरभाइजर ककपिट)
+              {locale === "en" ? "Supervisor Ops Cockpit" : "Ops Cockpit (सुपरभाइजर ककपिट)"}
             </h1>
             <span style={{ fontSize: "11px", fontWeight: "700", background: "#EFF6FF", color: "#1E3A8A", border: "1px solid #BFDBFE", padding: "2px 8px", borderRadius: "3px" }}>
               ADMIN AUDIT
@@ -180,7 +182,9 @@ export function OpsCockpitView() {
           </div>
 
           <p style={{ fontSize: "12px", color: "#475569", marginBottom: "10px" }}>
-            २४ घण्टामा रोकिएका निकासी (Prevented oversells via signed advisory lock)
+            {locale === "en"
+              ? "24h Blocked Dispatches (Prevented oversells via signed advisory lock)"
+              : "२४ घण्टामा रोकिएका निकासी (Prevented oversells via signed advisory lock)"}
           </p>
 
           <div style={{ fontSize: "11px", color: "#64748B", borderTop: "1px solid #F1F5F9", paddingTop: "8px" }}>
@@ -223,7 +227,9 @@ export function OpsCockpitView() {
           </div>
 
           <p style={{ fontSize: "12px", color: "#475569", marginBottom: "10px" }}>
-            बक्यौता बढी भई रोकिएका (Orders blocked exceeding credit limit)
+            {locale === "en"
+              ? "Over-Limit Orders (Orders blocked exceeding credit limit)"
+              : "बक्यौता बढी भई रोकिएका (Orders blocked exceeding credit limit)"}
           </p>
 
           <div style={{ fontSize: "11px", color: "#64748B", borderTop: "1px solid #F1F5F9", paddingTop: "8px" }}>
@@ -266,7 +272,9 @@ export function OpsCockpitView() {
           </div>
 
           <p style={{ fontSize: "12px", color: "#475569", marginBottom: "10px" }}>
-            टुटेका कोर साइज ३९–४१ (Active footwear models missing core sizes)
+            {locale === "en"
+              ? "Active Broken Curves (Footwear models missing core sizes 39–41)"
+              : "टुटेका कोर साइज ३९–४१ (Active footwear models missing core sizes)"}
           </p>
 
           <div style={{ fontSize: "11px", color: "#64748B", borderTop: "1px solid #F1F5F9", paddingTop: "8px" }}>
@@ -309,7 +317,7 @@ export function OpsCockpitView() {
           </div>
 
           <p style={{ fontSize: "12px", color: "#475569", marginBottom: "10px" }}>
-            सिंक अवस्था र पुराना ड्राफ्टहरू (Oldest Draft: <span className="num-mono-bold">{formatAge(telemetry?.unsynced_draft_age_seconds ?? 0)}</span>)
+            {locale === "en" ? "Outbox Backlog & Sync Health" : "सिंक अवस्था र पुराना ड्राफ्टहरू"} (Oldest Draft: <span className="num-mono-bold">{formatAge(telemetry?.unsynced_draft_age_seconds ?? 0)}</span>)
           </p>
 
           <div style={{ fontSize: "11px", color: "#64748B", borderTop: "1px solid #F1F5F9", paddingTop: "8px" }}>

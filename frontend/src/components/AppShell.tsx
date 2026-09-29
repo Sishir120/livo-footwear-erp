@@ -213,7 +213,7 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
             {/* Bilingual Language Switcher (EN | नेपाली) */}
             <div
               role="group"
-              aria-label="Language selection / भाषा छनोट"
+              aria-label={locale === "en" ? "Language selection" : "भाषा छनोट (Language selection)"}
               style={{
                 display: "inline-flex",
                 background: "#F1F5F9",
@@ -225,7 +225,7 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
               <button
                 type="button"
                 onClick={() => setLocale("en")}
-                aria-label="Switch to English"
+                aria-label={locale === "en" ? "Selected English language" : "अंग्रेजी भाषामा बदल्नुहोस् (Switch to English)"}
                 style={{
                   padding: "4px 10px",
                   fontSize: "11px",
@@ -243,7 +243,7 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
               <button
                 type="button"
                 onClick={() => setLocale("ne")}
-                aria-label="नेपाली भाषामा बदल्नुहोस्"
+                aria-label={locale === "en" ? "Switch to Nepali language" : "नेपाली भाषामा बदल्नुहोस्"}
                 style={{
                   padding: "4px 10px",
                   fontSize: "11px",

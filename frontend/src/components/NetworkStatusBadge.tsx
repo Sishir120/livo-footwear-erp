@@ -18,8 +18,10 @@ import {
   drainPendingProductionDrafts,
   ProductionDraft
 } from "@/lib/offlineDb";
+import { useLocale } from "../context/LocaleContext";
 
 export function NetworkStatusBadge() {
+  const { locale } = useLocale();
   const [isOnline, setIsOnline] = useState(true);
   const [draftStats, setDraftStats] = useState({ pending: 0, rejected: 0, syncing: 0 });
   const [syncingProgress, setSyncingProgress] = useState<{ current: number; total: number } | null>(null);
@@ -122,36 +124,50 @@ export function NetworkStatusBadge() {
   let badgeBorder = "#86EFAC";
   let badgeText = "#166534";
   let badgeIcon = <Wifi size={13} color="#166534" />;
-  let badgeLabel = "अनलाइन (Online)";
+  let badgeLabel = locale === "en" ? "Online" : "अनलाइन (Online)";
 
   if (!isOnline) {
     badgeBg = "#FEF3C7";
     badgeBorder = "#FCD34D";
     badgeText = "#92400E";
     badgeIcon = <WifiOff size={13} color="#92400E" />;
-    badgeLabel = totalQueue > 0
-      ? `अफलाइन (Offline — ${toNeDigits(totalQueue)} ब्याच सुरक्षित)`
-      : "अफलाइन (Offline)";
+    if (locale === "en") {
+      badgeLabel = totalQueue > 0 ? `Offline (${totalQueue} batches stored)` : "Offline";
+    } else {
+      badgeLabel = totalQueue > 0
+        ? `अफलाइन (Offline — ${toNeDigits(totalQueue)} ब्याच सुरक्षित)`
+        : "अफलाइन (Offline)";
+    }
   } else if (hasConflicts) {
     badgeBg = "#FEE2E2";
     badgeBorder = "#FCA5A5";
     badgeText = "#991B1B";
     badgeIcon = <AlertTriangle size={13} color="#991B1B" />;
-    badgeLabel = `सिंक समस्या (Sync conflict — ${toNeDigits(draftStats.rejected)} ब्याच समीक्षा आवश्यक)`;
+    badgeLabel = locale === "en"
+      ? `Sync conflict (${draftStats.rejected} batches require review)`
+      : `सिंक समस्या (Sync conflict — ${toNeDigits(draftStats.rejected)} ब्याच समीक्षा आवश्यक)`;
   } else if (isSyncing) {
     badgeBg = "#DBEAFE";
     badgeBorder = "#93C5FD";
     badgeText = "#1E40AF";
     badgeIcon = <RefreshCw size={13} className="animate-spin" color="#1E40AF" />;
-    badgeLabel = syncingProgress
-      ? `सिंक हुँदै... (Syncing ${syncingProgress.current}/${syncingProgress.total})`
-      : "सिंक हुँदै... (Syncing queue)";
+    if (locale === "en") {
+      badgeLabel = syncingProgress
+        ? `Syncing... (${syncingProgress.current}/${syncingProgress.total})`
+        : "Syncing queue...";
+    } else {
+      badgeLabel = syncingProgress
+        ? `सिंक हुँदै... (Syncing ${syncingProgress.current}/${syncingProgress.total})`
+        : "सिंक हुँदै... (Syncing queue)";
+    }
   } else if (totalQueue > 0) {
     badgeBg = "#FEF3C7";
     badgeBorder = "#FCD34D";
     badgeText = "#92400E";
     badgeIcon = <RefreshCw size={13} color="#92400E" />;
-    badgeLabel = `${toNeDigits(totalQueue)} ब्याच सिंक पर्खाइमा (Queued)`;
+    badgeLabel = locale === "en"
+      ? `${totalQueue} batches queued`
+      : `${toNeDigits(totalQueue)} ब्याच सिंक पर्खाइमा (Queued)`;
   }
 
   return (

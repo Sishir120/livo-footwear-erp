@@ -17,6 +17,7 @@ import {
   Warehouse as WarehouseIcon,
   RefreshCw
 } from "lucide-react";
+import { useLocale } from "../context/LocaleContext";
 
 interface StockMovementItem {
   id: number;
@@ -67,6 +68,7 @@ interface StockCardModalProps {
 const PARIS_POINTS = [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43];
 
 export function StockCardModal({ product, userRole, onClose, onStockChanged }: StockCardModalProps) {
+  const { locale } = useLocale();
   const [movements, setMovements] = useState<StockMovementItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -206,7 +208,7 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
               whiteSpace: "nowrap"
             }}
           >
-            [उत्पादन दाखिला]
+            {locale === "en" ? "[Production In]" : "[उत्पादन दाखिला]"}
           </span>
         );
       case "SALES_OUT":
@@ -225,7 +227,7 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
               whiteSpace: "nowrap"
             }}
           >
-            [बिक्री निकासी]
+            {locale === "en" ? "[Sales Out]" : "[बिक्री निकासी]"}
           </span>
         );
       case "ADJUSTMENT_IN":
@@ -246,7 +248,7 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
               whiteSpace: "nowrap"
             }}
           >
-            [स्टक मिलान]
+            {locale === "en" ? "[Stock Adjustment]" : "[स्टक मिलान]"}
           </span>
         );
       case "VOID_REVERSAL":
@@ -265,7 +267,7 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
               whiteSpace: "nowrap"
             }}
           >
-            [रद्द फिर्ता]
+            {locale === "en" ? "[Void Reversal]" : "[रद्द फिर्ता]"}
           </span>
         );
       default:
@@ -374,10 +376,10 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
                   </span>
                 </div>
                 <div style={{ fontSize: "12px", color: "#475569", marginTop: "2px", display: "flex", gap: "12px" }}>
-                  <span>वर्ग (Category): <strong>{product.category || "Footwear"}</strong></span>
-                  <span>रंग (Color): <strong>{product.color || "Standard"}</strong></span>
-                  <span>मूल्य (Price): <strong>Rs. {product.unit_price ? product.unit_price.toLocaleString() : "0"}</strong></span>
-                  <span>वेयरहाउस (Warehouse): <strong>Main Finished Warehouse (WH-MAIN)</strong></span>
+                  <span>{locale === "en" ? "Category:" : "वर्ग (Category):"} <strong>{product.category || "Footwear"}</strong></span>
+                  <span>{locale === "en" ? "Color:" : "रंग (Color):"} <strong>{product.color || "Standard"}</strong></span>
+                  <span>{locale === "en" ? "Price:" : "मूल्य (Price):"} <strong>Rs. {product.unit_price ? product.unit_price.toLocaleString() : "0"}</strong></span>
+                  <span>{locale === "en" ? "Warehouse:" : "वेयरहाउस (Warehouse):"} <strong>Main Finished Warehouse (WH-MAIN)</strong></span>
                 </div>
               </div>
             </div>
@@ -393,10 +395,10 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
                 }}
               >
                 <div style={{ fontSize: "10px", fontWeight: "700", color: "#475569", textTransform: "uppercase" }}>
-                  कुल मौज्दात (Total On-Hand)
+                  {locale === "en" ? "Total On-Hand" : "कुल मौज्दात (Total On-Hand)"}
                 </div>
                 <div style={{ fontSize: "18px", fontWeight: "700", color: "#1E3A8A" }} className="num-mono-bold">
-                  {totalPairsAcrossCurve.toLocaleString()} <span style={{ fontSize: "12px", fontWeight: "400" }}>जोर (pairs)</span>
+                  {totalPairsAcrossCurve.toLocaleString()} <span style={{ fontSize: "12px", fontWeight: "400" }}>{locale === "en" ? "pairs" : "जोर (pairs)"}</span>
                 </div>
               </div>
               <button
@@ -430,10 +432,10 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
               <div style={{ fontSize: "11px", fontWeight: "700", color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                पेरिस पोइन्ट साइज मौज्दात वक्र (Paris Points 32–43 Live Curve)
+                {locale === "en" ? "Paris Points (32–43) Live Stock Curve" : "पेरिस पोइन्ट साइज मौज्दात वक्र (Paris Points 32–43 Live Curve)"}
               </div>
               <div style={{ fontSize: "11px", color: "#64748B" }}>
-                कुनै साइज क्लिक गरी लेजर फिल्टर गर्नुहोस्
+                {locale === "en" ? "Click a size to filter ledger records" : "कुनै साइज क्लिक गरी लेजर फिल्टर गर्नुहोस्"}
               </div>
             </div>
 
@@ -564,42 +566,42 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#475569" }}>
               <Filter size={14} color="#1E3A8A" />
-              <span style={{ fontWeight: "600" }}>साइज:</span>
+              <span style={{ fontWeight: "600" }}>{locale === "en" ? "Size:" : "साइज:"}</span>
               <select
                 value={sizeFilter}
                 onChange={(e) => setSizeFilter(e.target.value)}
                 className="input-field"
                 style={{ padding: "4px 8px", fontSize: "12px", width: "95px" }}
               >
-                <option value="all">सबै (All)</option>
+                <option value="all">{locale === "en" ? "All Sizes" : "सबै (All)"}</option>
                 {PARIS_POINTS.map((sz) => (
                   <option key={sz} value={String(sz)}>
-                    साइज {sz}
+                    {locale === "en" ? `Size ${sz}` : `साइज ${sz}`}
                   </option>
                 ))}
               </select>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#475569" }}>
-              <span style={{ fontWeight: "600" }}>प्रकार (Type):</span>
+              <span style={{ fontWeight: "600" }}>{locale === "en" ? "Type:" : "प्रकार (Type):"}</span>
               <select
                 value={movementTypeFilter}
                 onChange={(e) => setMovementTypeFilter(e.target.value)}
                 className="input-field"
                 style={{ padding: "4px 8px", fontSize: "12px", width: "170px" }}
               >
-                <option value="all">सबै प्रकार (All Types)</option>
-                <option value="PRODUCTION_IN">उत्पादन दाखिला (Production In)</option>
-                <option value="SALES_OUT">बिक्री निकासी (Sales Out)</option>
-                <option value="ADJUSTMENT_IN">स्टक मिलान बढोत्तरी (Adj In)</option>
-                <option value="ADJUSTMENT_OUT">स्टक मिलान घटबढ (Adj Out)</option>
-                <option value="VOID_REVERSAL">रद्द फिर्ता (Void Reversal)</option>
+                <option value="all">{locale === "en" ? "All Types" : "सबै प्रकार (All Types)"}</option>
+                <option value="PRODUCTION_IN">{locale === "en" ? "Production In" : "उत्पादन दाखिला (Production In)"}</option>
+                <option value="SALES_OUT">{locale === "en" ? "Sales Out" : "बिक्री निकासी (Sales Out)"}</option>
+                <option value="ADJUSTMENT_IN">{locale === "en" ? "Adjustment In" : "स्टक मिलान बढोत्तरी (Adj In)"}</option>
+                <option value="ADJUSTMENT_OUT">{locale === "en" ? "Adjustment Out" : "स्टक मिलान घटबढ (Adj Out)"}</option>
+                <option value="VOID_REVERSAL">{locale === "en" ? "Void Reversal" : "रद्द फिर्ता (Void Reversal)"}</option>
               </select>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#475569" }}>
               <Calendar size={14} />
-              <span>मिति:</span>
+              <span>{locale === "en" ? "Date:" : "मिति:"}</span>
               <input
                 type="date"
                 value={dateFrom}
@@ -636,14 +638,14 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
                   color: "#475569"
                 }}
               >
-                फिल्टर हटाउनुहोस् (Reset)
+                {locale === "en" ? "Reset Filter" : "फिल्टर हटाउनुहोस् (Reset)"}
               </button>
             )}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <span style={{ fontSize: "12px", color: "#475569" }}>
-              जम्मा दाखिला/निकासी: <strong>{movements.length}</strong>
+              {locale === "en" ? "Total Movements:" : "जम्मा दाखिला/निकासी:"} <strong>{movements.length}</strong>
             </span>
             <button
               type="button"
@@ -665,27 +667,29 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
           {loading ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#475569" }}>
               <RefreshCw size={20} className="animate-spin" style={{ margin: "0 auto 8px", color: "#1E3A8A" }} />
-              <div>स्टक भौचर विवरण लोड हुँदैछ (Loading stock ledger)...</div>
+              <div>{locale === "en" ? "Loading stock ledger..." : "स्टक भौचर विवरण लोड हुँदैछ (Loading stock ledger)..."}</div>
             </div>
           ) : movements.length === 0 ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#64748B", fontSize: "13px" }}>
-              यस फिल्टर मा कुनै पनि स्टक कारोबार फेला परेन। (No stock movements found matching filter).
+              {locale === "en"
+                ? "No stock movements found matching filter."
+                : "यस फिल्टर मा कुनै पनि स्टक कारोबार फेला परेन। (No stock movements found matching filter)."}
             </div>
           ) : (
             <div className="table-container-dense" style={{ marginTop: "12px" }}>
               <table className="table-dense" style={{ width: "100%" }}>
                 <thead>
                   <tr>
-                    <th style={{ width: "110px" }}>मिति / समय</th>
-                    <th style={{ width: "130px" }}>भौचर नं (Ref No)</th>
-                    <th style={{ width: "70px", textAlign: "center" }}>साइज</th>
-                    <th style={{ width: "130px" }}>प्रकार (Type)</th>
-                    <th style={{ width: "85px", textAlign: "right" }}>दाखिला (+ जोर)</th>
-                    <th style={{ width: "85px", textAlign: "right" }}>निकासी (- जोर)</th>
-                    <th style={{ width: "95px", textAlign: "right" }}>बाँकी (Balance)</th>
-                    <th style={{ width: "110px" }}>कर्मचारी (Operator)</th>
-                    <th style={{ minWidth: "150px" }}>विवरण / कारण</th>
-                    {canReverse && <th style={{ width: "75px", textAlign: "center" }}>कार्य</th>}
+                    <th style={{ width: "110px" }}>{locale === "en" ? "Date / Time" : "मिति / समय"}</th>
+                    <th style={{ width: "130px" }}>{locale === "en" ? "Ref / Voucher No" : "भौचर नं (Ref No)"}</th>
+                    <th style={{ width: "70px", textAlign: "center" }}>{locale === "en" ? "Size" : "साइज"}</th>
+                    <th style={{ width: "130px" }}>{locale === "en" ? "Movement Type" : "प्रकार (Type)"}</th>
+                    <th style={{ width: "85px", textAlign: "right" }}>{locale === "en" ? "In (+ Pairs)" : "दाखिला (+ जोर)"}</th>
+                    <th style={{ width: "85px", textAlign: "right" }}>{locale === "en" ? "Out (- Pairs)" : "निकासी (- जोर)"}</th>
+                    <th style={{ width: "95px", textAlign: "right" }}>{locale === "en" ? "Balance" : "बाँकी (Balance)"}</th>
+                    <th style={{ width: "110px" }}>{locale === "en" ? "Operator" : "कर्मचारी (Operator)"}</th>
+                    <th style={{ minWidth: "150px" }}>{locale === "en" ? "Description / Reason" : "विवरण / कारण"}</th>
+                    {canReverse && <th style={{ width: "75px", textAlign: "center" }}>{locale === "en" ? "Action" : "कार्य"}</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -745,7 +749,7 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
                                 fontWeight: "700"
                               }}
                             >
-                              (रद्द)
+                              {locale === "en" ? "(Voided)" : "(रद्द)"}
                             </span>
                           )}
                         </td>
@@ -758,7 +762,7 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
                         {/* High-Contrast Badge */}
                         <td>{renderMovementBadge(m.movement_type)}</td>
 
-                        {/* In (+ जोर) */}
+                        {/* In (+ Pairs) */}
                         <td
                           className="num-mono"
                           style={{
@@ -771,7 +775,7 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
                           {m.qty_in > 0 ? `+${m.qty_in}` : "-"}
                         </td>
 
-                        {/* Out (- जोर) */}
+                        {/* Out (- Pairs) */}
                         <td
                           className="num-mono"
                           style={{
@@ -845,7 +849,7 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
                                   gap: "3px"
                                 }}
                               >
-                                <RotateCcw size={10} /> रद्द
+                                <RotateCcw size={10} /> {locale === "en" ? "Void" : "रद्द"}
                               </button>
                             ) : (
                               <span style={{ fontSize: "10px", color: "#94A3B8" }}>-</span>
@@ -907,7 +911,7 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <FileText size={16} />
                   <span style={{ fontWeight: "700", fontSize: "13.5px" }}>
-                    स्टक भौचर विवरण (Stock Voucher Inspection)
+                    {locale === "en" ? "Stock Voucher Inspection" : "स्टक भौचर विवरण (Stock Voucher Inspection)"}
                   </span>
                 </div>
                 <button
@@ -921,48 +925,48 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
 
               <div style={{ padding: "16px 20px", fontSize: "12.5px" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "8px 12px", borderBottom: "1px solid #E2E8F0", paddingBottom: "12px" }}>
-                  <div style={{ color: "#64748B", fontWeight: "600" }}>भौचर नं (Ref No):</div>
+                  <div style={{ color: "#64748B", fontWeight: "600" }}>{locale === "en" ? "Ref / Voucher No:" : "भौचर नं (Ref No):"}</div>
                   <div style={{ fontWeight: "700", color: "#0F172A", fontFamily: "monospace" }}>
                     {inspectDoc.source_doc_ref || `MOV-${inspectDoc.id}`}
                   </div>
 
-                  <div style={{ color: "#64748B", fontWeight: "600" }}>कारोबार प्रकार:</div>
+                  <div style={{ color: "#64748B", fontWeight: "600" }}>{locale === "en" ? "Movement Type:" : "कारोबार प्रकार:"}</div>
                   <div>{renderMovementBadge(inspectDoc.movement_type)}</div>
 
-                  <div style={{ color: "#64748B", fontWeight: "600" }}>उत्पादन / जुत्ता:</div>
+                  <div style={{ color: "#64748B", fontWeight: "600" }}>{locale === "en" ? "Article / Product:" : "उत्पादन / जुत्ता:"}</div>
                   <div style={{ fontWeight: "600", color: "#0F172A" }}>
                     {inspectDoc.product_name} ({inspectDoc.product_code})
                   </div>
 
-                  <div style={{ color: "#64748B", fontWeight: "600" }}>साइज (Size):</div>
+                  <div style={{ color: "#64748B", fontWeight: "600" }}>{locale === "en" ? "Size:" : "साइज (Size):"}</div>
                   <div style={{ fontWeight: "700", color: "#0F172A" }}>
                     {inspectDoc.size || "All Sizes"}
                   </div>
 
-                  <div style={{ color: "#64748B", fontWeight: "600" }}>परिमाण (Qty):</div>
+                  <div style={{ color: "#64748B", fontWeight: "600" }}>{locale === "en" ? "Quantity:" : "परिमाण (Qty):"}</div>
                   <div className="num-mono-bold" style={{ fontWeight: "700", color: inspectDoc.direction === 1 ? "#059669" : "#DC2626" }}>
-                    {inspectDoc.direction === 1 ? `+${inspectDoc.quantity}` : `-${inspectDoc.quantity}`} जोर (pairs)
+                    {inspectDoc.direction === 1 ? `+${inspectDoc.quantity}` : `-${inspectDoc.quantity}`} {locale === "en" ? "pairs" : "जोर (pairs)"}
                   </div>
 
-                  <div style={{ color: "#64748B", fontWeight: "600" }}>वेयरहाउस:</div>
+                  <div style={{ color: "#64748B", fontWeight: "600" }}>{locale === "en" ? "Warehouse:" : "वेयरहाउस:"}</div>
                   <div style={{ color: "#0F172A" }}>{inspectDoc.warehouse_name}</div>
 
-                  <div style={{ color: "#64748B", fontWeight: "600" }}>मिति (AD / BS):</div>
+                  <div style={{ color: "#64748B", fontWeight: "600" }}>{locale === "en" ? "Date (AD / BS):" : "मिति (AD / BS):"}</div>
                   <div style={{ color: "#0F172A" }}>
                     {inspectDoc.date_ad} {inspectDoc.date_bs ? `(${inspectDoc.date_bs})` : ""}
                   </div>
 
-                  <div style={{ color: "#64748B", fontWeight: "600" }}>प्रविष्टि कर्मचारी:</div>
+                  <div style={{ color: "#64748B", fontWeight: "600" }}>{locale === "en" ? "Operator / Actor:" : "प्रविष्टि कर्मचारी:"}</div>
                   <div style={{ color: "#0F172A" }}>{inspectDoc.actor_name} (ID: #{inspectDoc.actor_id})</div>
 
                   {inspectDoc.reason_code && (
                     <>
-                      <div style={{ color: "#64748B", fontWeight: "600" }}>कारण कोड:</div>
+                      <div style={{ color: "#64748B", fontWeight: "600" }}>{locale === "en" ? "Reason Code:" : "कारण कोड:"}</div>
                       <div style={{ fontWeight: "700", color: "#0F172A" }}>{inspectDoc.reason_code}</div>
                     </>
                   )}
 
-                  <div style={{ color: "#64748B", fontWeight: "600" }}>कैफियत (Notes):</div>
+                  <div style={{ color: "#64748B", fontWeight: "600" }}>{locale === "en" ? "Notes / Reason:" : "कैफियत (Notes):"}</div>
                   <div style={{ color: "#334155" }}>{inspectDoc.reason_text || inspectDoc.notes || "None"}</div>
                 </div>
 
@@ -973,7 +977,7 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
                     className="btn-primary"
                     style={{ padding: "6px 14px", fontSize: "12px" }}
                   >
-                    बन्द गर्नुहोस् (Close)
+                    {locale === "en" ? "Close" : "बन्द गर्नुहोस् (Close)"}
                   </button>
                 </div>
               </div>
@@ -1017,13 +1021,22 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
               <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px", color: "#991B1B" }}>
                 <AlertTriangle size={22} color="#DC2626" />
                 <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700" }}>
-                  स्टक कारोबार रद्द पुष्टि (Confirm Void Reversal)
+                  {locale === "en" ? "Confirm Void Reversal" : "स्टक कारोबार रद्द पुष्टि (Confirm Void Reversal)"}
                 </h3>
               </div>
 
               <p style={{ fontSize: "12.5px", color: "#334155", lineHeight: "1.5", margin: "0 0 14px" }}>
-                के तपाईं साच्चिकै भौचर <strong>#{reversingMovement.id}</strong> (
-                {reversingMovement.source_doc_ref || reversingMovement.movement_type}) लाई रद्द (VOID) गर्न चाहनुहुन्छ?
+                {locale === "en" ? (
+                  <>
+                    Are you sure you want to <strong>VOID</strong> voucher <strong>#{reversingMovement.id}</strong> (
+                    {reversingMovement.source_doc_ref || reversingMovement.movement_type})?
+                  </>
+                ) : (
+                  <>
+                    के तपाईं साच्चिकै भौचर <strong>#{reversingMovement.id}</strong> (
+                    {reversingMovement.source_doc_ref || reversingMovement.movement_type}) लाई रद्द (VOID) गर्न चाहनुहुन्छ?
+                  </>
+                )}
               </p>
 
               <div
@@ -1037,14 +1050,18 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
                   marginBottom: "16px"
                 }}
               >
-                <div>साइज: <strong>{reversingMovement.size || "N/A"}</strong></div>
-                <div>रद्द हुने परिमाण: <strong>{reversingMovement.quantity} जोर</strong></div>
+                <div>{locale === "en" ? "Size:" : "साइज:"} <strong>{reversingMovement.size || "N/A"}</strong></div>
+                <div>{locale === "en" ? "Void Quantity:" : "रद्द हुने परिमाण:"} <strong>{reversingMovement.quantity} {locale === "en" ? "pairs" : "जोर"}</strong></div>
                 <div>
-                  प्रभाव:{" "}
+                  {locale === "en" ? "Net Effect: " : "प्रभाव: "}
                   <strong>
-                    {reversingMovement.direction === 1
-                      ? `मौज्दात घट्नेछ (-${reversingMovement.quantity})`
-                      : `मौज्दात थपिनेछ (+${reversingMovement.quantity})`}
+                    {locale === "en"
+                      ? reversingMovement.direction === 1
+                        ? `Stock will decrease (-${reversingMovement.quantity})`
+                        : `Stock will increase (+${reversingMovement.quantity})`
+                      : reversingMovement.direction === 1
+                        ? `मौज्दात घट्नेछ (-${reversingMovement.quantity})`
+                        : `मौज्दात थपिनेछ (+${reversingMovement.quantity})`}
                   </strong>
                 </div>
               </div>
@@ -1065,7 +1082,7 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
                     color: "#475569"
                   }}
                 >
-                  रद्द नगर्नुहोस् (Cancel)
+                  {locale === "en" ? "Cancel" : "रद्द नगर्नुहोस् (Cancel)"}
                 </button>
                 <button
                   type="button"
@@ -1085,7 +1102,9 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
                     gap: "6px"
                   }}
                 >
-                  {reversalLoading ? "प्रक्रियामा..." : "रद्द निश्चित गर्नुहोस् (Confirm Void)"}
+                  {reversalLoading
+                    ? (locale === "en" ? "Processing..." : "प्रक्रियामा...")
+                    : (locale === "en" ? "Confirm Void" : "रद्द निश्चित गर्नुहोस् (Confirm Void)")}
                 </button>
               </div>
             </div>

@@ -11,6 +11,7 @@ import {
   Warehouse as WarehouseIcon,
   RefreshCw
 } from "lucide-react";
+import { useLocale } from "../context/LocaleContext";
 
 interface ProductOption {
   id: number;
@@ -37,21 +38,47 @@ interface StockAdjustmentModalProps {
 
 const PARIS_POINTS = [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43];
 
-const REASON_CODES = [
-  { code: "RECOUNT_CORRECTION", label: "गणना संशोधन (Recount Correction)", requiresSupervisor: false },
-  { code: "DAMAGED", label: "क्षतिग्रस्त / बिग्रेको (Damaged / Broken)", requiresSupervisor: true },
-  { code: "SAMPLE_ISSUE", label: "नमुना निकासी (Sample Issue)", requiresSupervisor: true },
-  { code: "THEFT_LOSS", label: "हराएको / अपचलन (Theft / Pilferage Loss)", requiresSupervisor: true },
-  { code: "SCRAP", label: "कारखाना स्क्र्याप (Factory Scrap / Reject)", requiresSupervisor: true },
-  { code: "OTHER", label: "अन्य - खुलाउनु पर्ने (Other - Specify in Notes)", requiresSupervisor: true }
-];
-
 export function StockAdjustmentModal({
   userRole,
   preselectedProduct,
   onClose,
   onSuccess
 }: StockAdjustmentModalProps) {
+  const { locale, isNepali } = useLocale();
+
+  const reasonCodes = useMemo(() => [
+    {
+      code: "RECOUNT_CORRECTION",
+      label: locale === "en" ? "Recount Correction" : "गणना संशोधन (Recount Correction)",
+      requiresSupervisor: false
+    },
+    {
+      code: "DAMAGED",
+      label: locale === "en" ? "Damaged / Broken" : "क्षतिग्रस्त / बिग्रेको (Damaged / Broken)",
+      requiresSupervisor: true
+    },
+    {
+      code: "SAMPLE_ISSUE",
+      label: locale === "en" ? "Sample Issue" : "नमुना निकासी (Sample Issue)",
+      requiresSupervisor: true
+    },
+    {
+      code: "THEFT_LOSS",
+      label: locale === "en" ? "Theft / Pilferage Loss" : "हराएको / अपचलन (Theft / Pilferage Loss)",
+      requiresSupervisor: true
+    },
+    {
+      code: "SCRAP",
+      label: locale === "en" ? "Factory Scrap / Reject" : "कारखाना स्क्र्याप (Factory Scrap / Reject)",
+      requiresSupervisor: true
+    },
+    {
+      code: "OTHER",
+      label: locale === "en" ? "Other (Specify in Notes)" : "अन्य - खुलाउनु पर्ने (Other - Specify in Notes)",
+      requiresSupervisor: true
+    }
+  ], [locale]);
+
   // If user is a viewer or viewer_demo, reject rendering immediately
   const isViewer = userRole === "viewer" || userRole === "viewer_demo";
 
@@ -196,7 +223,7 @@ export function StockAdjustmentModal({
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || "स्टक मिलान असफल भयो (Stock adjustment failed)");
+        throw new Error(errData.detail || (locale === "en" ? "Stock adjustment failed" : "स्टक मिलान असफल भयो (Stock adjustment failed)"));
       }
 
       const activeProduct = products.find((p) => p.id === selectedProductId);
@@ -263,7 +290,7 @@ export function StockAdjustmentModal({
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <Sliders size={18} />
             <h2 id="adj-modal-title" style={{ fontSize: "15px", fontWeight: "700", margin: 0 }}>
-              नियन्त्रित स्टक मिलान (Controlled Stock Adjustment)
+              {locale === "en" ? "Controlled Stock Adjustment" : "नियन्त्रित स्टक मिलान (Controlled Stock Adjustment)"}
             </h2>
           </div>
           <button
@@ -309,7 +336,7 @@ export function StockAdjustmentModal({
           {/* Article / Product Selection */}
           <div>
             <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0F172A", marginBottom: "4px" }}>
-              जुत्ता मोडल / आर्टिकल (Footwear Article SKU) *
+              {locale === "en" ? "Footwear Article SKU *" : "जुत्ता मोडल / आर्टिकल (Footwear Article SKU) *"}
             </label>
             <select
               value={selectedProductId || ""}
@@ -335,7 +362,7 @@ export function StockAdjustmentModal({
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0F172A", marginBottom: "4px" }}>
-                वेयरहाउस (Warehouse) *
+                {locale === "en" ? "Warehouse *" : "वेयरहाउस (Warehouse) *"}
               </label>
               <select
                 value={selectedWarehouseId}
@@ -354,7 +381,7 @@ export function StockAdjustmentModal({
 
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0F172A", marginBottom: "4px" }}>
-                साइज (Size 32–43) *
+                {locale === "en" ? "Size (Sizes 32–43) *" : "साइज (Size 32–43) *"}
               </label>
               <select
                 value={selectedSize}
@@ -365,7 +392,7 @@ export function StockAdjustmentModal({
               >
                 {PARIS_POINTS.map((sz) => (
                   <option key={sz} value={String(sz)}>
-                    साइज {sz} (Paris Point)
+                    {locale === "en" ? `Size ${sz} (Paris Point)` : `साइज ${sz} (Paris Point)`}
                   </option>
                 ))}
               </select>
@@ -375,7 +402,7 @@ export function StockAdjustmentModal({
           {/* Action Radio Selection: Add vs Reduce */}
           <div>
             <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0F172A", marginBottom: "6px" }}>
-              मिलान कार्य (Adjustment Action) *
+              {locale === "en" ? "Adjustment Action *" : "मिलान कार्य (Adjustment Action) *"}
             </label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
               <label
@@ -400,9 +427,11 @@ export function StockAdjustmentModal({
                 />
                 <div>
                   <div style={{ fontSize: "12.5px", fontWeight: "700", color: "#065F46" }}>
-                    बढोत्तरी (Add Stock / +)
+                    {locale === "en" ? "Add Stock (+)" : "बढोत्तरी (Add Stock / +)"}
                   </div>
-                  <div style={{ fontSize: "10.5px", color: "#64748B" }}>गणना थप, भौतिक फेला</div>
+                  <div style={{ fontSize: "10.5px", color: "#64748B" }}>
+                    {locale === "en" ? "Physical recount surplus, found inventory" : "गणना थप, भौतिक फेला"}
+                  </div>
                 </div>
               </label>
 
@@ -428,9 +457,11 @@ export function StockAdjustmentModal({
                 />
                 <div>
                   <div style={{ fontSize: "12.5px", fontWeight: "700", color: "#991B1B" }}>
-                    घटबढ / हानी (Reduce Stock / -)
+                    {locale === "en" ? "Reduce Stock (-)" : "घटबढ / हानी (Reduce Stock / -)"}
                   </div>
-                  <div style={{ fontSize: "10.5px", color: "#64748B" }}>क्षति, नमुना, हराएको, स्क्र्याप</div>
+                  <div style={{ fontSize: "10.5px", color: "#64748B" }}>
+                    {locale === "en" ? "Damage, sample issue, theft, scrap" : "क्षति, नमुना, हराएको, स्क्र्याप"}
+                  </div>
                 </div>
               </label>
             </div>
@@ -440,7 +471,7 @@ export function StockAdjustmentModal({
           <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "12px" }}>
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0F172A", marginBottom: "4px" }}>
-                जोर परिमाण (Pairs) *
+                {locale === "en" ? "Quantity (Pairs) *" : "जोर परिमाण (Pairs) *"}
               </label>
               <input
                 type="number"
@@ -457,7 +488,7 @@ export function StockAdjustmentModal({
 
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0F172A", marginBottom: "4px" }}>
-                कारण कोड (Reason Code) *
+                {locale === "en" ? "Reason Code *" : "कारण कोड (Reason Code) *"}
               </label>
               <select
                 value={reasonCode}
@@ -466,7 +497,7 @@ export function StockAdjustmentModal({
                 className="input-field"
                 style={{ width: "100%", padding: "6px 8px", fontSize: "12px" }}
               >
-                {REASON_CODES.map((r) => (
+                {reasonCodes.map((r) => (
                   <option key={r.code} value={r.code}>
                     {r.label}
                   </option>
@@ -487,14 +518,20 @@ export function StockAdjustmentModal({
             >
               <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#92400E", fontSize: "12px", fontWeight: "700", marginBottom: "4px" }}>
                 <Lock size={14} />
-                <span>सुपरभाइजर प्रमाणीकरण टोकन (Supervisor Authorization Token) *</span>
+                <span>
+                  {locale === "en"
+                    ? "Supervisor Authorization Token *"
+                    : "सुपरभाइजर प्रमाणीकरण टोकन (Supervisor Authorization Token) *"}
+                </span>
               </div>
               <p style={{ fontSize: "11px", color: "#78350F", margin: "0 0 6px" }}>
-                स्टक हानी/क्षति घटबढका लागि एड्मिन अधिकार वा सुपरभाइजर टोकन अनिवार्य छ।
+                {locale === "en"
+                  ? "Administrator privilege or valid supervisor token required for stock reduction."
+                  : "स्टक हानी/क्षति घटबढका लागि एड्मिन अधिकार वा सुपरभाइजर टोकन अनिवार्य छ।"}
               </p>
               <input
                 type="password"
-                placeholder="Enter Supervisor Token / Admin Password"
+                placeholder={locale === "en" ? "Enter Supervisor Token / Admin Password" : "सुपरभाइजर टोकन वा एड्मिन पासवर्ड"}
                 value={supervisorToken}
                 onChange={(e) => setSupervisorToken(e.target.value)}
                 disabled={submitting}
@@ -508,11 +545,13 @@ export function StockAdjustmentModal({
           {/* Reason Text / Justification */}
           <div>
             <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0F172A", marginBottom: "4px" }}>
-              विवरण / कैफियत (Reason Text / Audit Notes) {action === "reduce" || reasonCode === "OTHER" ? "*" : "(ऐच्छिक)"}
+              {locale === "en"
+                ? `Reason Text / Audit Notes ${action === "reduce" || reasonCode === "OTHER" ? "*" : "(Optional)"}`
+                : `विवरण / कैफियत (Reason Text / Audit Notes) ${action === "reduce" || reasonCode === "OTHER" ? "*" : "(ऐच्छिक)"}`}
             </label>
             <input
               type="text"
-              placeholder="e.g., Physical floor audit mismatch, wet sole damaged in monsoon rack"
+              placeholder={locale === "en" ? "e.g., Physical floor audit mismatch, wet sole damaged in monsoon rack" : "जस्तै: भौतिक गणना फरक, वर्षामा सोल बिग्रिएको"}
               value={reasonText}
               onChange={(e) => setReasonText(e.target.value)}
               disabled={submitting}
@@ -536,10 +575,10 @@ export function StockAdjustmentModal({
           >
             <div>
               <div style={{ fontSize: "11px", color: "#475569", fontWeight: "600", textTransform: "uppercase" }}>
-                हालको मौज्दात (Current)
+                {locale === "en" ? "Current Stock" : "हालको मौज्दात (Current)"}
               </div>
               <div className="num-mono-bold" style={{ fontSize: "16px", color: "#0F172A" }}>
-                {fetchingBalance ? "..." : currentBalance} जोर
+                {fetchingBalance ? "..." : currentBalance} {locale === "en" ? "pairs" : "जोर"}
               </div>
             </div>
 
@@ -547,13 +586,13 @@ export function StockAdjustmentModal({
 
             <div>
               <div style={{ fontSize: "11px", color: "#475569", fontWeight: "600", textTransform: "uppercase" }}>
-                मिलान (Adjustment)
+                {locale === "en" ? "Adjustment" : "मिलान (Adjustment)"}
               </div>
               <div
                 className="num-mono-bold"
                 style={{ fontSize: "16px", color: action === "add" ? "#059669" : "#DC2626" }}
               >
-                {action === "add" ? `+${parsedQty}` : `-${parsedQty}`} जोर
+                {action === "add" ? `+${parsedQty}` : `-${parsedQty}`} {locale === "en" ? "pairs" : "जोर"}
               </div>
             </div>
 
@@ -561,7 +600,7 @@ export function StockAdjustmentModal({
 
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: "11px", color: isFloorViolated ? "#991B1B" : "#475569", fontWeight: "700", textTransform: "uppercase" }}>
-                प्रक्षेपित मौज्दात (Projected)
+                {locale === "en" ? "Projected Stock" : "प्रक्षेपित मौज्दात (Projected)"}
               </div>
               <div
                 className="num-mono-bold"
@@ -571,7 +610,7 @@ export function StockAdjustmentModal({
                   color: isFloorViolated ? "#DC2626" : "#1E3A8A"
                 }}
               >
-                {projectedBalance} जोर
+                {projectedBalance} {locale === "en" ? "pairs" : "जोर"}
               </div>
             </div>
           </div>
@@ -595,7 +634,9 @@ export function StockAdjustmentModal({
             >
               <AlertTriangle size={15} color="#DC2626" />
               <span>
-                अस्वीकृत (Rejected): स्टक मौज्दात ऋणात्मक (Negative: {projectedBalance}) हुन पाउँदैन।
+                {locale === "en"
+                  ? `Rejected: Stock balance cannot be negative (Projected: ${projectedBalance} pairs).`
+                  : `अस्वीकृत (Rejected): स्टक मौज्दात ऋणात्मक (Negative: ${projectedBalance}) हुन पाउँदैन।`}
               </span>
             </div>
           )}
@@ -617,7 +658,7 @@ export function StockAdjustmentModal({
                 color: "#475569"
               }}
             >
-              रद्द गर्नुहोस् (Cancel)
+              {locale === "en" ? "Cancel" : "रद्द गर्नुहोस् (Cancel)"}
             </button>
             <button
               type="submit"
@@ -630,7 +671,9 @@ export function StockAdjustmentModal({
                 cursor: !isFormValid || submitting ? "not-allowed" : "pointer"
               }}
             >
-              {submitting ? "प्रविष्टि हुँदैछ..." : "स्टक मिलान प्रविष्टि गर्नुहोस् (Submit Adjustment)"}
+              {submitting
+                ? (locale === "en" ? "Submitting..." : "प्रविष्टि हुँदैछ...")
+                : (locale === "en" ? "Submit Stock Adjustment" : "स्टक मिलान प्रविष्टि गर्नुहोस् (Submit Adjustment)")}
             </button>
           </div>
         </form>

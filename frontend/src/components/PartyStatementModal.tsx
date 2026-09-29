@@ -17,6 +17,7 @@ import {
   ArrowUpRight
 } from "lucide-react";
 import { fromPaisa } from "@/lib/currency";
+import { useLocale } from "@/context/LocaleContext";
 
 interface PartyStatementModalProps {
   clientId: number;
@@ -62,6 +63,7 @@ interface StatementSummary {
 }
 
 export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatementModalProps) {
+  const { isNepali } = useLocale();
   const [loading, setLoading] = useState(true);
   const [client, setClient] = useState<ClientMeta | null>(null);
   const [summary, setSummary] = useState<StatementSummary | null>(null);
@@ -162,10 +164,12 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
             <FileText size={20} color="#1E3A8A" />
             <div>
               <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#0F172A", margin: 0 }}>
-                Party Account Statement & Subledger
+                {isNepali ? "ग्राहक हिसाब विवरण (Party Statement)" : "Party Account Statement & Subledger"}
               </h3>
               <div style={{ fontSize: "11px", color: "#475569" }}>
-                Auditable append-only ledger entries • Schedule-5 compliant
+                {isNepali
+                  ? "अपरिवर्तनीय लेजर प्रविष्टिहरू • अनुसूची-५ लेखापरीक्षण"
+                  : "Auditable append-only ledger entries • Schedule-5 compliant"}
               </div>
             </div>
           </div>
@@ -177,7 +181,7 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
               title="Print Customer Statement (A4)"
             >
               <Printer size={14} />
-              <span>Print Statement</span>
+              <span>{isNepali ? "खाता प्रिन्ट (Print)" : "Print Statement"}</span>
             </button>
             <button
               onClick={onClose}
@@ -200,14 +204,14 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
             <div>
               <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748B", fontWeight: "700" }}>
-                Debtor Account
+                {isNepali ? "ऋणी खाता विवरण (Debtor Account)" : "Debtor Account"}
               </div>
               <div style={{ fontSize: "18px", fontWeight: "800", color: "#0F172A", marginTop: "2px" }}>
-                {client?.name || "Loading..."}
+                {client?.name || (isNepali ? "लोड हुँदैछ..." : "Loading...")}
               </div>
               <div style={{ display: "flex", gap: "16px", marginTop: "6px", fontSize: "12px", color: "#475569" }}>
-                <span><strong>Party Code:</strong> {client?.code || "—"}</span>
-                {client?.pan_number && <span><strong>PAN:</strong> {client.pan_number}</span>}
+                <span><strong>{isNepali ? "पार्टी कोड:" : "Party Code:"}</strong> {client?.code || "—"}</span>
+                {client?.pan_number && <span><strong>{isNepali ? "स्थायी लेखा नं (PAN):" : "PAN:"}</strong> {client.pan_number}</span>}
                 {client?.phone && (
                   <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                     <Phone size={12} /> {client.phone}
@@ -223,7 +227,7 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
 
             <div style={{ textAlign: "right", minWidth: "220px" }}>
               <div style={{ fontSize: "11px", textTransform: "uppercase", color: "#64748B", fontWeight: "600" }}>
-                Net Ledger Balance
+                {isNepali ? "कुल बाँकी मौज्दात (Net Balance)" : "Net Ledger Balance"}
               </div>
               <div
                 className="erp-num"
@@ -237,10 +241,10 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
                 NPR {fromPaisa(summary?.net_balance_paisa ?? 0)}
               </div>
               <div style={{ fontSize: "11px", color: "#64748B", marginTop: "2px" }}>
-                Credit Limit: <strong>NPR {fromPaisa(client?.credit_limit_paisa ?? 0)}</strong>
+                {isNepali ? "ऋण सीमा (Credit Limit):" : "Credit Limit:"} <strong>NPR {fromPaisa(client?.credit_limit_paisa ?? 0)}</strong>
                 {client && client.credit_limit_paisa > 0 && (summary?.net_balance_paisa ?? 0) > client.credit_limit_paisa && (
                   <span style={{ color: "#B91C1C", fontWeight: "700", marginLeft: "6px" }}>
-                    [EXCEEDED]
+                    {isNepali ? "[सीमा नाघ्यो]" : "[EXCEEDED]"}
                   </span>
                 )}
               </div>
@@ -264,7 +268,7 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: "#475569" }}>
                 <Calendar size={13} />
-                <span>From:</span>
+                <span>{isNepali ? "देखि:" : "From:"}</span>
                 <input
                   type="date"
                   value={dateFrom}
@@ -279,7 +283,7 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
                 />
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: "#475569" }}>
-                <span>To:</span>
+                <span>{isNepali ? "सम्म:" : "To:"}</span>
                 <input
                   type="date"
                   value={dateTo}
@@ -302,7 +306,7 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
                   className="pagination-btn"
                   style={{ padding: "2px 8px", fontSize: "11px" }}
                 >
-                  Clear Range
+                  {isNepali ? "फिल्टर हटाउनुहोस्" : "Clear Range"}
                 </button>
               )}
             </div>
@@ -313,7 +317,7 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
                 checked={includeDisputed}
                 onChange={(e) => setIncludeDisputed(e.target.checked)}
               />
-              <span>Include Disputed Invoices</span>
+              <span>{isNepali ? "विवादित बिजक समावेश (Include Disputed)" : "Include Disputed Invoices"}</span>
             </label>
           </div>
         </div>
@@ -322,7 +326,7 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
         <div style={{ flex: 1, overflowY: "auto", padding: "0" }}>
           {loading ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#64748B" }}>
-              Loading auditable statement entries...
+              {isNepali ? "लेखा खाता प्रविष्टिहरू लोड हुँदैछ..." : "Loading auditable statement entries..."}
             </div>
           ) : error ? (
             <div style={{ padding: "30px", color: "#B91C1C", textAlign: "center" }}>
@@ -330,20 +334,20 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
             </div>
           ) : lines.length === 0 ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#64748B" }}>
-              No statement entries found for this party.
+              {isNepali ? "यस पार्टीको कुनै कारोबार भेटिएन।" : "No statement entries found for this party."}
             </div>
           ) : (
             <table className="table-dense" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
               <thead>
                 <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #CBD5E1", color: "#475569", textAlign: "left" }}>
-                  <th style={{ padding: "8px 12px", width: "95px" }}>Date</th>
-                  <th style={{ padding: "8px 12px", width: "130px" }}>Reference</th>
-                  <th style={{ padding: "8px 12px" }}>Description / Entry Type</th>
-                  <th style={{ padding: "8px 12px", width: "95px" }}>Due Date</th>
-                  <th style={{ padding: "8px 12px", textAlign: "right", width: "110px" }}>Debit (+)</th>
-                  <th style={{ padding: "8px 12px", textAlign: "right", width: "110px" }}>Credit (-)</th>
-                  <th style={{ padding: "8px 12px", textAlign: "right", width: "125px" }}>Running Bal</th>
-                  <th className="no-print" style={{ padding: "8px 12px", textAlign: "center", width: "90px" }}>Audit</th>
+                  <th style={{ padding: "8px 12px", width: "95px" }}>{isNepali ? "मिति (Date)" : "Date"}</th>
+                  <th style={{ padding: "8px 12px", width: "130px" }}>{isNepali ? "भौचर / बिजक नं (Voucher Ref)" : "Voucher Ref"}</th>
+                  <th style={{ padding: "8px 12px" }}>{isNepali ? "विवरण (Particulars)" : "Description / Entry Type"}</th>
+                  <th style={{ padding: "8px 12px", width: "95px" }}>{isNepali ? "भाका मिति (Due Date)" : "Due Date"}</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right", width: "110px" }}>{isNepali ? "डेबिट (+) (Debit)" : "Debit (+)"}</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right", width: "110px" }}>{isNepali ? "क्रेडिट (-) (Credit)" : "Credit (-)"}</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right", width: "125px" }}>{isNepali ? "बाँकी मौज्दात (Balance)" : "Balance"}</th>
+                  <th className="no-print" style={{ padding: "8px 12px", textAlign: "center", width: "90px" }}>{isNepali ? "जाँच (Audit)" : "Audit"}</th>
                 </tr>
               </thead>
               <tbody>
@@ -481,17 +485,17 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
           }}
         >
           <div style={{ fontSize: "11px", color: "#64748B" }}>
-            Total Entries: <strong>{lines.length}</strong> • Certified Statement Generated on {new Date().toLocaleDateString()}
+            {isNepali ? "कुल प्रविष्टि संख्या:" : "Total Entries:"} <strong>{lines.length}</strong> • {isNepali ? "प्रमाणित स्टेटमेन्ट मिति" : "Certified Statement Generated on"} {new Date().toLocaleDateString()}
           </div>
           <div style={{ display: "flex", gap: "20px", alignItems: "center" }}>
             <div style={{ fontSize: "12px" }}>
-              Total Debits: <strong className="erp-num">NPR {fromPaisa(summary?.total_debit_paisa ?? 0)}</strong>
+              {isNepali ? "कुल डेबिट:" : "Total Debits:"} <strong className="erp-num">NPR {fromPaisa(summary?.total_debit_paisa ?? 0)}</strong>
             </div>
             <div style={{ fontSize: "12px" }}>
-              Total Credits: <strong className="erp-num" style={{ color: "#047857" }}>NPR {fromPaisa(summary?.total_credit_paisa ?? 0)}</strong>
+              {isNepali ? "कुल क्रेडिट:" : "Total Credits:"} <strong className="erp-num" style={{ color: "#047857" }}>NPR {fromPaisa(summary?.total_credit_paisa ?? 0)}</strong>
             </div>
             <div style={{ fontSize: "13px", fontWeight: "700", paddingLeft: "10px", borderLeft: "2px solid #CBD5E1" }}>
-              Closing Due: <span className="erp-num" style={{ color: (summary?.net_balance_paisa ?? 0) > 0 ? "#B91C1C" : "#047857" }}>
+              {isNepali ? "अन्तिम बाँकी:" : "Closing Due:"} <span className="erp-num" style={{ color: (summary?.net_balance_paisa ?? 0) > 0 ? "#B91C1C" : "#047857" }}>
                 NPR {fromPaisa(summary?.net_balance_paisa ?? 0)}
               </span>
             </div>

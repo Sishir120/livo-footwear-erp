@@ -7,14 +7,14 @@ export type Locale = "en" | "ne";
 export const translations: Record<Locale, Record<string, string>> = {
   en: {
     // Nav & Tabs
-    dashboard: "Daily Report",
+    dashboard: "Dashboard",
     stock_ledger: "Stock Ledger",
-    ar_aging: "Party Aging & Subledger",
+    ar_aging: "Party Aging & AR",
     production_batches: "Production Batches",
     purchase_raw_materials: "Raw Material Purchases",
     sales_invoicing: "Sales & Invoicing",
-    settings_backups: "Settings & Diagnostics",
-    ops_cockpit: "Ops Cockpit (सुपरभाइजर ककपिट)",
+    settings_backups: "Settings",
+    ops_cockpit: "Supervisor Cockpit",
 
     // Titles
     daily_summary_title: "Daily Operational Summary",
@@ -29,6 +29,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     sales_desc: "Non-resettable, gapless sequential invoice numbers enforced by PostgreSQL UniqueConstraint",
     settings_title: "System Settings & Database Backups",
     settings_desc: "Manage encrypted cloud snapshots, audit logs, and system diagnostics",
+    ar_aging_title: "Accounts Receivable & Aging Subledger",
+    ar_aging_desc: "Real-time outstanding balance, aging analysis, and client statement reconciliation",
 
     // Metrics & Badges
     pairs: "pairs",
@@ -94,32 +96,45 @@ export const translations: Record<Locale, Record<string, string>> = {
     filter_by_supplier: "Filter by Supplier:",
     all_suppliers: "All Suppliers",
     all_clients: "All Clients",
-    shortcuts_hint: "Esc close • Ctrl+Enter quick commit"
+    shortcuts_hint: "Esc close • Ctrl+Enter quick commit",
+
+    // Sizing & Stock Card
+    shoe_sizes: "Shoe Sizes (Sizes 32–43)",
+    shoe_sizes_curve: "Shoe Sizes (Sizes 32–43) Curve",
+    stock_adjustment_btn: "Stock Adjustment",
+    stock_card_btn: "Stock Card",
+    online_status: "Online",
+    offline_status: "Offline",
+    batches_stored: "batches stored",
+    syncing_status: "Syncing queue...",
+    sync_conflict: "Sync conflict"
   },
   ne: {
     // Nav & Tabs
-    dashboard: "दैनिक प्रतिवेदन",
-    stock_ledger: "स्टक खाता / मौज्दात",
-    ar_aging: "पार्टी हिसाव तथा बक्यौता",
-    production_batches: "उत्पादन ब्याच",
-    purchase_raw_materials: "कच्चा पदार्थ खरिद",
-    sales_invoicing: "बिक्री तथा बिलिङ",
-    settings_backups: "सेटिङ तथा ब्याकअप",
-    ops_cockpit: "सुपरभाइजर ककपिट (Ops Cockpit)",
+    dashboard: "दैनिक विवरण (Daily Report)",
+    stock_ledger: "मौज्दात खाता (Stock Ledger)",
+    ar_aging: "पार्टी बाँकी (Party Aging)",
+    production_batches: "उत्पादन दाखिला (Production Run)",
+    purchase_raw_materials: "कच्चा पदार्थ खरिद (Purchases)",
+    sales_invoicing: "कर बिजक तथा बिक्री (Sales & Invoicing)",
+    settings_backups: "कारखाना सेटिङ (Settings)",
+    ops_cockpit: "ककपिट (Ops Cockpit)",
 
     // Titles
-    daily_summary_title: "दैनिक कार्यसञ्चालन प्रतिवेदन",
+    daily_summary_title: "दैनिक कार्यसञ्चालन प्रतिवेदन (Daily Operational Summary)",
     daily_summary_desc: "कारखाना उत्पादन, थोक बिक्री निकासी तथा नगद प्रवाहको वास्तविक विवरण",
-    stock_ledger_title: "तयारी जुत्ता-चप्पल मौज्दात खाता",
+    stock_ledger_title: "तयारी जुत्ता-चप्पल मौज्दात खाता (Stock Ledger)",
     stock_ledger_desc: "अपरिवर्तनीय स्टक मुभमेन्ट लेजरबाट स्वतः गणना हुने प्रत्यक्ष मौज्दात विवरण",
-    production_title: "कारखाना उत्पादन तथा ब्याच सञ्चालन",
+    production_title: "कारखाना उत्पादन तथा ब्याच सञ्चालन (Production Run)",
     production_desc: "तयारी सामानको खातामा स्वतः वृद्धि हुने वास्तविक उत्पादन ट्र्याकिङ",
-    purchases_title: "कच्चा पदार्थ खरिद तथा भन्सार खाता",
+    purchases_title: "कच्चा पदार्थ खरिद तथा भन्सार खाता (Purchases)",
     purchases_desc: "छाला, सोल तथा अन्य कच्चा पदार्थको गेट इन्ट्री र आपूर्तिकर्ता बिल विवरण",
-    sales_title: "थोक बिक्री आदेश तथा क्रमिक कर बिजक",
+    sales_title: "थोक बिक्री आदेश तथा क्रमिक कर बिजक (Sales & Invoices)",
     sales_desc: "नेपाल सरकारको भ्याट नियम अनुसार गैर-परिवर्तनीय क्रमिक कर बिजक प्रणाली",
-    settings_title: "प्रणाली सेटिङ तथा डाटा ब्याकअप",
+    settings_title: "प्रणाली सेटिङ तथा डाटा ब्याकअप (Settings & Backups)",
     settings_desc: "क्लाउड डाटाबेस ब्याकअप, अडिट लग तथा प्रणाली निरीक्षण विवरण",
+    ar_aging_title: "पार्टी हिसाव तथा बक्यौता खाता (Accounts Receivable)",
+    ar_aging_desc: "उठ्न बाँकी रकम, उमेर अनुसार विश्लेषण तथा पार्टी स्टेटमेन्ट विवरण",
 
     // Metrics & Badges
     pairs: "जोडी",
@@ -127,8 +142,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     healthy: "सम्पन्न / पर्याप्त",
     low_stock: "न्यून मौज्दात",
     out_of_stock: "स्टक समाप्त",
-    tax_invoice: "कर बिजक",
-    vat_tax_invoice: "कर बिजक (भ्याट)",
+    tax_invoice: "कर बिजक (Tax Invoice)",
+    vat_tax_invoice: "कर बिजक (भ्याट १३%)",
     total_products: "कुल उत्पादन प्रकार (SKU)",
     total_stock_volume: "कुल मौज्दात परिमाण",
     total_stock_value: "अनुमानित स्टक मूल्य",
@@ -150,47 +165,60 @@ export const translations: Record<Locale, Record<string, string>> = {
     commit_next_sale: "सेभ गरी अर्को बिल ↵",
     close: "बन्द गर्नुहोस्",
     export_excel: "एक्सेल / CSV डाउनलोड",
-    void_action: "रद्द गर्नुहोस्",
-    voided_badge: "रद्द गरिएको",
+    void_action: "रद्द गर्नुहोस् (Void)",
+    voided_badge: "रद्द गरिएको (VOID)",
     search_placeholder: "खोज्नुहोस् (कोड, ग्राहक, आपूर्तिकर्ता, मिति)...",
-    login_title: "लिभो फुटवेयर ईआरपी",
+    login_title: "लिभो फुटवेयर ईआरपी (LIVO ERP)",
     login_subtitle: "उत्पादन, मौज्दात विश्लेषण तथा क्रमिक कर बिलिङ प्रणाली",
-    username: "प्रयोगकर्ता नाम",
-    password: "गोप्य संकेत (पासवर्ड)",
+    username: "प्रयोगकर्ता नाम (Username)",
+    password: "गोप्य संकेत (Password)",
     login_button: "ईआरपीमा लगइन गर्नुहोस्",
-    logout: "बाहिरिनुहोस्",
-    role_editor: "सम्पादक (एडिटर)",
-    role_viewer: "दर्शक (भ्यूअर)",
-    supplier: "आपूर्तिकर्ता / भेन्डर",
-    raw_material: "कच्चा पदार्थ",
-    quantity: "परिमाण",
+    logout: "बाहिरिनुहोस् (Logout)",
+    role_editor: "सम्पादक (Editor)",
+    role_viewer: "निरीक्षक (Auditor)",
+    supplier: "आपूर्तिकर्ता / भेन्डर (Supplier)",
+    raw_material: "कच्चा पदार्थ (Raw Material)",
+    quantity: "परिमाण (Quantity)",
     unit_rate: "दर (रु.)",
     date_ad: "मिति (ई.सं. AD)",
     date_bs: "मिति (वि.सं. BS)",
     remarks: "कैफियत / गेट पास नं.",
-    physical_bill: "आपूर्तिकर्ताको भौतिक बिल / भर्पाई (फोटो वा PDF)",
+    physical_bill: "भौतिक बिल / भर्पाई (Photo/PDF)",
     click_upload: "भौतिक बिल / भौचर अपलोड गर्न यहाँ थिच्नुहोस्",
     upload_hint: "१० MB सम्मको PNG, JPG वा PDF सुरक्षित अडिटका लागि",
     footwear_model: "जुत्ता मोडल (साइज / रङ कोड)",
     target_pairs: "लक्षित परिमाण (जोडी)",
     produced_pairs: "तयार भएको परिमाण (जोडी)",
     assembly_workers: "कामदार संख्या",
-    batch_no: "ब्याच संकेत नं.",
-    order_no: "बिक्री आदेश नं.",
-    client_buyer: "ग्राहक / खरिदकर्ताको नाम",
-    invoice_no: "कर बिजक नं.",
-    invoice_total: "कुल बिल रकम",
-    print_action: "प्रिन्ट",
+    batch_no: "ब्याच संकेत नं. (Batch No)",
+    order_no: "बिक्री आदेश नं. (Order No)",
+    client_buyer: "ग्राहक / पार्टीको नाम (Client)",
+    invoice_no: "कर बिजक नं. (Invoice No)",
+    invoice_total: "कुल बिल रकम (Total)",
+    print_action: "प्रिन्ट (Print)",
     all_categories: "सबै वर्गहरू",
     filter_by_supplier: "आपूर्तिकर्ता अनुसार छान्नुहोस्:",
     all_suppliers: "सबै आपूर्तिकर्ताहरू",
     all_clients: "सबै ग्राहकहरू",
-    shortcuts_hint: "Esc बन्द • Ctrl+Enter द्रुत सेभ"
+    shortcuts_hint: "Esc बन्द • Ctrl+Enter द्रुत सेभ",
+
+    // Sizing & Stock Card
+    shoe_sizes: "जुत्ता साइज (Sizes 32–43)",
+    shoe_sizes_curve: "जुत्ता साइज (Sizes 32–43) विवरण",
+    stock_adjustment_btn: "स्टक मिलान (Stock Adjustment)",
+    stock_card_btn: "स्टक कार्ड (Stock Card)",
+    online_status: "अनलाइन (Online)",
+    offline_status: "अफलाइन (Offline)",
+    batches_stored: "ब्याच सुरक्षित",
+    syncing_status: "सिंक हुँदै... (Syncing)",
+    sync_conflict: "सिंक समस्या (Conflict)"
   }
 };
 
 interface LocaleContextType {
   locale: Locale;
+  isNepali: boolean;
+  isEnglish: boolean;
   setLocale: (locale: Locale) => void;
   toggleLocale: () => void;
   t: (key: string, fallback?: string) => string;
@@ -198,6 +226,8 @@ interface LocaleContextType {
 
 const LocaleContext = createContext<LocaleContextType>({
   locale: "en",
+  isNepali: false,
+  isEnglish: true,
   setLocale: () => {},
   toggleLocale: () => {},
   t: (key: string, fallback?: string) => fallback || key,
@@ -208,7 +238,7 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("livo_locale") as Locale;
+      const saved = (localStorage.getItem("livo_preferred_locale") || localStorage.getItem("livo_locale")) as Locale;
       if (saved === "en" || saved === "ne") {
         setLocaleState(saved);
       }
@@ -220,6 +250,7 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   const setLocale = (newLocale: Locale) => {
     setLocaleState(newLocale);
     try {
+      localStorage.setItem("livo_preferred_locale", newLocale);
       localStorage.setItem("livo_locale", newLocale);
     } catch (e) {
       // ignore
@@ -242,8 +273,11 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     return fallback !== undefined ? fallback : key;
   };
 
+  const isNepali = locale === "ne";
+  const isEnglish = locale === "en";
+
   return (
-    <LocaleContext.Provider value={{ locale, setLocale, toggleLocale, t }}>
+    <LocaleContext.Provider value={{ locale, isNepali, isEnglish, setLocale, toggleLocale, t }}>
       {children}
     </LocaleContext.Provider>
   );

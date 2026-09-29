@@ -49,7 +49,7 @@ interface StockReportViewProps {
 }
 
 export function StockReportView({ userRole }: StockReportViewProps) {
-  const { t } = useLocale();
+  const { locale, isNepali, t } = useLocale();
   const [stockItems, setStockItems] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -312,7 +312,7 @@ export function StockReportView({ userRole }: StockReportViewProps) {
                 Inventory Size Curve Distribution
               </span>
             </div>
-            <span style={{ fontSize: "11px", color: "#475569" }}>जुत्ता साइज (Sizes 32–43) Curve</span>
+            <span style={{ fontSize: "11px", color: "#475569" }}>{locale === "en" ? "Shoe Sizes (Sizes 32–43) Curve" : "जुत्ता साइज (Sizes 32–43) Curve"}</span>
           </div>
 
           <div style={{ width: "100%", height: "190px" }}>
@@ -362,7 +362,7 @@ export function StockReportView({ userRole }: StockReportViewProps) {
                 color: viewMode === "matrix" ? "#FFFFFF" : "#475569"
               }}
             >
-              जुत्ता साइज (Sizes 32–43)
+              {locale === "en" ? "Shoe Sizes (Sizes 32–43)" : "जुत्ता साइज (Sizes 32–43)"}
             </button>
             <button
               type="button"
@@ -436,7 +436,7 @@ export function StockReportView({ userRole }: StockReportViewProps) {
                 cursor: "pointer"
               }}
             >
-              <Sliders size={13} /> + स्टक मिलान (Stock Adjustment)
+              <Sliders size={13} /> + {locale === "en" ? "Stock Adjustment" : "स्टक मिलान (Stock Adjustment)"}
             </button>
           )}
         </div>
@@ -454,7 +454,7 @@ export function StockReportView({ userRole }: StockReportViewProps) {
             </h3>
           </div>
           <div style={{ fontSize: "11px", color: "#64748B", display: "flex", alignItems: "center", gap: "4px" }}>
-            <Info size={11} /> जुत्ता साइज (Sizes 32–43) • Append-only ledger math
+            <Info size={11} /> {locale === "en" ? "Shoe Sizes (Sizes 32–43) • Append-only ledger math" : "जुत्ता साइज (Sizes 32–43) • Append-only ledger math"}
           </div>
         </div>
 
@@ -468,7 +468,7 @@ export function StockReportView({ userRole }: StockReportViewProps) {
             No product inventory records match the selected filter criteria.
           </div>
         ) : viewMode === "matrix" ? (
-          /* SIZING MATRIX GRID - जुत्ता साइज (Sizes 32-43) */
+          /* SIZING MATRIX GRID */
           <div className="table-container-dense">
             <table className="table-dense">
               <thead>
@@ -486,7 +486,7 @@ export function StockReportView({ userRole }: StockReportViewProps) {
                   <th style={{ textAlign: "right", width: "110px" }}>Total Pairs</th>
                   <th style={{ textAlign: "right", width: "120px" }}>Valuation</th>
                   <th style={{ width: "85px", textAlign: "center" }}>Health</th>
-                  <th style={{ width: "95px", textAlign: "center" }}>स्टक कार्ड</th>
+                  <th style={{ width: "95px", textAlign: "center" }}>{locale === "en" ? "Stock Card" : "स्टक कार्ड"}</th>
                 </tr>
               </thead>
               <tbody>
@@ -600,7 +600,7 @@ export function StockReportView({ userRole }: StockReportViewProps) {
                           }}
                           title="Open Stock Card"
                         >
-                          <FileText size={11} /> स्टक कार्ड
+                          <FileText size={11} /> {locale === "en" ? "Stock Card" : "स्टक कार्ड"}
                         </button>
                       </td>
                     </tr>
@@ -624,7 +624,7 @@ export function StockReportView({ userRole }: StockReportViewProps) {
                   <th style={{ textAlign: "right", width: "120px" }}>Current Stock</th>
                   <th style={{ textAlign: "right", width: "130px" }}>Valuation</th>
                   <th style={{ width: "90px", textAlign: "center" }}>Stock Health</th>
-                  <th style={{ width: "95px", textAlign: "center" }}>स्टक कार्ड</th>
+                  <th style={{ width: "95px", textAlign: "center" }}>{locale === "en" ? "Stock Card" : "स्टक कार्ड"}</th>
                 </tr>
               </thead>
               <tbody>
@@ -728,7 +728,7 @@ export function StockReportView({ userRole }: StockReportViewProps) {
                           }}
                           title="Open Stock Card"
                         >
-                          <FileText size={11} /> स्टक कार्ड
+                          <FileText size={11} /> {locale === "en" ? "Stock Card" : "स्टक कार्ड"}
                         </button>
                       </td>
                     </tr>

@@ -18,8 +18,10 @@ import {
   Check
 } from "lucide-react";
 import { clearOfflineQueue } from "@/lib/offlineQueue";
+import { useLocale } from "@/context/LocaleContext";
 
 export function SettingsView() {
+  const { locale } = useLocale();
   // Factory Configuration State
   const [companyName, setCompanyName] = useState("Livo Footwear Industries Pvt. Ltd.");
   const [panNumber] = useState("609823412"); // Read-only statutory identifier
@@ -100,7 +102,11 @@ export function SettingsView() {
   const handleClearCache = async () => {
     try {
       await clearOfflineQueue();
-      setCacheNotice("स्थानीय ड्राफ्ट र क्यास सफा गरियो (Local draft cache cleared)");
+      setCacheNotice(
+        locale === "en"
+          ? "Local draft cache cleared successfully."
+          : "स्थानीय ड्राफ्ट र क्यास सफा गरियो (Local draft cache cleared)"
+      );
       setTimeout(() => setCacheNotice(null), 4000);
     } catch (err: any) {
       setCacheNotice(`Failed to clear cache: ${err.message}`);
@@ -137,7 +143,7 @@ export function SettingsView() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
         <div>
           <h1 style={{ fontSize: "20px", fontWeight: "700", color: "#0F172A", letterSpacing: "-0.01em" }}>
-            प्रणाली सेटिङ तथा कारखाना विन्यास (System Settings & Factory Config)
+            {locale === "en" ? "System Settings & Factory Policy" : "प्रणाली सेटिङ तथा कारखाना विन्यास (System Settings & Factory Config)"}
           </h1>
           <p style={{ fontSize: "13px", color: "#475569", marginTop: "2px" }}>
             Industrial paper parameter configuration, statutory terms, offline sync storage, and cloud disaster recovery.
@@ -161,7 +167,7 @@ export function SettingsView() {
                 animation: "fadeIn 0.2s ease"
               }}
             >
-              <Check size={16} /> परिवर्तन सुरक्षित भयो (Settings Saved)
+              <Check size={16} /> {locale === "en" ? "Settings Saved" : "परिवर्तन सुरक्षित भयो (Settings Saved)"}
             </span>
           )}
           <button
@@ -183,7 +189,7 @@ export function SettingsView() {
               transition: "background-color 0.15s ease"
             }}
           >
-            <Save size={15} /> सुरक्षित गर्नुहोस् (Save Settings)
+            <Save size={15} /> {locale === "en" ? "Save Settings" : "सुरक्षित गर्नुहोस् (Save Settings)"}
           </button>
         </div>
       </div>
@@ -197,7 +203,7 @@ export function SettingsView() {
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
               <Building2 size={18} color="#1E3A8A" />
               <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>
-                कम्पनी तथा कारखाना विवरण
+                {locale === "en" ? "Company & Factory Profile" : "कम्पनी तथा कारखाना विवरण (Company Profile)"}
               </h3>
             </div>
             <div style={{ fontSize: "12px", fontWeight: "600", color: "#64748B" }}>
@@ -211,7 +217,7 @@ export function SettingsView() {
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#334155", marginBottom: "4px" }}>
-                Company Legal Name / कम्पनीको नाम
+                {locale === "en" ? "Company Legal Name" : "कम्पनीको नाम (Company Legal Name)"}
               </label>
               <input
                 type="text"
@@ -242,7 +248,7 @@ export function SettingsView() {
 
               <div>
                 <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#334155", marginBottom: "4px" }}>
-                  Factory Plant Address / कारखाना ठेगाना
+                  {locale === "en" ? "Factory Plant Address" : "कारखाना ठेगाना (Factory Plant Address)"}
                 </label>
                 <input
                   type="text"
@@ -261,7 +267,7 @@ export function SettingsView() {
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
               <Sliders size={18} color="#1E3A8A" />
               <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>
-                साइज तथा प्याकिङ नीति
+                {locale === "en" ? "Sizing & Packaging Policy" : "साइज तथा प्याकिङ नीति (Sizing Policy)"}
               </h3>
             </div>
             <div style={{ fontSize: "12px", fontWeight: "600", color: "#64748B" }}>
@@ -275,7 +281,7 @@ export function SettingsView() {
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#334155", marginBottom: "4px" }}>
-                Standard Sizing Curve / साइज मानक
+                {locale === "en" ? "Standard Sizing Curve" : "साइज मानक (Standard Sizing Curve)"}
               </label>
               <input
                 type="text"
@@ -288,7 +294,7 @@ export function SettingsView() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
               <div>
                 <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#334155", marginBottom: "4px" }}>
-                  Master Carton Multiplier / कार्टन गुणक
+                  {locale === "en" ? "Master Carton Multiplier" : "कार्टन गुणक (Master Carton Multiplier)"}
                 </label>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <input
@@ -299,14 +305,14 @@ export function SettingsView() {
                     style={{ width: "80px", padding: "8px 12px", fontSize: "13px", borderRadius: "4px", border: "1px solid #CBD5E1", background: "#FFFFFF", color: "#0F172A" }}
                   />
                   <span style={{ fontSize: "12.5px", color: "#475569" }}>
-                    जोडी प्रति कार्टन (12 Pairs = 1 Carton)
+                    {locale === "en" ? "Pairs per Carton (12 Pairs = 1 Carton)" : "जोडी प्रति कार्टन (12 Pairs = 1 Carton)"}
                   </span>
                 </div>
               </div>
 
               <div>
                 <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#334155", marginBottom: "4px" }}>
-                  Core Size Alert Thresholds / मुख्य साइजहरू
+                  {locale === "en" ? "Core Size Alert Thresholds" : "मुख्य साइजहरू (Core Size Alert Thresholds)"}
                 </label>
                 <input
                   type="text"
@@ -326,7 +332,7 @@ export function SettingsView() {
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
               <Percent size={18} color="#1E3A8A" />
               <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>
-                कर तथा वित्तीय नीति
+                {locale === "en" ? "Tax & Credit Policy" : "कर तथा वित्तीय नीति (Tax Policy)"}
               </h3>
             </div>
             <div style={{ fontSize: "12px", fontWeight: "600", color: "#64748B" }}>
@@ -353,7 +359,7 @@ export function SettingsView() {
 
               <div>
                 <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#334155", marginBottom: "4px" }}>
-                  Standard Credit Terms / भुक्तानी अवधि
+                  {locale === "en" ? "Standard Credit Terms" : "भुक्तानी अवधि (Standard Credit Terms)"}
                 </label>
                 <input
                   type="text"
@@ -366,7 +372,7 @@ export function SettingsView() {
 
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#334155", marginBottom: "4px" }}>
-                Default Customer Credit Ceiling / सुरुवाती बक्यौता सीमा (NPR)
+                {locale === "en" ? "Default Customer Credit Ceiling (NPR)" : "सुरुवाती बक्यौता सीमा (Default Credit Ceiling - NPR)"}
               </label>
               <div style={{ position: "relative" }}>
                 <span style={{ position: "absolute", left: "10px", top: "8px", fontSize: "12.5px", color: "#64748B" }}>
@@ -390,7 +396,7 @@ export function SettingsView() {
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
               <HardDrive size={18} color="#1E3A8A" />
               <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>
-                सिंक तथा स्थानीय क्यास
+                {locale === "en" ? "Sync & Local Device Cache" : "सिंक तथा स्थानीय क्यास (Sync & Local Cache)"}
               </h3>
             </div>
             <div style={{ fontSize: "12px", fontWeight: "600", color: "#64748B" }}>
@@ -441,7 +447,7 @@ export function SettingsView() {
                   transition: "background 0.15s ease"
                 }}
               >
-                <Trash2 size={14} /> Clear Local Outbox Drafts (क्यास खाली गर्नुहोस्)
+                <Trash2 size={14} /> {locale === "en" ? "Clear Local Outbox Drafts" : "Clear Local Outbox Drafts (क्यास खाली गर्नुहोस्)"}
               </button>
             </div>
           </div>
@@ -539,7 +545,7 @@ export function SettingsView() {
           <div>
             <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#0F172A", display: "flex", alignItems: "center", gap: "8px" }}>
               <ShieldCheck size={18} color="#047857" />
-              One-Click Support Diagnostics (प्रणाली निरीक्षण तथा सहयोग)
+              {locale === "en" ? "One-Click Support Diagnostics" : "One-Click Support Diagnostics (प्रणाली निरीक्षण तथा सहयोग)"}
             </h3>
             <p style={{ color: "#475569", fontSize: "13px", marginTop: "4px", maxWidth: "680px" }}>
               Exports encrypted ZIP bundle containing structured JSON logs, database self-check results, and runtime memory profiles for technical support.

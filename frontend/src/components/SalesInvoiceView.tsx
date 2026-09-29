@@ -18,12 +18,14 @@ import { exportToCSV } from "../utils/csvExport";
 import { useBarcodeScanner } from "../hooks/useBarcodeScanner";
 import { apiFetch, extractSupportReference } from "../lib/api";
 import { toPaisa, fromPaisa, calculateVat, calculateVatPaisa } from "../lib/currency";
+import { useLocale } from "../context/LocaleContext";
 
 const COMPANY_PAN = "609823412";
 const COMPANY_NAME = "LIVO FOOTWEAR INDUSTRIES PVT. LTD.";
 const COMPANY_ADDRESS = "Balaju Industrial District, Kathmandu, Nepal";
 
 export function SalesInvoiceView({ userRole }: { userRole?: string }) {
+  const { locale } = useLocale();
   const [clients, setClients] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -58,7 +60,10 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
   const expectedPairs = numCartons * 12 + numLoose;
   const enteredPairs = parseFloat(quantity || "0") || 0;
   const cartonMismatch = enteredPairs > 0 && expectedPairs !== enteredPairs;
-  const cartonMismatchMsg = `कार्टुन र जोर संख्या मिलेन: ${numCartons} कार्टुन = ${expectedPairs} जोर हुनुपर्छ।`;
+  const cartonMismatchMsg =
+    locale === "en"
+      ? `Carton and pair mismatch: ${numCartons} Cartons = ${expectedPairs} pairs expected.`
+      : `कार्टुन र जोर संख्या मिलेन: ${numCartons} कार्टुन = ${expectedPairs} जोर हुनुपर्छ।`;
 
   // Field Refs for Sequential Keyboard Traversal
   const clientRef = useRef<HTMLSelectElement>(null);
@@ -440,7 +445,9 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
         <div>
           <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#0F172A", margin: 0, letterSpacing: "-0.01em" }}>
-            Wholesale Sales & Statutory Tax Invoices (कर बिजक)
+            {locale === "en"
+              ? "Wholesale Sales & Statutory Tax Invoices"
+              : "कर बिजक तथा थोक बिक्री (Sales & Invoicing)"}
           </h2>
           <div style={{ fontSize: "12px", color: "#475569", marginTop: "2px" }}>
             Nepal IRD Rule 23(1) Schedule-5 Compliance · Monotonic Sequential Invoices
@@ -548,7 +555,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
 
           {/* Dual-Unit Packaging Floor Hint */}
           <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "3px", padding: "4px 8px", fontSize: "11px", fontWeight: "700", color: "#1E3A8A" }}>
-            <span>१ कार्टुन = १२ जोर (1 Carton = 12 Pairs)</span>
+            <span>{locale === "en" ? "1 Carton = 12 Pairs" : "१ कार्टुन = १२ जोर (1 Carton = 12 Pairs)"}</span>
           </div>
         </div>
 
@@ -681,9 +688,9 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                                 alignItems: "center",
                                 gap: "3px"
                               }}
-                              title="Preview Nepal IRD Tax Invoice (कर बिजक)"
+                              title={locale === "en" ? "Preview Tax Invoice" : "Preview Nepal IRD Tax Invoice (कर बिजक)"}
                             >
-                              <Printer size={11} /> कर बिजक
+                              <Printer size={11} /> {locale === "en" ? "Tax Invoice" : "कर बिजक"}
                             </button>
                             {userRole === "editor" && !inv.is_void && (
                               <button
@@ -861,7 +868,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <Receipt size={16} color="#1E3A8A" />
                 <span style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A", textTransform: "uppercase" }}>
-                  Nepal IRD Statutory Tax Invoice (कर बिजक)
+                  {locale === "en" ? "Nepal IRD Statutory Tax Invoice" : "नेपाल सरकार कर बिजक (Nepal IRD Tax Invoice)"}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -882,7 +889,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     cursor: "pointer"
                   }}
                 >
-                  <Printer size={13} /> Print Official Copy
+                  <Printer size={13} /> {locale === "en" ? "Print Official Copy" : "प्रमाणित प्रति प्रिन्ट गर्नुहोस्"}
                 </button>
                 <button
                   type="button"
@@ -899,13 +906,17 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
               {/* Header Box */}
               <div style={{ textAlign: "center", borderBottom: "2px solid #0F172A", paddingBottom: "12px", marginBottom: "14px" }}>
                 <div style={{ fontSize: "11px", fontWeight: "600", color: "#475569" }}>
-                  नेपाल सरकार · आन्तरिक राजस्व विभाग (Government of Nepal · Inland Revenue Department)
+                  {locale === "en"
+                    ? "Government of Nepal · Inland Revenue Department"
+                    : "नेपाल सरकार · आन्तरिक राजस्व विभाग (Government of Nepal · Inland Revenue Department)"}
                 </div>
                 <h1 style={{ fontSize: "20px", fontWeight: "800", color: "#0F172A", margin: "4px 0 2px 0", letterSpacing: "0.02em" }}>
-                  कर बिजक (TAX INVOICE)
+                  {locale === "en" ? "TAX INVOICE" : "कर बिजक (TAX INVOICE)"}
                 </h1>
                 <div style={{ fontSize: "11px", color: "#64748B" }}>
-                  नियम २३ को उपनियम (१) सँग सम्बन्धित (Schedule-5, Value Added Tax Rules, 2053)
+                  {locale === "en"
+                    ? "Schedule-5, Value Added Tax Rules, 2053"
+                    : "अनुसूची-५, नियम २३ को उपनियम (१) सँग सम्बन्धित"}
                 </div>
               </div>
 
@@ -914,11 +925,15 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                 {/* Seller Info */}
                 <div style={{ border: "1px solid #CBD5E1", borderRadius: "3px", padding: "10px 12px" }}>
                   <div style={{ fontWeight: "700", fontSize: "13px", color: "#0F172A" }}>{COMPANY_NAME}</div>
-                  <div style={{ color: "#475569", marginTop: "2px" }}>ठेगाना (Address): {COMPANY_ADDRESS}</div>
+                  <div style={{ color: "#475569", marginTop: "2px" }}>
+                    {locale === "en" ? "Address: " : "ठेगाना (Address): "}{COMPANY_ADDRESS}
+                  </div>
                   
                   {/* Seller PAN Grid */}
                   <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ fontWeight: "700", color: "#0F172A" }}>विक्रेताको स्थायी लेखा नं. (PAN):</span>
+                    <span style={{ fontWeight: "700", color: "#0F172A" }}>
+                      {locale === "en" ? "Seller's PAN:" : "विक्रेताको स्थायी लेखा नं. (PAN):"}
+                    </span>
                     <div style={{ display: "inline-flex", gap: "2px" }}>
                       {COMPANY_PAN.split("").map((digit, i) => (
                         <span key={i} style={{ width: "18px", height: "20px", border: "1px solid #1E3A8A", background: "#EFF6FF", color: "#1E3A8A", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: "800", fontFamily: "monospace", fontSize: "12px" }}>
@@ -932,21 +947,23 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                 {/* Invoice Metadata & Buyer Info */}
                 <div style={{ border: "1px solid #CBD5E1", borderRadius: "3px", padding: "10px 12px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                    <span style={{ color: "#475569" }}>बिजक नं. (Invoice No):</span>
+                    <span style={{ color: "#475569" }}>{locale === "en" ? "Invoice No:" : "बिजक नं. (Invoice No):"}</span>
                     <strong style={{ fontFamily: "monospace", color: "#1E3A8A" }}>{previewInvoice.invoice_number}</strong>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                    <span style={{ color: "#475569" }}>मिति (Date AD):</span>
+                    <span style={{ color: "#475569" }}>{locale === "en" ? "Date (AD):" : "मिति (Date AD):"}</span>
                     <strong>{previewInvoice.date_ad}</strong>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                    <span style={{ color: "#475569" }}>मिति (Date BS):</span>
+                    <span style={{ color: "#475569" }}>{locale === "en" ? "Date (BS):" : "मिति (Date BS):"}</span>
                     <strong>{previewInvoice.date_bs} BS</strong>
                   </div>
 
                   {/* Buyer PAN */}
                   <div style={{ marginTop: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontWeight: "700", color: "#0F172A" }}>खरिदकर्ताको PAN:</span>
+                    <span style={{ fontWeight: "700", color: "#0F172A" }}>
+                      {locale === "en" ? "Buyer's PAN:" : "खरिदकर्ताको स्थायी लेखा नं. (PAN):"}
+                    </span>
                     <div style={{ display: "inline-flex", gap: "2px" }}>
                       {(previewInvoice.client?.pan_number || "---------").padEnd(9, "-").slice(0, 9).split("").map((digit: string, i: number) => (
                         <span key={i} style={{ width: "16px", height: "18px", border: "1px solid #CBD5E1", background: "#F8FAFC", color: digit === "-" ? "#CBD5E1" : "#0F172A", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: "700", fontFamily: "monospace", fontSize: "11px" }}>
@@ -956,7 +973,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     </div>
                   </div>
                   <div style={{ marginTop: "4px", fontSize: "11.5px", color: "#475569" }}>
-                    खरिदकर्ता (Buyer): <strong style={{ color: "#0F172A" }}>{previewInvoice.client?.name || "Cash Customer"}</strong>
+                    {locale === "en" ? "Buyer: " : "खरिदकर्ता (Buyer): "}<strong style={{ color: "#0F172A" }}>{previewInvoice.client?.name || "Cash Customer"}</strong>
                   </div>
                 </div>
               </div>
@@ -965,11 +982,11 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
               <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid #0F172A", marginBottom: "14px", fontSize: "12px" }}>
                 <thead>
                   <tr style={{ background: "#F1F5F9", borderBottom: "1px solid #0F172A" }}>
-                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "40px", textAlign: "center" }}>क्र.सं.</th>
-                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", textAlign: "left" }}>विवरण (Particulars)</th>
-                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "80px", textAlign: "right" }}>परिमाण (Qty)</th>
-                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "95px", textAlign: "right" }}>दर (Rate Rs.)</th>
-                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "115px", textAlign: "right" }}>जम्मा रकम (Rs.)</th>
+                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "40px", textAlign: "center" }}>{locale === "en" ? "S.N." : "क्र.सं."}</th>
+                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", textAlign: "left" }}>{locale === "en" ? "Particulars" : "विवरण (Particulars)"}</th>
+                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "80px", textAlign: "right" }}>{locale === "en" ? "Quantity" : "परिमाण (Qty)"}</th>
+                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "95px", textAlign: "right" }}>{locale === "en" ? "Rate (Rs.)" : "दर (Rate Rs.)"}</th>
+                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "115px", textAlign: "right" }}>{locale === "en" ? "Amount (Rs.)" : "जम्मा रकम (Rs.)"}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1011,31 +1028,31 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                 <table style={{ width: "320px", borderCollapse: "collapse", fontSize: "12px" }}>
                   <tbody>
                     <tr>
-                      <td style={{ padding: "4px 8px", color: "#475569" }}>कुल करयोग्य रकम (Taxable Subtotal):</td>
+                      <td style={{ padding: "4px 8px", color: "#475569" }}>{locale === "en" ? "Taxable Subtotal:" : "कुल करयोग्य रकम (Taxable Subtotal):"}</td>
                       <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "600" }}>
                         Rs. {fmtNpr(previewInvoice.subtotal)}
                       </td>
                     </tr>
                     <tr>
-                      <td style={{ padding: "4px 8px", color: "#475569" }}>मूल्य अभिवृद्धि कर १३% (13% VAT):</td>
+                      <td style={{ padding: "4px 8px", color: "#475569" }}>{locale === "en" ? "Value Added Tax (13% VAT):" : "मूल्य अभिवृद्धि कर १३% (13% VAT):"}</td>
                       <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "600", color: "#1E3A8A" }}>
                         Rs. {fmtNpr(previewInvoice.vatAmount)}
                       </td>
                     </tr>
                     <tr style={{ borderTop: "2px solid #0F172A", borderBottom: "2px solid #0F172A", background: "#F8FAFC" }}>
-                      <td style={{ padding: "6px 8px", fontWeight: "800", color: "#0F172A" }}>कूल जम्मा रकम (Grand Total NPR):</td>
+                      <td style={{ padding: "6px 8px", fontWeight: "800", color: "#0F172A" }}>{locale === "en" ? "Grand Total (NPR):" : "कूल जम्मा रकम (Grand Total NPR):"}</td>
                       <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "800", fontSize: "13px", color: "#0F172A" }}>
                         Rs. {fmtNpr(previewInvoice.total_amount)}
                       </td>
                     </tr>
                     <tr>
-                      <td style={{ padding: "4px 8px", color: "#059669", fontWeight: "600" }}>प्राप्त रकम (Amount Received):</td>
+                      <td style={{ padding: "4px 8px", color: "#059669", fontWeight: "600" }}>{locale === "en" ? "Amount Received:" : "प्राप्त रकम (Amount Received):"}</td>
                       <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "600", color: "#059669" }}>
                         Rs. {fmtNpr(previewInvoice.received_amount)}
                       </td>
                     </tr>
                     <tr>
-                      <td style={{ padding: "4px 8px", color: "#DC2626", fontWeight: "700" }}>बाँकी बक्यौता (Receivable Balance):</td>
+                      <td style={{ padding: "4px 8px", color: "#DC2626", fontWeight: "700" }}>{locale === "en" ? "Receivable Balance Due:" : "बाँकी बक्यौता (Receivable Balance):"}</td>
                       <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "700", color: "#DC2626" }}>
                         Rs. {fmtNpr(previewInvoice.receivable_amount)}
                       </td>
@@ -1047,10 +1064,10 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
               {/* Statutory Signature Block */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "40px", paddingTop: "10px", fontSize: "11px", color: "#475569" }}>
                 <div style={{ textAlign: "center", width: "180px", borderTop: "1px dashed #64748B", paddingTop: "4px" }}>
-                  खरिदकर्ताको दस्तखत (Buyer Signature)
+                  {locale === "en" ? "Buyer Signature" : "खरिदकर्ताको दस्तखत (Buyer Signature)"}
                 </div>
                 <div style={{ textAlign: "center", width: "180px", borderTop: "1px dashed #64748B", paddingTop: "4px" }}>
-                  आधिकारिक दस्तखत (Authorized Signature)
+                  {locale === "en" ? "Authorized Signature" : "आधिकारिक दस्तखत (Authorized Signature)"}
                 </div>
               </div>
             </div>
@@ -1206,17 +1223,19 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                 <div style={{ background: "#F1F5F9", border: "1px solid #CBD5E1", borderRadius: "4px", padding: "10px 12px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                     <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.04em", color: "#334155" }}>
-                      Dual-Unit Carton Reconciliation (कार्टुन र जोर मिलान)
+                      {locale === "en"
+                        ? "Dual-Unit Carton Reconciliation"
+                        : "कार्टुन र जोर मिलान (Dual-Unit Reconciliation)"}
                     </span>
                     <span style={{ fontSize: "10.5px", color: "#1E3A8A", fontWeight: "700", background: "#DBEAFE", padding: "1px 6px", borderRadius: "3px" }}>
-                      १ कार्टुन = १२ जोर
+                      {locale === "en" ? "1 Carton = 12 Pairs" : "१ कार्टुन = १२ जोर"}
                     </span>
                   </div>
 
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
                     <div>
                       <label style={{ fontSize: "10.5px", textTransform: "uppercase", color: "#475569", fontWeight: "700", display: "block", marginBottom: "2px" }}>
-                        Cartons (कार्टुन)
+                        {locale === "en" ? "Cartons (ctn)" : "कार्टुन (Cartons)"}
                       </label>
                       <input
                         type="number"
@@ -1235,7 +1254,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     </div>
                     <div>
                       <label style={{ fontSize: "10.5px", textTransform: "uppercase", color: "#475569", fontWeight: "700", display: "block", marginBottom: "2px" }}>
-                        Loose Pairs (खुद्रा)
+                        {locale === "en" ? "Loose Pairs" : "खुद्रा जोर (Loose Pairs)"}
                       </label>
                       <input
                         type="number"
@@ -1254,7 +1273,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     </div>
                     <div>
                       <label style={{ fontSize: "10.5px", textTransform: "uppercase", color: "#475569", fontWeight: "700", display: "block", marginBottom: "2px" }}>
-                        Entered Pairs (जोर)
+                        {locale === "en" ? "Total Pairs" : "जम्मा जोर (Total Pairs)"}
                       </label>
                       <input
                         ref={quantityRef}
