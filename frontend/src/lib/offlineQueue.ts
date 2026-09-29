@@ -108,6 +108,22 @@ export async function getQueueCount(): Promise<number> {
   }
 }
 
+export async function clearOfflineQueue(): Promise<void> {
+  try {
+    const db = await getDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.clear();
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+    notifyListeners();
+  } catch (err) {
+    console.error("Failed to clear offline queue:", err);
+  }
+}
+
 async function notifyListeners() {
   const count = await getQueueCount();
   listeners.forEach((listener) => listener(count));

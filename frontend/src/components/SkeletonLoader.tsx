@@ -13,10 +13,10 @@ export function SkeletonLoader({ title = "Loading Module...", type = "dashboard"
       {/* Header bar skeleton */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <div>
-          <div style={{ height: "24px", width: "220px", background: "#1e293b", borderRadius: "4px", marginBottom: "8px" }} />
-          <div style={{ height: "14px", width: "320px", background: "#0f172a", borderRadius: "4px" }} />
+          <div style={{ height: "24px", width: "220px", background: "#E2E8F0", borderRadius: "4px", marginBottom: "8px" }} />
+          <div style={{ height: "14px", width: "320px", background: "#F1F5F9", borderRadius: "4px" }} />
         </div>
-        <div style={{ height: "36px", width: "120px", background: "#1e293b", borderRadius: "6px" }} />
+        <div style={{ height: "36px", width: "120px", background: "#E2E8F0", borderRadius: "4px" }} />
       </div>
 
       {type === "dashboard" && (
@@ -28,14 +28,14 @@ export function SkeletonLoader({ title = "Loading Module...", type = "dashboard"
                 key={i}
                 style={{
                   height: "90px",
-                  background: "#0f172a",
-                  border: "1px solid #1e293b",
-                  borderRadius: "8px",
+                  background: "#FFFFFF",
+                  border: "1px solid #CBD5E1",
+                  borderRadius: "4px",
                   padding: "16px"
                 }}
               >
-                <div style={{ height: "12px", width: "60%", background: "#1e293b", borderRadius: "4px", marginBottom: "12px" }} />
-                <div style={{ height: "24px", width: "40%", background: "#334155", borderRadius: "4px" }} />
+                <div style={{ height: "12px", width: "60%", background: "#F1F5F9", borderRadius: "4px", marginBottom: "12px" }} />
+                <div style={{ height: "24px", width: "40%", background: "#E2E8F0", borderRadius: "4px" }} />
               </div>
             ))}
           </div>
@@ -45,31 +45,31 @@ export function SkeletonLoader({ title = "Loading Module...", type = "dashboard"
             <div
               style={{
                 height: "280px",
-                background: "#0f172a",
-                border: "1px solid #1e293b",
-                borderRadius: "8px",
+                background: "#FFFFFF",
+                border: "1px solid #CBD5E1",
+                borderRadius: "4px",
                 padding: "20px"
               }}
             >
-              <div style={{ height: "16px", width: "150px", background: "#1e293b", borderRadius: "4px", marginBottom: "20px" }} />
-              <div style={{ height: "200px", background: "rgba(30, 41, 59, 0.4)", borderRadius: "6px", display: "flex", alignItems: "flex-end", gap: "12px", padding: "12px" }}>
+              <div style={{ height: "16px", width: "150px", background: "#E2E8F0", borderRadius: "4px", marginBottom: "20px" }} />
+              <div style={{ height: "200px", background: "#F8FAFC", borderRadius: "4px", display: "flex", alignItems: "flex-end", gap: "12px", padding: "12px", border: "1px solid #F1F5F9" }}>
                 {[40, 65, 85, 30, 95, 60, 75].map((h, idx) => (
-                  <div key={idx} style={{ flex: 1, height: `${h}%`, background: "#1e293b", borderRadius: "4px" }} />
+                  <div key={idx} style={{ flex: 1, height: `${h}%`, background: "#CBD5E1", borderRadius: "2px" }} />
                 ))}
               </div>
             </div>
             <div
               style={{
                 height: "280px",
-                background: "#0f172a",
-                border: "1px solid #1e293b",
-                borderRadius: "8px",
+                background: "#FFFFFF",
+                border: "1px solid #CBD5E1",
+                borderRadius: "4px",
                 padding: "20px"
               }}
             >
-              <div style={{ height: "16px", width: "180px", background: "#1e293b", borderRadius: "4px", marginBottom: "20px" }} />
+              <div style={{ height: "16px", width: "180px", background: "#E2E8F0", borderRadius: "4px", marginBottom: "20px" }} />
               <div style={{ height: "200px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ width: "140px", height: "140px", borderRadius: "50%", border: "16px solid #1e293b" }} />
+                <div style={{ width: "140px", height: "140px", borderRadius: "50%", border: "16px solid #E2E8F0" }} />
               </div>
             </div>
           </div>
@@ -77,10 +77,10 @@ export function SkeletonLoader({ title = "Loading Module...", type = "dashboard"
       )}
 
       {/* Table rows skeleton */}
-      <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "8px", padding: "16px" }}>
-        <div style={{ height: "36px", background: "#1e293b", borderRadius: "4px", marginBottom: "12px" }} />
+      <div style={{ background: "#FFFFFF", border: "1px solid #CBD5E1", borderRadius: "4px", padding: "16px" }}>
+        <div style={{ height: "36px", background: "#F1F5F9", borderRadius: "4px", marginBottom: "12px" }} />
         {[1, 2, 3, 4, 5].map((r) => (
-          <div key={r} style={{ height: "28px", background: "rgba(30, 41, 59, 0.3)", borderRadius: "4px", marginBottom: "8px" }} />
+          <div key={r} style={{ height: "28px", background: "#F8FAFC", borderRadius: "4px", marginBottom: "8px", borderBottom: "1px solid #F1F5F9" }} />
         ))}
       </div>
     </div>

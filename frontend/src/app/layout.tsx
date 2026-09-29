@@ -34,13 +34,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className="light" style={{ backgroundColor: "#F8FAFC", colorScheme: "light" }}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+        <meta name="color-scheme" content="light" />
+        <meta name="theme-color" content="#F8FAFC" />
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#0b1120" />
       </head>
-      <body>
+      <body className="min-h-screen bg-[#F8FAFC] text-[#0F172A] antialiased" style={{ backgroundColor: "#F8FAFC" }}>
         <LocaleProvider>
           {children}
         </LocaleProvider>

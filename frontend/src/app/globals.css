@@ -180,6 +180,16 @@ table, td, th, input[type="number"], input[type="date"], .num-mono, .num-mono-bo
 }
 
 /* Form Inputs — High-Contrast Industrial Input */
+input, select, textarea {
+  background-color: #ffffff;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #64748b;
+}
+
 .input-field {
   width: 100%;
   background: #FFFFFF;
@@ -192,7 +202,7 @@ table, td, th, input[type="number"], input[type="date"], .num-mono, .num-mono-bo
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
-.input-field:focus {
+.input-field:focus, input:focus, select:focus, textarea:focus {
   border-color: var(--accent-blue);
   box-shadow: 0 0 0 1px var(--accent-blue);
 }
@@ -290,12 +300,18 @@ table, td, th, input[type="number"], input[type="date"], .num-mono, .num-mono-bo
   background: #EFF6FF !important;
 }
 
-/* Sticky Column Utilities for High-Density Grids */
-.sticky-col-left-1 {
+/* Sticky Column Utilities for High-Density Grids — Enforce Pure White Surface */
+.sticky-col-left-1,
+.sticky-col-left-2,
+.sticky-col-right {
   position: sticky;
-  left: 0;
   z-index: 15;
-  background: #FFFFFF !important;
+  background-color: #FFFFFF !important;
+  opacity: 1 !important;
+}
+
+.sticky-col-left-1 {
+  left: 0;
   border-right: 1px solid var(--border-color) !important;
 }
 
@@ -305,10 +321,7 @@ table, td, th, input[type="number"], input[type="date"], .num-mono, .num-mono-bo
 }
 
 .sticky-col-left-2 {
-  position: sticky;
   left: 90px;
-  z-index: 15;
-  background: #FFFFFF !important;
   border-right: 1px solid var(--border-color) !important;
 }
 
@@ -318,15 +331,32 @@ table, td, th, input[type="number"], input[type="date"], .num-mono, .num-mono-bo
 }
 
 .sticky-col-right {
-  position: sticky;
   right: 0;
-  z-index: 15;
-  background: #FFFFFF !important;
 }
 
 .table-dense thead th.sticky-col-right {
   background: #F1F5F9 !important;
   z-index: 25;
+}
+
+.table-dense tbody tr:nth-child(even) td.sticky-col-left-1,
+.table-dense tbody tr:nth-child(even) td.sticky-col-left-2,
+.table-dense tbody tr:nth-child(even) td.sticky-col-right {
+  background-color: #FFFFFF !important;
+}
+
+.table-dense tbody tr:hover td.sticky-col-left-1,
+.table-dense tbody tr:hover td.sticky-col-left-2,
+.table-dense tbody tr:hover td.sticky-col-right {
+  background-color: #EFF6FF !important;
+}
+
+/* Full-Screen Loading Spinners and Fallbacks */
+.full-screen-loader,
+.screen-fallback,
+[role="status"][aria-live="polite"] {
+  background-color: #F8FAFC !important;
+  color: #0F172A !important;
 }
 
 /* Sizing Matrix Cells (Paris Points 32-43) */
