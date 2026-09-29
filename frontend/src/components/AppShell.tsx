@@ -17,7 +17,9 @@ import {
   UserCheck,
   CreditCard,
   ShieldAlert,
-  Users
+  Users,
+  Image as ImageIcon,
+  Trophy
 } from "lucide-react";
 
 import { LegalModal } from "./LegalModal";
@@ -97,6 +99,8 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
     { id: "production", label: t("production_batches"), icon: Factory },
     { id: "purchase", label: t("purchase_raw_materials"), icon: FileText },
     { id: "hr", label: t("hr_management"), icon: Users },
+    { id: "gallery", label: t("gallery"), icon: ImageIcon },
+    { id: "analytics", label: t("analytics_ranks"), icon: Trophy },
     ...(user?.role === "admin" ? [{ id: "ops_cockpit", label: t("ops_cockpit"), icon: ShieldAlert }] : []),
     { id: "settings", label: t("settings_backups"), icon: SettingsIcon },
   ];

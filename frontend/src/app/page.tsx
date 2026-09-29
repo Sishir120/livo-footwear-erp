@@ -45,6 +45,16 @@ const HRManagementView = dynamic(
   { loading: () => <SkeletonLoader title="Loading HR & Worker Ledger..." type="table" />, ssr: false }
 );
 
+const ProductGalleryView = dynamic(
+  () => import("@/components/ProductGalleryView").then((mod) => mod.ProductGalleryView),
+  { loading: () => <SkeletonLoader title="Loading Product Gallery..." type="table" />, ssr: false }
+);
+
+const LeaderboardsView = dynamic(
+  () => import("@/components/LeaderboardsView").then((mod) => mod.LeaderboardsView),
+  { loading: () => <SkeletonLoader title="Loading Sales Leaderboards & Analytics..." type="table" />, ssr: false }
+);
+
 const SettingsView = dynamic(
   () => import("@/components/SettingsView").then((mod) => mod.SettingsView),
   { loading: () => <SkeletonLoader title="Loading System Settings..." type="form" />, ssr: false }
@@ -167,6 +177,18 @@ export default function Home() {
       {activeTab === "hr" && (
         <ErrorBoundary screenName="HR & Workers">
           <HRManagementView userRole={user.role} />
+        </ErrorBoundary>
+      )}
+
+      {activeTab === "gallery" && (
+        <ErrorBoundary screenName="Product Gallery">
+          <ProductGalleryView userRole={user.role} />
+        </ErrorBoundary>
+      )}
+
+      {activeTab === "analytics" && (
+        <ErrorBoundary screenName="Analytics & Leaderboards">
+          <LeaderboardsView userRole={user.role} />
         </ErrorBoundary>
       )}
 

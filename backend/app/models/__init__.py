@@ -11,6 +11,8 @@ from app.models.bom import BillOfMaterials
 from app.models.receivable import ReceivableEntry, PaymentAllocation
 from app.models.sync import ProductionSyncLog
 from app.models.worker import Worker, WorkerAdvance, WorkerMonthlyRecord
+from app.models.gallery import ProductImage
+from app.models.analytics import DailyFactoryLog
 
 __all__ = [
     "Company",
@@ -37,6 +39,8 @@ __all__ = [
     "ProductionSyncLog",
     "Worker",
     "WorkerAdvance",
-    "WorkerMonthlyRecord"
+    "WorkerMonthlyRecord",
+    "ProductImage",
+    "DailyFactoryLog"
 ]
 

@@ -11,6 +11,8 @@ from app.api.v1.backup import router as backup_router
 from app.api.v1.receivables import router as receivables_router
 from app.api.v1.ops import router as ops_router
 from app.api.v1.hr import router as hr_router
+from app.api.v1.gallery import router as gallery_router
+from app.api.v1.analytics import router as analytics_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -25,5 +27,7 @@ api_router.include_router(backup_router)
 api_router.include_router(receivables_router)
 api_router.include_router(ops_router)
 api_router.include_router(hr_router)
+api_router.include_router(gallery_router)
+api_router.include_router(analytics_router)
 
 

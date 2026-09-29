@@ -4,3 +4,5 @@ __pycache__/
 venv/
 *.db
 logs/
+static/uploads/products/*
+!static/uploads/products/.gitkeep
