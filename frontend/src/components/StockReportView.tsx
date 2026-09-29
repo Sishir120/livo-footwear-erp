@@ -12,7 +12,9 @@ import {
   Layers,
   ArrowUpDown,
   RefreshCw,
-  Info
+  Info,
+  Sliders,
+  FileText
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -29,6 +31,8 @@ import {
 } from "recharts";
 import { exportToCSV } from "../utils/csvExport";
 import { useLocale } from "../context/LocaleContext";
+import { StockCardModal } from "./StockCardModal";
+import { StockAdjustmentModal } from "./StockAdjustmentModal";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Boot: "#3b82f6",
@@ -40,7 +44,11 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 const PARIS_POINTS = [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43];
 
-export function StockReportView() {
+interface StockReportViewProps {
+  userRole?: string;
+}
+
+export function StockReportView({ userRole }: StockReportViewProps) {
   const { t } = useLocale();
   const [stockItems, setStockItems] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
@@ -49,6 +57,20 @@ export function StockReportView() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [viewMode, setViewMode] = useState<"matrix" | "detailed">("matrix");
   const [loading, setLoading] = useState(true);
+
+  // Stock Card & Adjustment Modal state
+  const [stockCardProduct, setStockCardProduct] = useState<{
+    id: number;
+    code: string;
+    name: string;
+    category?: string;
+    color?: string;
+    unit_price?: number;
+    sizes?: Record<number, number>;
+  } | null>(null);
+
+  const [isAdjustmentOpen, setIsAdjustmentOpen] = useState(false);
+  const [adjustmentTargetProduct, setAdjustmentTargetProduct] = useState<any>(null);
 
   useEffect(() => {
     fetchStockReport();
@@ -97,6 +119,7 @@ export function StockReportView() {
   const matrixRows = useMemo(() => {
     const map = new Map<string, {
       key: string;
+      productId: number;
       modelName: string;
       codePrefix: string;
       category: string;
@@ -113,6 +136,7 @@ export function StockReportView() {
       if (!row) {
         row = {
           key: modelKey,
+          productId: item.product_id,
           modelName: item.name,
           codePrefix: item.code.includes("-") ? item.code.split("-").slice(0, 2).join("-") : item.code,
           category: item.category || "-",
@@ -389,6 +413,32 @@ export function StockReportView() {
           <button onClick={handleExportCSV} className="btn-export" disabled={!filteredItems.length}>
             <Download size={13} /> Export CSV
           </button>
+
+          {/* Controlled Stock Adjustment Trigger: Unmounted for viewers */}
+          {userRole !== "viewer" && userRole !== "viewer_demo" && (
+            <button
+              type="button"
+              onClick={() => {
+                setAdjustmentTargetProduct(null);
+                setIsAdjustmentOpen(true);
+              }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "12px",
+                padding: "5px 12px",
+                background: "#1E3A8A",
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: "3px",
+                fontWeight: "700",
+                cursor: "pointer"
+              }}
+            >
+              <Sliders size={13} /> + स्टक मिलान (Stock Adjustment)
+            </button>
+          )}
         </div>
       </div>
 
@@ -435,7 +485,8 @@ export function StockReportView() {
                   <th style={{ textAlign: "right", width: "100px" }}>Rate</th>
                   <th style={{ textAlign: "right", width: "110px" }}>Total Pairs</th>
                   <th style={{ textAlign: "right", width: "120px" }}>Valuation</th>
-                  <th style={{ width: "95px", textAlign: "center" }}>Health</th>
+                  <th style={{ width: "85px", textAlign: "center" }}>Health</th>
+                  <th style={{ width: "95px", textAlign: "center" }}>स्टक कार्ड</th>
                 </tr>
               </thead>
               <tbody>
@@ -445,10 +496,36 @@ export function StockReportView() {
                   const hasStock = row.totalPairs > 0;
                   return (
                     <tr key={row.key} style={{ height: "36px" }}>
-                      <td className="sticky-col-left-1 num-mono" style={{ fontWeight: "700", color: "#1E3A8A", padding: "6px 10px" }}>
+                      <td
+                        className="sticky-col-left-1 num-mono"
+                        style={{ fontWeight: "700", color: "#1E3A8A", padding: "6px 10px", cursor: "pointer", textDecoration: "underline" }}
+                        onClick={() => setStockCardProduct({
+                          id: row.productId,
+                          code: row.codePrefix,
+                          name: row.modelName,
+                          category: row.category,
+                          color: row.color,
+                          unit_price: row.unit_price,
+                          sizes: row.sizes
+                        })}
+                        title="Click to view Stock Card"
+                      >
                         {row.codePrefix}
                       </td>
-                      <td className="sticky-col-left-2" style={{ fontWeight: "600", color: "#0F172A", padding: "6px 10px" }}>
+                      <td
+                        className="sticky-col-left-2"
+                        style={{ fontWeight: "600", color: "#0F172A", padding: "6px 10px", cursor: "pointer" }}
+                        onClick={() => setStockCardProduct({
+                          id: row.productId,
+                          code: row.codePrefix,
+                          name: row.modelName,
+                          category: row.category,
+                          color: row.color,
+                          unit_price: row.unit_price,
+                          sizes: row.sizes
+                        })}
+                        title="Click to view Stock Card"
+                      >
                         {row.modelName}
                       </td>
                       <td style={{ padding: "6px 10px" }}>
@@ -495,6 +572,37 @@ export function StockReportView() {
                           <span className="badge badge-success">OK</span>
                         )}
                       </td>
+                      <td style={{ textAlign: "center", padding: "4px 6px" }}>
+                        <button
+                          type="button"
+                          onClick={() => setStockCardProduct({
+                            id: row.productId,
+                            code: row.codePrefix,
+                            name: row.modelName,
+                            category: row.category,
+                            color: row.color,
+                            unit_price: row.unit_price,
+                            sizes: row.sizes
+                          })}
+                          style={{
+                            background: "#EFF6FF",
+                            border: "1px solid #3B82F6",
+                            borderRadius: "3px",
+                            color: "#1E40AF",
+                            padding: "3px 8px",
+                            fontSize: "11px",
+                            fontWeight: "700",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "3px",
+                            whiteSpace: "nowrap"
+                          }}
+                          title="Open Stock Card"
+                        >
+                          <FileText size={11} /> स्टक कार्ड
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -515,7 +623,8 @@ export function StockReportView() {
                   <th style={{ textAlign: "right", width: "110px" }}>Unit Price</th>
                   <th style={{ textAlign: "right", width: "120px" }}>Current Stock</th>
                   <th style={{ textAlign: "right", width: "130px" }}>Valuation</th>
-                  <th style={{ width: "110px", textAlign: "center" }}>Stock Health</th>
+                  <th style={{ width: "90px", textAlign: "center" }}>Stock Health</th>
+                  <th style={{ width: "95px", textAlign: "center" }}>स्टक कार्ड</th>
                 </tr>
               </thead>
               <tbody>
@@ -524,17 +633,44 @@ export function StockReportView() {
                   const isDepleted = item.current_stock_pairs <= 0;
                   return (
                     <tr key={item.product_id}>
-                      <td style={{ fontWeight: "700", color: "#3b82f6" }} className="num-mono">
+                      <td
+                        style={{ fontWeight: "700", color: "#1E3A8A", cursor: "pointer", textDecoration: "underline" }}
+                        className="num-mono"
+                        onClick={() => setStockCardProduct({
+                          id: item.product_id,
+                          code: item.code,
+                          name: item.name,
+                          category: item.category,
+                          color: item.color,
+                          unit_price: item.unit_price,
+                          sizes: { [Number(item.size)]: item.current_stock_pairs }
+                        })}
+                        title="Click to view Stock Card"
+                      >
                         {item.code}
                       </td>
-                      <td style={{ fontWeight: "600" }}>{item.name}</td>
+                      <td
+                        style={{ fontWeight: "600", cursor: "pointer" }}
+                        onClick={() => setStockCardProduct({
+                          id: item.product_id,
+                          code: item.code,
+                          name: item.name,
+                          category: item.category,
+                          color: item.color,
+                          unit_price: item.unit_price,
+                          sizes: { [Number(item.size)]: item.current_stock_pairs }
+                        })}
+                        title="Click to view Stock Card"
+                      >
+                        {item.name}
+                      </td>
                       <td>
-                        <span style={{ fontSize: "11px", color: "#94a3b8" }}>{item.category || "-"}</span>
+                        <span style={{ fontSize: "11px", color: "#475569" }}>{item.category || "-"}</span>
                       </td>
                       <td style={{ textAlign: "center" }} className="num-mono">
                         {item.size || "-"}
                       </td>
-                      <td style={{ color: "#94a3b8", fontSize: "11px" }}>{item.color || "-"}</td>
+                      <td style={{ color: "#475569", fontSize: "11px" }}>{item.color || "-"}</td>
                       <td style={{ textAlign: "right" }} className="num-mono">
                         Rs. {item.unit_price?.toLocaleString()}
                       </td>
@@ -564,6 +700,37 @@ export function StockReportView() {
                           </span>
                         )}
                       </td>
+                      <td style={{ textAlign: "center", padding: "4px 6px" }}>
+                        <button
+                          type="button"
+                          onClick={() => setStockCardProduct({
+                            id: item.product_id,
+                            code: item.code,
+                            name: item.name,
+                            category: item.category,
+                            color: item.color,
+                            unit_price: item.unit_price,
+                            sizes: { [Number(item.size)]: item.current_stock_pairs }
+                          })}
+                          style={{
+                            background: "#EFF6FF",
+                            border: "1px solid #3B82F6",
+                            borderRadius: "3px",
+                            color: "#1E40AF",
+                            padding: "3px 8px",
+                            fontSize: "11px",
+                            fontWeight: "700",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "3px",
+                            whiteSpace: "nowrap"
+                          }}
+                          title="Open Stock Card"
+                        >
+                          <FileText size={11} /> स्टक कार्ड
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -572,6 +739,31 @@ export function StockReportView() {
           </div>
         )}
       </div>
+
+      {/* STOCK CARD MODAL */}
+      {stockCardProduct && (
+        <StockCardModal
+          product={stockCardProduct}
+          userRole={userRole}
+          onClose={() => setStockCardProduct(null)}
+          onStockChanged={fetchStockReport}
+        />
+      )}
+
+      {/* CONTROLLED STOCK ADJUSTMENT MODAL */}
+      {isAdjustmentOpen && (
+        <StockAdjustmentModal
+          userRole={userRole}
+          preselectedProduct={adjustmentTargetProduct}
+          onClose={() => {
+            setIsAdjustmentOpen(false);
+            setAdjustmentTargetProduct(null);
+          }}
+          onSuccess={() => {
+            fetchStockReport();
+          }}
+        />
+      )}
     </div>
   );
 }

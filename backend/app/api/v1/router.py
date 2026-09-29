@@ -8,6 +8,7 @@ from app.api.v1.sales import router as sales_router
 from app.api.v1.invoices import router as invoice_router
 from app.api.v1.reports import router as reports_router
 from app.api.v1.backup import router as backup_router
+from app.api.v1.receivables import router as receivables_router
 # NOTE: Tally Prime router removed from Phase 1 — not client-requested, not in scope.
 # Archived at: backend/_unscoped/tally-export/tally.py
 # May be pitched to client as a paid add-on in a later phase.
@@ -22,4 +23,5 @@ api_router.include_router(sales_router)
 api_router.include_router(invoice_router)
 api_router.include_router(reports_router)
 api_router.include_router(backup_router)
+api_router.include_router(receivables_router)
 

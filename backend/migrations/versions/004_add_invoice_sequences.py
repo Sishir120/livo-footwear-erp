@@ -15,16 +15,21 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
-    op.create_table(
-        'invoice_sequences',
-        sa.Column('id', sa.Integer(), nullable=False, primary_key=True),
-        sa.Column('company_id', sa.Integer(), sa.ForeignKey('companies.id'), nullable=False),
-        sa.Column('current_sequence', sa.Integer(), nullable=False, server_default='0'),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
-        sa.UniqueConstraint('company_id', name='uq_invoice_sequences_company')
-    )
-    op.create_index('ix_invoice_sequences_id', 'invoice_sequences', ['id'], unique=False)
-    op.create_index('ix_invoice_sequences_company_id', 'invoice_sequences', ['company_id'], unique=True)
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    tables = insp.get_table_names()
+
+    if 'invoice_sequences' not in tables:
+        op.create_table(
+            'invoice_sequences',
+            sa.Column('id', sa.Integer(), nullable=False, primary_key=True),
+            sa.Column('company_id', sa.Integer(), sa.ForeignKey('companies.id'), nullable=False),
+            sa.Column('current_sequence', sa.Integer(), nullable=False, server_default='0'),
+            sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+            sa.UniqueConstraint('company_id', name='uq_invoice_sequences_company')
+        )
+        op.create_index('ix_invoice_sequences_id', 'invoice_sequences', ['id'], unique=False)
+        op.create_index('ix_invoice_sequences_company_id', 'invoice_sequences', ['company_id'], unique=True)
 
 def downgrade() -> None:
     op.drop_table('invoice_sequences')

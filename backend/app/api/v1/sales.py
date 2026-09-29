@@ -6,6 +6,7 @@ from app.api.deps import get_db, get_current_user, require_editor
 from app.models.user import User
 from app.models.sales import Client, SalesOrder, SalesItem, Payment
 from app.models.stock import Product, StockMovement
+from app.models.receivable import ReceivableEntry
 from app.db.repository import TenantRepository
 
 router = APIRouter(prefix="/sales", tags=["Sales & Invoicing"])
@@ -31,6 +32,7 @@ class SalesOrderCreate(BaseModel):
     received_amount: float = Field(0.0, ge=0.0)
     items: List[SalesItemCreate] = Field(..., min_length=1)
     delivered: bool = True
+    supervisor_override: bool = False
 
 class PaymentCreate(BaseModel):
     sales_order_id: int = Field(..., gt=0)
@@ -108,6 +110,7 @@ def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(requ
             stack.enter_context(lock)
 
         # 1. Pessimistic Row Locking & Physical Stock Boundary Check
+        prod_map = {}
         for item in data.items:
             # Acquire row-level lock on product variant (with_for_update)
             product = db.query(Product).filter(
@@ -117,6 +120,7 @@ def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(requ
 
             if not product:
                 raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found in current company")
+            prod_map[item.product_id] = product
 
             if data.delivered:
                 # Calculate current available balance within the lock boundary
@@ -162,7 +166,36 @@ def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(requ
         received_amount = float(received_dec)
         receivable_amount = float(receivable_dec)
 
-        # 3. Create order record
+        # 3. Credit Dispatch Safeguard: check customer credit limit
+        client = client_repo.get_by_id(data.client_id)
+        if client and client.credit_limit and client.credit_limit > 0:
+            ar_outstanding_paisa = db.query(
+                func.coalesce(func.sum(ReceivableEntry.direction * ReceivableEntry.amount_paisa), 0)
+            ).filter(
+                ReceivableEntry.company_id == current_user.company_id,
+                ReceivableEntry.client_id == data.client_id
+            ).scalar() or 0
+
+            if ar_outstanding_paisa == 0:
+                legacy_receivable = db.query(
+                    func.coalesce(func.sum(SalesOrder.receivable_amount), 0.0)
+                ).filter(
+                    SalesOrder.company_id == current_user.company_id,
+                    SalesOrder.client_id == data.client_id
+                ).scalar() or 0.0
+                ar_outstanding_paisa = int(round(legacy_receivable * 100))
+
+            credit_limit_paisa = int(round(client.credit_limit * 100))
+            order_total_paisa = int(round(total_amount * 100))
+
+            if (ar_outstanding_paisa + order_total_paisa) > credit_limit_paisa:
+                if not getattr(data, "supervisor_override", False):
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail="Credit limit exceeded - supervisor override required"
+                    )
+
+        # 4. Create order record
         order = order_repo.create(
             order_number=data.order_number,
             client_id=data.client_id,
@@ -187,12 +220,18 @@ def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(requ
             )
 
             if data.delivered:
+                prod = prod_map.get(item.product_id)
                 movement_repo.create(
                     product_id=item.product_id,
+                    warehouse_id=1,
+                    size=prod.size if prod else None,
                     quantity=item.quantity,
                     direction=-1,
                     ref_type="sale",
                     ref_id=order.id,
+                    movement_type="SALES_OUT",
+                    source_doc_ref=data.order_number,
+                    actor_id=current_user.id,
                     date_ad=data.order_date_ad,
                     date_bs=data.order_date_bs,
                     notes=f"Sales Order {data.order_number}"

@@ -1,4 +1,5 @@
 import html
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -13,6 +14,7 @@ from app.models.user import User
 from app.models.company import Company
 from app.models.invoice import Invoice, InvoiceSequence
 from app.models.sales import SalesOrder, SalesItem, Client
+from app.models.receivable import ReceivableEntry
 from app.db.repository import TenantRepository
 from app.core.currency import quantize_npr, calculate_vat
 
@@ -123,6 +125,33 @@ def generate_invoice(data: InvoiceCreate, current_user: User = Depends(require_e
                 receivable_amount=total_amount - order.received_amount,
                 is_void=False
             )
+
+            # Statutory AR Subledger posting: INVOICE_POSTED (+1 debit)
+            due_dt = None
+            if order.order_date_ad:
+                try:
+                    parsed_d = datetime.strptime(order.order_date_ad, "%Y-%m-%d").date()
+                    due_dt = datetime.combine(parsed_d + timedelta(days=30), datetime.min.time(), tzinfo=timezone.utc)
+                except Exception:
+                    due_dt = datetime.now(timezone.utc) + timedelta(days=30)
+            else:
+                due_dt = datetime.now(timezone.utc) + timedelta(days=30)
+
+            rec_repo = TenantRepository(ReceivableEntry, db, current_user.company_id)
+            rec_repo.create(
+                client_id=order.client_id,
+                entry_type="INVOICE_POSTED",
+                direction=1,
+                amount_paisa=int(round(total_amount * 100)),
+                source_doc_ref=invoice_num,
+                invoice_id=invoice.id,
+                actor_id=current_user.id,
+                occurred_at=datetime.now(timezone.utc),
+                due_date=due_dt,
+                is_disputed=False,
+                notes=f"Tax invoice {invoice_num} issued for Order #{order.order_number}"
+            )
+
             db.commit()
             return invoice
         except IntegrityError:
@@ -139,6 +168,7 @@ def cancel_invoice(invoice_id: int, current_user: User = Depends(require_editor)
     """
     Voids an invoice adhering to Nepal statutory VAT rules (RULES.md §2).
     The record is NEVER physically deleted, preserving the sequence and audit trail.
+    Writes a matching VOID_REVERSAL entry (-1 direction) to the AR subledger.
     """
     invoice_repo = TenantRepository(Invoice, db, current_user.company_id)
     invoice = invoice_repo.get_by_id(invoice_id)
@@ -146,6 +176,25 @@ def cancel_invoice(invoice_id: int, current_user: User = Depends(require_editor)
         raise HTTPException(status_code=404, detail="Invoice not found")
 
     invoice.is_void = True
+
+    # Post VOID_REVERSAL to AR subledger
+    order = db.query(SalesOrder).filter(SalesOrder.id == invoice.sales_order_id).first()
+    if order:
+        rec_repo = TenantRepository(ReceivableEntry, db, current_user.company_id)
+        rec_repo.create(
+            client_id=order.client_id,
+            entry_type="VOID_REVERSAL",
+            direction=-1,
+            amount_paisa=int(round(invoice.total_amount * 100)),
+            source_doc_ref=f"VOID-{invoice.invoice_number}",
+            invoice_id=invoice.id,
+            actor_id=current_user.id,
+            occurred_at=datetime.now(timezone.utc),
+            due_date=None,
+            is_disputed=False,
+            notes=f"Void cancellation reversal for {invoice.invoice_number}"
+        )
+
     db.commit()
     db.refresh(invoice)
     return {"message": "Invoice successfully marked as void", "id": invoice.id, "invoice_number": invoice.invoice_number, "is_void": True}

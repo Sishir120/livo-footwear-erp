@@ -9,6 +9,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     // Nav & Tabs
     dashboard: "Daily Report",
     stock_ledger: "Stock Ledger",
+    ar_aging: "Party Aging & Subledger",
     production_batches: "Production Batches",
     purchase_raw_materials: "Raw Material Purchases",
     sales_invoicing: "Sales & Invoicing",
@@ -98,6 +99,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     // Nav & Tabs
     dashboard: "दैनिक प्रतिवेदन",
     stock_ledger: "स्टक खाता / मौज्दात",
+    ar_aging: "पार्टी हिसाव तथा बक्यौता",
     production_batches: "उत्पादन ब्याच",
     purchase_raw_materials: "कच्चा पदार्थ खरिद",
     sales_invoicing: "बिक्री तथा बिलिङ",

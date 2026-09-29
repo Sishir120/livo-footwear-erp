@@ -9,11 +9,19 @@ class BasicRateLimitMiddleware(BaseHTTPMiddleware):
     Simple in-memory sliding window rate limiter for public auth endpoints.
     Sized appropriately for a 3-user internal tool per RULES.md §4.
     """
+    _instances = []
+
     def __init__(self, app, max_requests: int = 30, window_seconds: int = 60):
         super().__init__(app)
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self.requests = defaultdict(list)
+        BasicRateLimitMiddleware._instances.append(self)
+
+    @classmethod
+    def reset_all(cls):
+        for inst in cls._instances:
+            inst.requests.clear()
 
     async def dispatch(self, request: Request, call_next):
         # Rate limit only authentication/login endpoints

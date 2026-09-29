@@ -501,3 +501,65 @@ table, td, th, input[type="number"], input[type="date"], .num-mono, .num-mono-bo
     border-bottom-right-radius: 0;
   }
 }
+
+/* Tabular Numeric Alignment for ERP Ledger & Statements */
+.erp-num {
+  font-family: 'Fira Code', 'Roboto Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Dedicated A4 Print Engine for Customer Statements */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm 15mm 15mm;
+  }
+
+  body {
+    background: #FFFFFF !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+  }
+
+  .sidebar,
+  .app-header,
+  .no-print,
+  button,
+  .pagination-bar,
+  .mobile-close-btn {
+    display: none !important;
+  }
+
+  .main-wrapper {
+    margin-left: 0 !important;
+    padding: 0 !important;
+    background: #FFFFFF !important;
+  }
+
+  .modal-overlay {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+
+  .statement-printable {
+    box-shadow: none !important;
+    border: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .statement-printable table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  .statement-printable th,
+  .statement-printable td {
+    border-bottom: 1px solid #CBD5E1 !important;
+  }
+}

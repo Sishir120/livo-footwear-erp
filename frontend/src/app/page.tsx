@@ -25,6 +25,11 @@ const SalesInvoiceView = dynamic(
   { loading: () => <SkeletonLoader title="Loading Sales & Invoicing..." type="table" />, ssr: false }
 );
 
+const PartyAgingView = dynamic(
+  () => import("@/components/PartyAgingView").then((mod) => mod.PartyAgingView),
+  { loading: () => <SkeletonLoader title="Loading Accounts Receivable Aging..." type="table" />, ssr: false }
+);
+
 const ProductionView = dynamic(
   () => import("@/components/ProductionView").then((mod) => mod.ProductionView),
   { loading: () => <SkeletonLoader title="Loading Production Batches..." type="table" />, ssr: false }
@@ -119,7 +124,7 @@ export default function Home() {
 
       {activeTab === "stock" && (
         <ErrorBoundary screenName="Stock Ledger">
-          <StockReportView />
+          <StockReportView userRole={user.role} />
         </ErrorBoundary>
       )}
 
@@ -128,6 +133,12 @@ export default function Home() {
       {activeTab === "sales" && (
         <ErrorBoundary screenName="Sales & Invoicing">
           <SalesInvoiceView userRole={user.role} />
+        </ErrorBoundary>
+      )}
+
+      {activeTab === "receivables" && (
+        <ErrorBoundary screenName="Accounts Receivable Aging">
+          <PartyAgingView userRole={user.role} />
         </ErrorBoundary>
       )}
 

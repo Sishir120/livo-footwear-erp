@@ -30,17 +30,21 @@ class TenantRepository(Generic[T]):
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
-    def get_all(self, limit: int = 100, offset: int = 0) -> List[T]:
+    def get_all(self, limit: Optional[int] = None, offset: int = 0) -> List[T]:
         stmt = select(self.model).where(
             self.model.company_id == self.company_id
-        ).offset(offset).limit(limit)
+        ).offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
         return list(self.db.execute(stmt).scalars().all())
 
-    def filter(self, *criterion, limit: int = 100, offset: int = 0) -> List[T]:
+    def filter(self, *criterion, limit: Optional[int] = None, offset: int = 0) -> List[T]:
         stmt = select(self.model).where(
             self.model.company_id == self.company_id,
             *criterion
-        ).offset(offset).limit(limit)
+        ).offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
         return list(self.db.execute(stmt).scalars().all())
 
     def filter_one(self, *criterion) -> Optional[T]:

@@ -16,6 +16,7 @@ import {
 import { exportToCSV } from "../utils/csvExport";
 import { ThermalLabelModal, BoxLabelData } from "./ThermalLabelModal";
 import { apiFetch } from "../lib/api";
+import { saveDraft, cacheCatalogItems, getCachedCatalog } from "../lib/offlineDb";
 
 const SIZES = [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43] as const;
 
@@ -89,8 +90,18 @@ export function ProductionView({ userRole }: { userRole?: string }) {
       if (prodRes.ok) {
         const prodData = await prodRes.json();
         setProducts(prodData);
+        // Pre-cache catalog in IndexedDB for offline floor use
+        cacheCatalogItems(
+          prodData.map((p: any) => ({
+            skuId: p.id,
+            modelName: p.name,
+            category: p.category || "Footwear",
+            sizes: [p.size || "40"],
+            cachedAt: new Date().toISOString()
+          }))
+        ).catch(() => {});
+
         if (prodData.length > 0 && !selectedModelKey) {
-          // Select first available footwear model
           const first = prodData[0];
           setSelectedModelKey(`${first.name}__${first.color || "Standard"}`);
         }
@@ -98,6 +109,23 @@ export function ProductionView({ userRole }: { userRole?: string }) {
       if (batchRes.ok) setBatches(await batchRes.json());
     } catch (e) {
       console.error(e);
+      // Fallback to offline catalog cache if server unreachable
+      const cached = await getCachedCatalog();
+      if (cached && cached.length > 0) {
+        const mapped = cached.map((c) => ({
+          id: c.skuId,
+          name: c.modelName,
+          category: c.category,
+          size: c.sizes[0] || "40",
+          color: "Standard",
+          unit_price: 3200.0,
+          code: `SHOE-${c.skuId}`
+        }));
+        setProducts(mapped);
+        if (!selectedModelKey && mapped.length > 0) {
+          setSelectedModelKey(`${mapped[0].name}__Standard`);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -268,86 +296,100 @@ export function ProductionView({ userRole }: { userRole?: string }) {
 
     try {
       const currentBatchNumber = `${batchPrefix}-${batchSeq}`;
-      let createdCount = 0;
-      let lastProductId: number | null = null;
-      let lastSizeStr = "41";
-
+      const sizeQtyMap: Record<string, number> = {};
       for (const item of activeEntries) {
-        let matchedProduct = activeGroup.productsBySize[String(item.size)];
-
-        // If product SKU for this size does not exist yet, create it on-demand
-        if (!matchedProduct) {
-          const skuCode = `${activeGroup.codePrefix}-${item.size}`;
-          const createRes = await apiFetch("/api/v1/production/products", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              code: skuCode,
-              name: activeGroup.name,
-              category: "Shoe",
-              size: String(item.size),
-              color: activeGroup.color,
-              unit_price: 3200.0
-            })
-          });
-
-          if (createRes.ok) {
-            matchedProduct = await createRes.json();
-            // Update local state cache
-            setProducts((prev) => [...prev, matchedProduct]);
-          } else {
-            // Fallback: pick any existing product from group
-            matchedProduct = Object.values(activeGroup.productsBySize)[0];
-          }
-        }
-
-        if (matchedProduct) {
-          const specificBatchNumber = activeEntries.length === 1 
-            ? currentBatchNumber 
-            : `${currentBatchNumber}-${item.size}`;
-
-          const res = await apiFetch("/api/v1/production/batches", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              batch_number: specificBatchNumber,
-              product_id: matchedProduct.id,
-              target_quantity: item.qty,
-              produced_quantity: item.qty,
-              worker_count: parseInt(workerCount) || 1,
-              date_ad: dateAd,
-              date_bs: dateBs,
-              notes: `Line: ${productionLine} | Shift: ${productionShift} | Workers: ${workerCount}`
-            })
-          });
-
-          if (res.ok) {
-            createdCount++;
-            lastProductId = matchedProduct.id;
-            lastSizeStr = String(item.size);
-          } else {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.detail || `Failed to record size ${item.size}`);
-          }
-        }
+        sizeQtyMap[String(item.size)] = item.qty;
       }
 
-      // Ephemeral 2-second confirmation: "ब्याच सुरक्षित भयो (Batch BATCH-XXXX Recorded)"
-      setSuccessFeedback(`ब्याच सुरक्षित भयो (Batch ${currentBatchNumber} Recorded)`);
-      setTimeout(() => setSuccessFeedback(""), 2000);
+      const primaryProduct = Object.values(activeGroup.productsBySize)[0] || products[0];
+      const targetProductId = primaryProduct ? primaryProduct.id : 1;
+
+      // Generate client-side UUID idempotency key (format: prod:draft:{uuid})
+      const uuid = typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      const idempotencyKey = `prod:draft:${uuid}`;
+      const createdAtDevice = new Date().toISOString();
+
+      const draftPayload = {
+        idempotency_key: idempotencyKey,
+        created_at_device: createdAtDevice,
+        product_id: targetProductId,
+        warehouse_id: 1,
+        line: productionLine,
+        shift: productionShift,
+        worker_count: parseInt(workerCount) || 1,
+        date_ad: dateAd,
+        date_bs: dateBs,
+        size_quantities: sizeQtyMap,
+        notes: `Line: ${productionLine} | Shift: ${productionShift} | Workers: ${workerCount}`
+      };
+
+      let syncSuccess = false;
+      let recordedBatchNumber = currentBatchNumber;
+
+      // 3-second network timeout controller
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+      try {
+        const res = await fetch("/api/v1/production/sync/draft", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(draftPayload),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const resData = await res.json();
+          recordedBatchNumber = resData.batch_number || currentBatchNumber;
+          syncSuccess = true;
+          setSuccessFeedback(`ब्याच सुरक्षित भयो (Batch ${recordedBatchNumber} Recorded)`);
+          setTimeout(() => setSuccessFeedback(""), 2000);
+        } else {
+          const err = await res.json().catch(() => ({}));
+          if (res.status === 422) {
+            setErrorMessage(err.detail || "Server rejected batch data");
+            setSubmitting(false);
+            return;
+          }
+          throw new Error(err.detail || `Server error (${res.status})`);
+        }
+      } catch (netErr: any) {
+        clearTimeout(timeoutId);
+        // Wi-Fi cutout or timeout: store in IndexedDB with status PENDING
+        await saveDraft({
+          idempotencyKey,
+          createdAtDevice,
+          productId: targetProductId,
+          modelName: activeGroup.name,
+          line: productionLine,
+          shift: productionShift,
+          sizeQuantities: sizeQtyMap,
+          totalPairs: totalBatchPairs,
+          status: "PENDING",
+          retryCount: 0,
+          dateAd,
+          dateBs,
+          notes: draftPayload.notes
+        });
+
+        // Explicit non-blocking offline floor notice per prompt
+        setSuccessFeedback("इन्टरनेट विच्छेद: ब्याच स्थानीय रूपमा सुरक्षित भयो (Draft saved on device; not yet in live stock).");
+        setTimeout(() => setSuccessFeedback(""), 4500);
+      }
 
       // Setup thermal label data for the committed batch
-      if (lastProductId) {
-        const prod = getProduct(lastProductId) || Object.values(activeGroup.productsBySize)[0];
-        setCurrentLabelData({
-          productName: prod?.name || activeGroup.name,
-          sku: prod?.code || currentBatchNumber,
-          size: lastSizeStr,
-          color: prod?.color || activeGroup.color,
-          batchNumber: currentBatchNumber,
-          dateStr: dateAd,
-        });
-      }
+      const prod = getProduct(targetProductId) || Object.values(activeGroup.productsBySize)[0];
+      setCurrentLabelData({
+        productName: prod?.name || activeGroup.name,
+        sku: prod?.code || recordedBatchNumber,
+        size: activeEntries[0] ? String(activeEntries[0].size) : "40",
+        color: prod?.color || activeGroup.color,
+        batchNumber: recordedBatchNumber,
+        dateStr: dateAd,
+      });
 
       // Automatically increment sequence number and clear ONLY the 12 size quantity inputs
       // Model, Line, Shift, Workers, Date are preserved intact!
@@ -365,9 +407,10 @@ export function ProductionView({ userRole }: { userRole?: string }) {
         }
       }, 50);
 
-      loadData();
+      if (syncSuccess) {
+        loadData();
+      }
     } catch (e: any) {
-      // Preserve all entered numbers intact, display exact server error message with retry shortcut
       const errMsg = e?.message || "Error saving production batch";
       setErrorMessage(`${errMsg} — पुनः प्रयास गर्न Ctrl+Enter थिच्नुहोस् (Press Ctrl+Enter to retry)`);
     } finally {

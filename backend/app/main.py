@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.db.session import engine, Base, SessionLocal
-from app.models import Company, User
+from app.models import Company, User, Warehouse
 from app.core.security import get_password_hash
 from app.core.exceptions import global_exception_handler, http_exception_handler
 from app.middleware.audit import AuditLogMiddleware
@@ -22,16 +22,13 @@ async def lifespan(app: FastAPI):
         alembic_ini = os.path.join(backend_dir, "alembic.ini")
         if os.path.exists(alembic_ini):
             alembic_cfg = Config(alembic_ini)
+            alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
             from sqlalchemy import inspect
             inspector = inspect(engine)
             existing_tables = inspector.get_table_names()
             if "companies" in existing_tables and "alembic_version" not in existing_tables:
                 command.stamp(alembic_cfg, "002_invoice_uq")
-            else:
-                try:
-                    command.upgrade(alembic_cfg, "head")
-                except Exception:
-                    command.stamp(alembic_cfg, "002_invoice_uq")
+            command.upgrade(alembic_cfg, "head")
         else:
             Base.metadata.create_all(bind=engine)
     except Exception as e:
@@ -81,6 +78,18 @@ async def lifespan(app: FastAPI):
                     active=True
                 )
                 db.add(viewer)
+
+            # Seed default main finished goods warehouse
+            warehouse = db.query(Warehouse).filter(Warehouse.company_id == company.id, Warehouse.code == "WH-MAIN").first()
+            if not warehouse:
+                warehouse = Warehouse(
+                    company_id=company.id,
+                    name="Main Finished Warehouse",
+                    code="WH-MAIN",
+                    location="Factory Premises, Birgunj",
+                    is_active=True
+                )
+                db.add(warehouse)
 
             db.commit()
         except Exception as e:

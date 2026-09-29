@@ -40,3 +40,29 @@ def acquire_stock_advisory_lock(db: Session, company_id: int, product_id: int) -
         # Fallback or dialect inspection fail-safe
         pass
     return lock_key
+
+
+import hashlib
+
+_idempotency_locks = defaultdict(threading.Lock)
+
+def get_idempotency_mutex(company_id: int, idempotency_key: str) -> threading.Lock:
+    """Returns an in-process mutex dedicated to an idempotency key."""
+    with _meta_lock:
+        return _idempotency_locks[(company_id, idempotency_key)]
+
+def get_idempotency_lock_key(company_id: int, idempotency_key: str) -> int:
+    """Derive a deterministic signed 64-bit integer from (company_id, idempotency_key)."""
+    raw_hash = int(hashlib.sha256(f"{company_id}:{idempotency_key}".encode("utf-8")).hexdigest()[:15], 16)
+    return raw_hash - (1 << 63) if raw_hash >= (1 << 63) else raw_hash
+
+def acquire_idempotency_advisory_lock(db: Session, company_id: int, idempotency_key: str) -> int:
+    """Acquires a transaction-scoped PostgreSQL Advisory Lock on integer hash of idempotency_key."""
+    lock_key = get_idempotency_lock_key(company_id, idempotency_key)
+    try:
+        bind = db.get_bind()
+        if bind and bind.dialect.name == "postgresql":
+            db.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": lock_key})
+    except Exception:
+        pass
+    return lock_key

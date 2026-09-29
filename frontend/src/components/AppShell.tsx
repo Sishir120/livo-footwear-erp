@@ -14,10 +14,12 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
-  UserCheck
+  UserCheck,
+  CreditCard
 } from "lucide-react";
 
 import { LegalModal } from "./LegalModal";
+import { NetworkStatusBadge } from "./NetworkStatusBadge";
 import { useLocale } from "../context/LocaleContext";
 import { subscribeQueueChange, replayQueue } from "../lib/offlineQueue";
 
@@ -89,6 +91,7 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
     { id: "daily", label: t("dashboard"), icon: BarChart3 },
     { id: "stock", label: t("stock_ledger"), icon: Boxes },
     { id: "sales", label: t("sales_invoicing"), icon: ShoppingBag },
+    { id: "receivables", label: t("ar_aging"), icon: CreditCard },
     { id: "production", label: t("production_batches"), icon: Factory },
     { id: "purchase", label: t("purchase_raw_materials"), icon: FileText },
     { id: "settings", label: t("settings_backups"), icon: SettingsIcon },
@@ -202,31 +205,8 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            {/* Offline Outbox Status Badge */}
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              {!isOnline ? (
-                <span className="badge badge-warning">
-                  Offline ({queuedCount} queued)
-                </span>
-              ) : queuedCount > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsSyncing(true);
-                    replayQueue().finally(() => setIsSyncing(false));
-                  }}
-                  disabled={isSyncing}
-                  className="badge badge-info"
-                  style={{ cursor: "pointer" }}
-                >
-                  {isSyncing ? "Syncing..." : `Sync (${queuedCount})`}
-                </button>
-              ) : (
-                <span className="badge badge-success">
-                  ● Live
-                </span>
-              )}
-            </div>
+            {/* Offline-Resilient Network Status & Queue Badge */}
+            <NetworkStatusBadge />
 
             {/* Bilingual Language Switcher (EN | नेपाली) */}
             <div

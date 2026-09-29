@@ -58,12 +58,12 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
 
 def require_editor(current_user: User = Depends(get_current_user)) -> User:
     """
-    Enforces 'editor' role requirement for mutating operations.
+    Enforces 'editor' or 'admin' role requirement for mutating operations.
     Rejects viewers at the API layer as mandated by RULES.md §0 and §4.
     """
-    if current_user.role != "editor":
+    if current_user.role not in ("editor", "admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied. Role 'editor' is required for modifying data.",
+            detail="Permission denied. Role 'editor' or 'admin' is required for modifying data.",
         )
     return current_user

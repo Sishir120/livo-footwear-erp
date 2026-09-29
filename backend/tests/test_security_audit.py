@@ -356,6 +356,8 @@ def test_rate_limiter_threshold_protection():
 
         # BasicRateLimitMiddleware limits to 30 requests per minute
         assert 429 in status_codes, f"Rate limiter failed to trigger 429: {status_codes}"
+        from app.middleware.rate_limit import BasicRateLimitMiddleware
+        BasicRateLimitMiddleware.reset_all()
 
 
 def test_cross_tenant_reference_idor_rejection(setup_audit_env):
