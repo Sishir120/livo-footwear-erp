@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -17,19 +18,19 @@ class ClientCreate(BaseModel):
     contact_person: Optional[str] = Field(None, max_length=150)
     phone: Optional[str] = Field(None, max_length=50)
     address: Optional[str] = Field(None, max_length=255)
-    credit_limit: float = Field(0.0, ge=0.0)
+    credit_limit: Decimal = Field(Decimal('0.0'), ge=Decimal('0.0'))
 
 class SalesItemCreate(BaseModel):
     product_id: int = Field(..., gt=0)
-    quantity: float = Field(..., gt=0)
-    unit_price: float = Field(..., ge=0.0)
+    quantity: Decimal = Field(..., gt=0)
+    unit_price: Decimal = Field(..., ge=Decimal('0.0'))
 
 class SalesOrderCreate(BaseModel):
     order_number: str = Field(..., min_length=1, max_length=50)
     client_id: int = Field(..., gt=0)
     order_date_ad: str = Field(..., max_length=20)
     order_date_bs: str = Field(..., max_length=20)
-    received_amount: float = Field(0.0, ge=0.0)
+    received_amount: Decimal = Field(Decimal('0.0'), ge=Decimal('0.0'))
     items: List[SalesItemCreate] = Field(..., min_length=1)
     delivered: bool = True
     supervisor_override: bool = False
@@ -37,7 +38,7 @@ class SalesOrderCreate(BaseModel):
 class PaymentCreate(BaseModel):
     sales_order_id: int = Field(..., gt=0)
     client_id: int = Field(..., gt=0)
-    amount: float = Field(..., gt=0)
+    amount: Decimal = Field(..., gt=0)
     payment_date_ad: str = Field(..., max_length=20)
     payment_date_bs: str = Field(..., max_length=20)
     payment_method: str = Field("cash", max_length=30)
@@ -145,16 +146,16 @@ def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(requ
 
                 if latest_snap:
                     subsequent = db.query(
-                        func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), 0.0)
+                        func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), Decimal('0.0'))
                     ).filter(
                         StockMovement.company_id == current_user.company_id,
                         StockMovement.product_id == item.product_id,
                         StockMovement.id > latest_snap.last_movement_id
                     ).scalar()
-                    current_balance = float(latest_snap.balance) + float(subsequent)
+                    current_balance = Decimal(latest_snap.balance) + Decimal(subsequent)
                 else:
-                    current_balance = float(
-                        db.query(func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), 0.0))
+                    current_balance = Decimal(
+                        db.query(func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), Decimal('0.0')))
                         .filter(
                             StockMovement.product_id == item.product_id,
                             StockMovement.company_id == current_user.company_id
@@ -162,7 +163,7 @@ def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(requ
                         .scalar()
                     )
 
-                if current_balance - float(item.quantity) < 0:
+                if current_balance - Decimal(item.quantity) < 0:
                     raise HTTPException(
                         status_code=422,
                         detail={
@@ -184,9 +185,9 @@ def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(requ
         received_dec = quantize_npr(data.received_amount)
         receivable_dec = quantize_npr(total_amount_dec - received_dec)
 
-        total_amount = float(total_amount_dec)
-        received_amount = float(received_dec)
-        receivable_amount = float(receivable_dec)
+        total_amount = Decimal(total_amount_dec)
+        received_amount = Decimal(received_dec)
+        receivable_amount = Decimal(receivable_dec)
 
         # 3. Credit Dispatch Safeguard: check customer credit limit
         client = client_repo.get_by_id(data.client_id)
@@ -200,11 +201,11 @@ def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(requ
 
             if ar_outstanding_paisa == 0:
                 legacy_receivable = db.query(
-                    func.coalesce(func.sum(SalesOrder.receivable_amount), 0.0)
+                    func.coalesce(func.sum(SalesOrder.receivable_amount), Decimal('0.0'))
                 ).filter(
                     SalesOrder.company_id == current_user.company_id,
                     SalesOrder.client_id == data.client_id
-                ).scalar() or 0.0
+                ).scalar() or Decimal('0.0')
                 ar_outstanding_paisa = int(round(legacy_receivable * 100))
 
             credit_limit_paisa = int(round(client.credit_limit * 100))
@@ -244,8 +245,8 @@ def create_sales_order(data: SalesOrderCreate, current_user: User = Depends(requ
                 sales_order_id=order.id,
                 product_id=item.product_id,
                 quantity=item.quantity,
-                unit_price=float(quantize_npr(item.unit_price)),
-                total_price=float(line_total_dec)
+                unit_price=Decimal(quantize_npr(item.unit_price)),
+                total_price=Decimal(line_total_dec)
             )
 
             if data.delivered:
@@ -290,7 +291,7 @@ def record_payment(data: PaymentCreate, current_user: User = Depends(require_edi
     payment = payment_repo.create(
         sales_order_id=data.sales_order_id,
         client_id=data.client_id,
-        amount=float(payment_amt_dec),
+        amount=Decimal(payment_amt_dec),
         payment_date_ad=data.payment_date_ad,
         payment_date_bs=data.payment_date_bs,
         payment_method=data.payment_method,
@@ -302,8 +303,8 @@ def record_payment(data: PaymentCreate, current_user: User = Depends(require_edi
     order_total_dec = quantize_npr(order.total_amount)
     new_receivable_dec = quantize_npr(max(Decimal("0.00"), order_total_dec - new_received_dec))
 
-    order.received_amount = float(new_received_dec)
-    order.receivable_amount = float(new_receivable_dec)
+    order.received_amount = Decimal(new_received_dec)
+    order.receivable_amount = Decimal(new_receivable_dec)
 
     db.commit()
     return payment

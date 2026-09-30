@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -44,7 +45,7 @@ def get_daily_report(
 
     # 3. Stock movements summary on date_ad
     stock_in = db.query(
-        func.coalesce(func.sum(StockMovement.quantity), 0.0)
+        func.coalesce(func.sum(StockMovement.quantity), Decimal('0.0'))
     ).filter(
         StockMovement.company_id == company_id,
         StockMovement.date_ad == date_ad,
@@ -52,7 +53,7 @@ def get_daily_report(
     ).scalar()
 
     stock_out = db.query(
-        func.coalesce(func.sum(StockMovement.quantity), 0.0)
+        func.coalesce(func.sum(StockMovement.quantity), Decimal('0.0'))
     ).filter(
         StockMovement.company_id == company_id,
         StockMovement.date_ad == date_ad,
@@ -63,21 +64,21 @@ def get_daily_report(
         "date_ad": date_ad,
         "production": {
             "batch_count": len(production_batches),
-            "total_pairs_produced": float(total_pairs_produced),
+            "total_pairs_produced": Decimal(total_pairs_produced),
             "worker_count": total_workers_active,
             "batches": production_batches
         },
         "sales": {
             "order_count": len(sales_orders),
-            "total_sales_amount": float(total_sales_amount),
-            "total_received_amount": float(total_received_amount),
-            "total_receivable_amount": float(total_receivable_amount),
+            "total_sales_amount": Decimal(total_sales_amount),
+            "total_received_amount": Decimal(total_received_amount),
+            "total_receivable_amount": Decimal(total_receivable_amount),
             "orders": sales_orders
         },
         "stock_movement_summary": {
-            "total_stock_in_pairs": float(stock_in),
-            "total_stock_out_pairs": float(stock_out),
-            "net_change_pairs": float(stock_in - stock_out)
+            "total_stock_in_pairs": Decimal(stock_in),
+            "total_stock_out_pairs": Decimal(stock_out),
+            "net_change_pairs": Decimal(stock_in - stock_out)
         }
     }
 
@@ -99,18 +100,18 @@ def get_stock_report(
         products = [p for p in products if p.category and p.category.lower() == category.lower()]
 
     items_report = []
-    total_stock_pairs = 0.0
-    total_stock_value = 0.0
+    total_stock_pairs = Decimal('0.0')
+    total_stock_value = Decimal('0.0')
 
     for p in products:
         current_qty = db.query(
-            func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), 0.0)
+            func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), Decimal('0.0'))
         ).filter(
             StockMovement.company_id == company_id,
             StockMovement.product_id == p.id
         ).scalar()
 
-        qty = float(current_qty)
+        qty = Decimal(current_qty)
         val = qty * p.unit_price
         total_stock_pairs += qty
         total_stock_value += val

@@ -1,3 +1,4 @@
+from decimal import Decimal
 from datetime import date, datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
@@ -18,7 +19,7 @@ class SnapshotCreate(BaseModel):
 
 class StockMovementCreate(BaseModel):
     product_id: int
-    quantity: float
+    quantity: Decimal
     direction: int = Field(..., description="1 for inward, -1 for outbound")
     reference_type: Optional[str] = "manual"
     reference_id: Optional[int] = None
@@ -28,7 +29,7 @@ class StockAdjustmentCreate(BaseModel):
     product_id: int
     warehouse_id: Optional[int] = 1
     size: Optional[str] = None
-    quantity_delta: float
+    quantity_delta: Decimal
     reason_code: Optional[str] = None
     reason_text: Optional[str] = None
     supervisor_token: Optional[str] = None
@@ -84,16 +85,16 @@ def create_stock_movement(
 
             if latest_snap:
                 subsequent = db.query(
-                    func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), 0.0)
+                    func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), Decimal('0.0'))
                 ).filter(
                     StockMovement.company_id == current_user.company_id,
                     StockMovement.product_id == payload.product_id,
                     StockMovement.id > latest_snap.last_movement_id
                 ).scalar()
-                current_balance = float(latest_snap.balance) + float(subsequent)
+                current_balance = Decimal(latest_snap.balance) + Decimal(subsequent)
             else:
-                current_balance = float(
-                    db.query(func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), 0.0))
+                current_balance = Decimal(
+                    db.query(func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), Decimal('0.0')))
                     .filter(
                         StockMovement.product_id == payload.product_id,
                         StockMovement.company_id == current_user.company_id
@@ -103,8 +104,8 @@ def create_stock_movement(
 
             # 3. If current_balance - payload.quantity < 0:
             if current_balance - payload.quantity < 0:
-                avail_str = int(current_balance) if current_balance.is_integer() else current_balance
-                req_str = int(payload.quantity) if payload.quantity.is_integer() else payload.quantity
+                avail_str = int(current_balance) if current_balance % 1 == 0 else current_balance
+                req_str = int(payload.quantity) if payload.quantity % 1 == 0 else payload.quantity
                 raise HTTPException(
                     status_code=422,
                     detail={
@@ -203,7 +204,7 @@ def create_stock_snapshots(
     # Calculate full current balance and find max movement id for each product
     agg_rows = db.query(
         StockMovement.product_id,
-        func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), 0.0).label("balance"),
+        func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), Decimal('0.0')).label("balance"),
         func.coalesce(func.max(StockMovement.id), 0).label("last_movement_id")
     ).filter(
         StockMovement.company_id == current_user.company_id,
@@ -297,32 +298,32 @@ def get_stock_balance(
         ]
         subsequent_rows = db.query(
             StockMovement.product_id,
-            func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), 0.0).label("delta")
+            func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), Decimal('0.0')).label("delta")
         ).filter(
             StockMovement.company_id == current_user.company_id,
             or_(*conditions)
         ).group_by(StockMovement.product_id).all()
 
-        delta_map = {row.product_id: float(row.delta) for row in subsequent_rows}
+        delta_map = {row.product_id: Decimal(row.delta) for row in subsequent_rows}
         for p_id, snap in snapshot_map.items():
-            balance_map[p_id] = float(snap.balance) + delta_map.get(p_id, 0.0)
+            balance_map[p_id] = Decimal(snap.balance) + delta_map.get(p_id, Decimal('0.0'))
 
     # Products without snapshots: full movement summation fallback
     products_without_snapshot = [p_id for p_id in product_ids if p_id not in snapshot_map]
     if products_without_snapshot:
         pure_rows = db.query(
             StockMovement.product_id,
-            func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), 0.0).label("balance")
+            func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), Decimal('0.0')).label("balance")
         ).filter(
             StockMovement.company_id == current_user.company_id,
             StockMovement.product_id.in_(products_without_snapshot)
         ).group_by(StockMovement.product_id).all()
         for row in pure_rows:
-            balance_map[row.product_id] = float(row.balance)
+            balance_map[row.product_id] = Decimal(row.balance)
 
     balance_results = []
     for prod in products:
-        qty = balance_map.get(prod.id, 0.0)
+        qty = balance_map.get(prod.id, Decimal('0.0'))
         balance_results.append({
             "product_id": prod.id,
             "code": prod.code,
@@ -332,7 +333,7 @@ def get_stock_balance(
             "color": prod.color,
             "unit_price": prod.unit_price,
             "current_stock_pairs": qty,
-            "pending_stock": qty if qty > 0 else 0.0
+            "pending_stock": qty if qty > 0 else Decimal('0.0')
         })
 
     return balance_results
@@ -350,7 +351,7 @@ def get_available_stock_variant(
     Strict append-only summation: SUM(direction * quantity).
     """
     query = db.query(
-        func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), 0.0)
+        func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), Decimal('0.0'))
     ).filter(
         StockMovement.company_id == company_id,
         StockMovement.product_id == product_id
@@ -359,7 +360,7 @@ def get_available_stock_variant(
         query = query.filter(StockMovement.warehouse_id == warehouse_id)
     if size is not None:
         query = query.filter(StockMovement.size == size)
-    return float(query.scalar() or 0.0)
+    return Decimal(query.scalar() or Decimal('0.0'))
 
 
 @router.get("/warehouses")
@@ -486,11 +487,11 @@ def get_stock_ledger(
             "warehouse_id": r.warehouse_id,
             "warehouse_name": wh.name if wh else "Main Finished Warehouse",
             "size": r.size or (prod.size if prod else ""),
-            "quantity": float(r.quantity),
+            "quantity": Decimal(r.quantity),
             "direction": r.direction,
-            "qty_in": float(r.quantity) if r.direction == 1 else 0.0,
-            "qty_out": float(r.quantity) if r.direction == -1 else 0.0,
-            "running_balance": float(r.running_balance or 0.0),
+            "qty_in": Decimal(r.quantity) if r.direction == 1 else Decimal('0.0'),
+            "qty_out": Decimal(r.quantity) if r.direction == -1 else Decimal('0.0'),
+            "running_balance": Decimal(r.running_balance or Decimal('0.0')),
             "movement_type": r.movement_type,
             "source_doc_ref": r.source_doc_ref or "",
             "ref_type": r.ref_type,
@@ -700,7 +701,7 @@ def get_product_stock_curve(
         Product.name == base_prod.name
     ).all()
 
-    curve = {sz: 0.0 for sz in range(32, 44)}
+    curve = {sz: Decimal('0.0') for sz in range(32, 44)}
     for sp in sibling_products:
         sz_int = None
         try:
@@ -709,7 +710,7 @@ def get_product_stock_curve(
             pass
         if sz_int and 32 <= sz_int <= 43:
             bal = get_available_stock_variant(db, current_user.company_id, sp.id, warehouse_id, sp.size)
-            curve[sz_int] = max(0.0, bal)
+            curve[sz_int] = max(Decimal('0.0'), bal)
 
     return {
         "product_id": base_prod.id,

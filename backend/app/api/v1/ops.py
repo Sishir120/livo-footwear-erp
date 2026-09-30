@@ -1,3 +1,4 @@
+from decimal import Decimal
 """
 Operations Telemetry & Observability API
 Provides real-time system metrics, database health, migration state,
@@ -106,19 +107,19 @@ def get_operations_telemetry(
     movement_balances = dict(
         db.query(
             StockMovement.product_id,
-            func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), 0.0)
+            func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), Decimal('0.0'))
         ).filter(
             StockMovement.company_id == company_id
         ).group_by(StockMovement.product_id).all()
     )
 
-    models_core_stock = defaultdict(lambda: {"39": 0.0, "40": 0.0, "41": 0.0, "has_core_skus": False})
+    models_core_stock = defaultdict(lambda: {"39": Decimal('0.0'), "40": Decimal('0.0'), "41": Decimal('0.0'), "has_core_skus": False})
     for p in active_products:
         sz = str(p.size or "").strip()
         base_name = p.name.split("-")[0].strip() if "-" in p.name else p.name
         if sz in ("39", "40", "41"):
             models_core_stock[base_name]["has_core_skus"] = True
-            models_core_stock[base_name][sz] += float(movement_balances.get(p.id, 0.0))
+            models_core_stock[base_name][sz] += Decimal(movement_balances.get(p.id, Decimal('0.0')))
 
     broken_core_runs_count = sum(
         1 for m, data in models_core_stock.items()
@@ -137,7 +138,7 @@ def get_operations_telemetry(
         ProductionSyncLog.status.in_(["REJECTED", "CONFLICT"])
     ).count()
 
-    sync_error_rate_24h = round(failed_syncs_24h / total_syncs_24h, 4) if total_syncs_24h > 0 else 0.0
+    sync_error_rate_24h = round(failed_syncs_24h / total_syncs_24h, 4) if total_syncs_24h > 0 else Decimal('0.0')
 
     return {
         "db_status": db_status,

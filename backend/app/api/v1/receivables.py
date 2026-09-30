@@ -1,3 +1,4 @@
+from decimal import Decimal
 from datetime import datetime, date, timezone, timedelta
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query, HTTPException, status
@@ -89,11 +90,11 @@ def get_ar_aging_report(
     # Pre-fetch legacy sales orders for historical fallback if no entries exist
     legacy_orders = db.query(
         SalesOrder.client_id,
-        func.coalesce(func.sum(SalesOrder.receivable_amount), 0.0).label("legacy_receivable")
+        func.coalesce(func.sum(SalesOrder.receivable_amount), Decimal('0.0')).label("legacy_receivable")
     ).filter(
         SalesOrder.company_id == current_user.company_id
     ).group_by(SalesOrder.client_id).all()
-    legacy_map = {row.client_id: float(row.legacy_receivable) for row in legacy_orders}
+    legacy_map = {row.client_id: Decimal(row.legacy_receivable) for row in legacy_orders}
 
     party_rows = []
     total_summary = {
@@ -107,11 +108,11 @@ def get_ar_aging_report(
 
     for client in clients:
         entries = client_entries_map.get(client.id, [])
-        credit_limit_paisa = int(round((client.credit_limit or 0.0) * 100))
+        credit_limit_paisa = int(round((client.credit_limit or Decimal('0.0')) * 100))
 
         if not entries:
             # Fallback for legacy database rows without AR entries
-            legacy_amt = legacy_map.get(client.id, 0.0)
+            legacy_amt = legacy_map.get(client.id, Decimal('0.0'))
             legacy_paisa = int(round(legacy_amt * 100))
             if legacy_paisa > 0:
                 row_data = {
@@ -345,8 +346,8 @@ def get_party_statement(
             "contact_person": client.contact_person or "",
             "phone": client.phone or "",
             "address": client.address or "",
-            "credit_limit": client.credit_limit or 0.0,
-            "credit_limit_paisa": int(round((client.credit_limit or 0.0) * 100))
+            "credit_limit": client.credit_limit or Decimal('0.0'),
+            "credit_limit_paisa": int(round((client.credit_limit or Decimal('0.0')) * 100))
         },
         "summary": {
             "total_debit_paisa": total_debit,
@@ -456,7 +457,7 @@ def record_ar_payment(
                 company_id=current_user.company_id,
                 sales_order_id=last_order.id,
                 client_id=client.id,
-                amount=payload.amount_paisa / 100.0,
+                amount=payload.amount_paisa / Decimal('100.0'),
                 payment_date_ad=ad_str,
                 payment_date_bs=bs_str,
                 payment_method=method.lower(),

@@ -1,3 +1,4 @@
+from decimal import Decimal
 import html
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
@@ -23,7 +24,7 @@ router = APIRouter(prefix="/invoices", tags=["Invoices"])
 class InvoiceCreate(BaseModel):
     sales_order_id: int = Field(..., gt=0)
     vat_enabled: bool = False
-    vat_rate: float = Field(13.0, ge=0.0, le=100.0)
+    vat_rate: Decimal = Field(13.0, ge=Decimal('0.0'), le=Decimal('100.0'))
 
 @router.get("")
 def list_invoices(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -98,10 +99,10 @@ def generate_invoice(data: InvoiceCreate, current_user: User = Depends(require_e
     received_dec = quantize_npr(order.received_amount)
     receivable_dec = quantize_npr(grand_total_dec - received_dec)
 
-    subtotal = float(subtotal_taxable)
-    vat_amount = float(vat_dec)
-    total_amount = float(grand_total_dec)
-    receivable_amount = float(receivable_dec)
+    subtotal = Decimal(subtotal_taxable)
+    vat_amount = Decimal(vat_dec)
+    total_amount = Decimal(grand_total_dec)
+    receivable_amount = Decimal(receivable_dec)
 
     # Atomic sequence allocation with bounded fallback retry loop for constraint conflict recovery
     max_retries = 3
@@ -118,7 +119,7 @@ def generate_invoice(data: InvoiceCreate, current_user: User = Depends(require_e
                 date_bs=order.order_date_bs,
                 subtotal=subtotal,
                 vat_enabled=data.vat_enabled,
-                vat_rate=data.vat_rate if data.vat_enabled else 0.0,
+                vat_rate=data.vat_rate if data.vat_enabled else Decimal('0.0'),
                 vat_amount=vat_amount,
                 total_amount=total_amount,
                 received_amount=order.received_amount,

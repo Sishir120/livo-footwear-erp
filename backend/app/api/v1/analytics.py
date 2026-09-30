@@ -1,3 +1,4 @@
+from decimal import Decimal
 from datetime import datetime, timezone, timedelta, date as dt_date
 from typing import List, Optional, Literal
 from fastapi import APIRouter, Depends, Query, HTTPException, status
@@ -73,8 +74,8 @@ def get_top_products(
         Product.code,
         Product.name,
         Product.category,
-        func.coalesce(sales_subquery.c.total_pairs_sold, 0.0).label("pairs_sold"),
-        func.coalesce(sales_subquery.c.total_revenue, 0.0).label("revenue"),
+        func.coalesce(sales_subquery.c.total_pairs_sold, Decimal('0.0')).label("pairs_sold"),
+        func.coalesce(sales_subquery.c.total_revenue, Decimal('0.0')).label("revenue"),
         func.coalesce(sales_subquery.c.order_count, 0).label("orders")
     ).outerjoin(
         sales_subquery, Product.id == sales_subquery.c.product_id
@@ -89,7 +90,7 @@ def get_top_products(
 
     ranked_items = []
     for rank_idx, row in enumerate(results, start=1):
-        revenue_paisa = int(round(float(row.revenue) * 100))
+        revenue_paisa = int(round(Decimal(row.revenue) * 100))
         ranked_items.append(
             TopProductItem(
                 rank=rank_idx,
@@ -97,7 +98,7 @@ def get_top_products(
                 code=row.code,
                 name=row.name,
                 category=row.category,
-                total_pairs_sold=float(row.pairs_sold),
+                total_pairs_sold=Decimal(row.pairs_sold),
                 total_revenue_paisa=revenue_paisa,
                 order_count=int(row.orders)
             )
@@ -119,9 +120,9 @@ def get_top_customers(
     orders_sub = db.query(
         SalesOrder.client_id,
         func.count(SalesOrder.id).label("order_count"),
-        func.coalesce(func.sum(SalesOrder.total_amount), 0.0).label("total_revenue"),
-        func.coalesce(func.sum(SalesOrder.received_amount), 0.0).label("total_received"),
-        func.coalesce(func.sum(SalesOrder.receivable_amount), 0.0).label("total_receivable")
+        func.coalesce(func.sum(SalesOrder.total_amount), Decimal('0.0')).label("total_revenue"),
+        func.coalesce(func.sum(SalesOrder.received_amount), Decimal('0.0')).label("total_received"),
+        func.coalesce(func.sum(SalesOrder.receivable_amount), Decimal('0.0')).label("total_receivable")
     ).filter(
         SalesOrder.company_id == current_user.company_id,
         SalesOrder.status != "cancelled"
@@ -132,7 +133,7 @@ def get_top_customers(
     # 2. Distinct pairs subquery
     pairs_sub = db.query(
         SalesOrder.client_id,
-        func.coalesce(func.sum(SalesItem.quantity), 0.0).label("total_pairs")
+        func.coalesce(func.sum(SalesItem.quantity), Decimal('0.0')).label("total_pairs")
     ).join(
         SalesOrder, SalesItem.sales_order_id == SalesOrder.id
     ).filter(
@@ -149,10 +150,10 @@ def get_top_customers(
         Client.name,
         Client.contact_person,
         func.coalesce(orders_sub.c.order_count, 0).label("order_count"),
-        func.coalesce(pairs_sub.c.total_pairs, 0.0).label("total_pairs"),
-        func.coalesce(orders_sub.c.total_revenue, 0.0).label("total_revenue"),
-        func.coalesce(orders_sub.c.total_received, 0.0).label("total_received"),
-        func.coalesce(orders_sub.c.total_receivable, 0.0).label("total_receivable")
+        func.coalesce(pairs_sub.c.total_pairs, Decimal('0.0')).label("total_pairs"),
+        func.coalesce(orders_sub.c.total_revenue, Decimal('0.0')).label("total_revenue"),
+        func.coalesce(orders_sub.c.total_received, Decimal('0.0')).label("total_received"),
+        func.coalesce(orders_sub.c.total_receivable, Decimal('0.0')).label("total_receivable")
     ).outerjoin(
         orders_sub, Client.id == orders_sub.c.client_id
     ).outerjoin(
@@ -169,13 +170,13 @@ def get_top_customers(
 
     ranked_customers = []
     for serial_idx, row in enumerate(results, start=1):
-        rev_paisa = int(round(float(row.total_revenue) * 100))
-        rec_paisa = int(round(float(row.total_received) * 100))
-        due_paisa = int(round(float(row.total_receivable) * 100))
+        rev_paisa = int(round(Decimal(row.total_revenue) * 100))
+        rec_paisa = int(round(Decimal(row.total_received) * 100))
+        due_paisa = int(round(Decimal(row.total_receivable) * 100))
 
         reliability = 100.0
         if rev_paisa > 0:
-            reliability = round(min(100.0, (rec_paisa / rev_paisa) * 100.0), 2)
+            reliability = round(min(Decimal('100.0'), (Decimal(rec_paisa) / Decimal(rev_paisa)) * Decimal('100.0')), 2)
 
         ranked_customers.append(
             TopCustomerItem(
@@ -185,7 +186,7 @@ def get_top_customers(
                 name=row.name,
                 pan_number=row.contact_person or "",
                 total_orders=int(row.order_count),
-                total_pairs=float(row.total_pairs),
+                total_pairs=Decimal(row.total_pairs),
                 total_revenue_paisa=rev_paisa,
                 total_received_paisa=rec_paisa,
                 outstanding_receivable_paisa=due_paisa,
@@ -236,34 +237,34 @@ def get_production_ratios(
         d = b.date_ad
         if d not in batches_by_date:
             batches_by_date[d] = {
-                "produced": 0.0,
+                "produced": Decimal('0.0'),
                 "workers": 0,
                 "date_bs": b.date_bs
             }
-        batches_by_date[d]["produced"] += float(b.produced_quantity)
+        batches_by_date[d]["produced"] += Decimal(b.produced_quantity)
         batches_by_date[d]["workers"] = max(batches_by_date[d]["workers"], b.worker_count or 1)
 
     # 3. Combine distinct dates
     all_dates = sorted(set(list(logs_by_date.keys()) + list(batches_by_date.keys())))
 
     daily_records: List[DailyRecordItem] = []
-    total_pairs_all = 0.0
+    total_pairs_all = Decimal('0.0')
     total_workers_sum = 0
-    total_hours_sum = 0.0
+    total_hours_sum = Decimal('0.0')
 
     for d_str in all_dates:
         log_entry = logs_by_date.get(d_str)
         batch_entry = batches_by_date.get(d_str)
 
         if log_entry:
-            pairs = float(log_entry.total_pairs_produced)
+            pairs = Decimal(log_entry.total_pairs_produced)
             workers = log_entry.total_workers
-            hours = float(log_entry.total_working_hours)
+            hours = Decimal(log_entry.total_working_hours)
             bs = log_entry.date_bs
         elif batch_entry:
-            pairs = float(batch_entry["produced"])
+            pairs = Decimal(batch_entry["produced"])
             workers = batch_entry["workers"] if batch_entry["workers"] > 0 else active_workers_count
-            hours = float(workers * 8.0)
+            hours = Decimal(workers * 8.0)
             bs = batch_entry["date_bs"]
         else:
             continue
@@ -271,8 +272,8 @@ def get_production_ratios(
         if not bs:
             bs = _approx_ad_to_bs(d_str)
 
-        pairs_per_w = round(pairs / workers, 2) if workers > 0 else 0.0
-        pairs_per_h = round(pairs / hours, 2) if hours > 0 else 0.0
+        pairs_per_w = round(pairs / workers, 2) if workers > 0 else Decimal('0.0')
+        pairs_per_h = round(pairs / hours, 2) if hours > 0 else Decimal('0.0')
 
         daily_records.append(
             DailyRecordItem(
@@ -292,9 +293,9 @@ def get_production_ratios(
 
     # Summary
     num_days = len(daily_records)
-    avg_workers = round(total_workers_sum / num_days, 1) if num_days > 0 else 0.0
-    avg_pairs_worker = round(total_pairs_all / total_workers_sum, 2) if total_workers_sum > 0 else 0.0
-    avg_pairs_hour = round(total_pairs_all / total_hours_sum, 2) if total_hours_sum > 0 else 0.0
+    avg_workers = round(total_workers_sum / num_days, 1) if num_days > 0 else Decimal('0.0')
+    avg_pairs_worker = round(total_pairs_all / total_workers_sum, 2) if total_workers_sum > 0 else Decimal('0.0')
+    avg_pairs_hour = round(total_pairs_all / total_hours_sum, 2) if total_hours_sum > 0 else Decimal('0.0')
 
     summary = ProductionRatioSummary(
         avg_daily_workers=avg_workers,
@@ -331,15 +332,15 @@ def record_daily_factory_log(
     # Calculate pairs from production batches if not provided
     pairs = payload.total_pairs_produced
     if pairs is None:
-        batch_sum = db.query(func.coalesce(func.sum(ProductionBatch.produced_quantity), 0.0)).filter(
+        batch_sum = db.query(func.coalesce(func.sum(ProductionBatch.produced_quantity), Decimal('0.0'))).filter(
             ProductionBatch.company_id == current_user.company_id,
             ProductionBatch.date_ad == payload.date_ad,
             ProductionBatch.status != "cancelled"
-        ).scalar() or 0.0
+        ).scalar() or Decimal('0.0')
         pairs = int(round(batch_sum))
 
-    pairs_worker = round(pairs / payload.total_workers, 2) if payload.total_workers > 0 else 0.0
-    pairs_hour = round(pairs / payload.total_working_hours, 2) if payload.total_working_hours > 0 else 0.0
+    pairs_worker = round(pairs / payload.total_workers, 2) if payload.total_workers > 0 else Decimal('0.0')
+    pairs_hour = round(pairs / payload.total_working_hours, 2) if payload.total_working_hours > 0 else Decimal('0.0')
 
     if existing:
         existing.date_bs = bs_date

@@ -1,3 +1,4 @@
+from decimal import Decimal
 from datetime import date, datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, status
@@ -117,8 +118,8 @@ def get_workers(
         m_rec = monthly_records.get(w.id)
         current_m = CurrentMonthHours(
             month_year=eval_month,
-            total_working_hours=m_rec.total_working_hours if m_rec else 0.0,
-            overtime_hours=m_rec.overtime_hours if m_rec else 0.0,
+            total_working_hours=m_rec.total_working_hours if m_rec else Decimal('0.0'),
+            overtime_hours=m_rec.overtime_hours if m_rec else Decimal('0.0'),
             gross_pay_paisa=m_rec.gross_pay_paisa if m_rec else 0,
             advance_deduction_paisa=m_rec.advance_deduction_paisa if m_rec else 0,
             net_paid_paisa=m_rec.net_paid_paisa if m_rec else 0,
@@ -371,7 +372,7 @@ def process_monthly_payroll(
 ):
     """
     Process, calculate, and finalize monthly payroll for a worker:
-    - Calculates gross pay for SALARY (basic + OT) or WAGE (TWH * rate + OT * 1.5 * rate)
+    - Calculates gross pay for SALARY (basic + OT) or WAGE (TWH * rate + OT * Decimal('1.5') * rate)
     - Computes and applies advance deduction up to outstanding advance balance
     - If mark_as_paid=True, updates status to PAID and logs an automatic RECOVERED advance entry
     """
@@ -385,8 +386,8 @@ def process_monthly_payroll(
             detail="Worker not found."
         )
 
-    twh = payload.total_working_hours or 0.0
-    ot = payload.overtime_hours or 0.0
+    twh = Decimal(str(payload.total_working_hours)) if payload.total_working_hours is not None else Decimal('0.0')
+    ot = Decimal(str(payload.overtime_hours)) if payload.overtime_hours is not None else Decimal('0.0')
 
     # 1. Gross pay computation if not explicitly provided
     if payload.gross_pay_paisa is not None:
@@ -395,14 +396,14 @@ def process_monthly_payroll(
         if worker.pay_type == "SALARY":
             # Standard monthly salary base
             base = worker.basic_rate_paisa
-            # Overtime rate: (Monthly salary / 208 hours) * 1.5
-            hourly_rate = float(worker.basic_rate_paisa) / 208.0
-            ot_pay = int(ot * hourly_rate * 1.5)
+            # Overtime rate: (Monthly salary / 208 hours) * Decimal('1.5')
+            hourly_rate = Decimal(worker.basic_rate_paisa) / Decimal('208.0')
+            ot_pay = int(ot * hourly_rate * Decimal('1.5'))
             gross_pay = base + ot_pay
         else:
             # WAGE worker: regular hours + overtime hours at 1.5x
             reg_pay = int(twh * worker.basic_rate_paisa)
-            ot_pay = int(ot * worker.basic_rate_paisa * 1.5)
+            ot_pay = int(ot * worker.basic_rate_paisa * Decimal('1.5'))
             gross_pay = reg_pay + ot_pay
 
     # 2. Advance deduction computation

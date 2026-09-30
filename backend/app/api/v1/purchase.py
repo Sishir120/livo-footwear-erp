@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -21,13 +22,13 @@ class RawMaterialCreate(BaseModel):
     code: str = Field(..., min_length=1, max_length=50)
     name: str = Field(..., min_length=1, max_length=150)
     unit: str = Field("kg", max_length=20)
-    min_stock_alert: float = Field(0.0, ge=0.0)
+    min_stock_alert: Decimal = Field(Decimal('0.0'), ge=Decimal('0.0'))
 
 class PurchaseCreate(BaseModel):
     supplier_id: int = Field(..., gt=0)
     raw_material_id: int = Field(..., gt=0)
-    quantity: float = Field(..., gt=0)
-    unit_price: float = Field(..., ge=0)
+    quantity: Decimal = Field(..., gt=0)
+    unit_price: Decimal = Field(..., ge=0)
     purchase_date_ad: str = Field(..., max_length=20)
     purchase_date_bs: str = Field(..., max_length=20)
     payment_status: str = Field("unpaid", max_length=20)

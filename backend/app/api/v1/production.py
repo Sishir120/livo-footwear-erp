@@ -1,3 +1,4 @@
+from decimal import Decimal
 import json
 import hashlib
 from typing import List, Optional, Dict, Any
@@ -23,22 +24,22 @@ class ProductCreate(BaseModel):
     category: Optional[str] = Field("Shoe", max_length=50)
     size: Optional[str] = Field("40", max_length=20)
     color: Optional[str] = Field("Black", max_length=50)
-    unit_price: float = Field(0.0, ge=0.0)
+    unit_price: Decimal = Field(Decimal('0.0'), ge=Decimal('0.0'))
 
 class MaterialUsageItem(BaseModel):
     raw_material_id: int = Field(..., gt=0)
-    quantity_used: float = Field(..., gt=0)
+    quantity_used: Decimal = Field(..., gt=0)
 
 class BOMItemCreate(BaseModel):
     product_id: int = Field(..., gt=0)
     raw_material_id: int = Field(..., gt=0)
-    quantity_required: float = Field(..., gt=0)
+    quantity_required: Decimal = Field(..., gt=0)
 
 class ProductionBatchCreate(BaseModel):
     batch_number: str = Field(..., min_length=1, max_length=50)
     product_id: int = Field(..., gt=0)
-    target_quantity: float = Field(..., gt=0)
-    produced_quantity: float = Field(..., gt=0)  # [M-01 FIX] Must be > 0; zero-pair batches are semantically invalid
+    target_quantity: Decimal = Field(..., gt=0)
+    produced_quantity: Decimal = Field(..., gt=0)  # [M-01 FIX] Must be > 0; zero-pair batches are semantically invalid
     worker_count: int = Field(1, ge=1)
     date_ad: str = Field(..., max_length=20)
     date_bs: str = Field(..., max_length=20)
@@ -46,22 +47,22 @@ class ProductionBatchCreate(BaseModel):
     material_usages: List[MaterialUsageItem] = []
 
 # Helper: check raw material available balance
-def check_raw_material_stock(db: Session, company_id: int, raw_material_id: int, required_qty: float, material_name: str) -> float:
+def check_raw_material_stock(db: Session, company_id: int, raw_material_id: int, required_qty: Decimal, material_name: str) -> float:
     total_purchased = db.query(
-        func.coalesce(func.sum(Purchase.quantity), 0.0)
+        func.coalesce(func.sum(Purchase.quantity), Decimal('0.0'))
     ).filter(
         Purchase.company_id == company_id,
         Purchase.raw_material_id == raw_material_id
     ).scalar()
 
     total_used = db.query(
-        func.coalesce(func.sum(ProductionMaterialUsage.quantity_used), 0.0)
+        func.coalesce(func.sum(ProductionMaterialUsage.quantity_used), Decimal('0.0'))
     ).filter(
         ProductionMaterialUsage.company_id == company_id,
         ProductionMaterialUsage.raw_material_id == raw_material_id
     ).scalar()
 
-    available = float(total_purchased) - float(total_used)
+    available = Decimal(total_purchased) - Decimal(total_used)
     if available < required_qty:
         raise HTTPException(
             status_code=422,
@@ -175,7 +176,7 @@ def create_production_batch(data: ProductionBatchCreate, current_user: User = De
             mat = material_repo.get_by_id(bom.raw_material_id)
             if not mat:
                 raise HTTPException(status_code=404, detail=f"BOM raw material {bom.raw_material_id} not found in company")
-            qty_needed = float(bom.quantity_required) * float(data.produced_quantity)
+            qty_needed = Decimal(bom.quantity_required) * Decimal(data.produced_quantity)
             check_raw_material_stock(db, current_user.company_id, bom.raw_material_id, qty_needed, mat.name)
             usages_to_deduct.append((bom.raw_material_id, qty_needed))
     elif data.material_usages:
@@ -333,8 +334,8 @@ def sync_production_draft(
         validated_sizes: Dict[str, int] = {}
         for sz, qty in payload.size_quantities.items():
             try:
-                val = float(qty)
-                if val < 0 or not val.is_integer():
+                val = Decimal(qty)
+                if val < 0 or not (val % 1 == 0):
                     raise ValueError()
                 int_val = int(val)
                 validated_sizes[str(sz)] = int_val
@@ -394,8 +395,8 @@ def sync_production_draft(
             company_id=current_user.company_id,
             batch_number=batch_num,
             product_id=payload.product_id,
-            target_quantity=float(total_pairs),
-            produced_quantity=float(total_pairs),
+            target_quantity=Decimal(total_pairs),
+            produced_quantity=Decimal(total_pairs),
             worker_count=payload.worker_count,
             status="completed",
             date_ad=payload.date_ad,
@@ -411,7 +412,7 @@ def sync_production_draft(
             BillOfMaterials.product_id == payload.product_id
         ).all()
         for bom in boms:
-            qty_needed = float(bom.quantity_required) * float(total_pairs)
+            qty_needed = Decimal(bom.quantity_required) * Decimal(total_pairs)
             db.add(ProductionMaterialUsage(
                 company_id=current_user.company_id,
                 batch_id=batch.id,
@@ -433,7 +434,7 @@ def sync_production_draft(
                     product_id=variant.id,
                     warehouse_id=payload.warehouse_id,
                     size=sz,
-                    quantity=float(qty),
+                    quantity=Decimal(qty),
                     direction=1,
                     ref_type="production",
                     ref_id=batch.id,
