@@ -126,6 +126,8 @@ export function StockReportView({ userRole }: StockReportViewProps) {
       color: string;
       unit_price: number;
       sizes: Record<number, number>;
+      sizesReserved: Record<number, number>;
+      sizesAtp: Record<number, number>;
       totalPairs: number;
       totalValuation: number;
     }>();
@@ -143,16 +145,23 @@ export function StockReportView({ userRole }: StockReportViewProps) {
           color: item.color || "-",
           unit_price: item.unit_price || 0,
           sizes: {},
+          sizesReserved: {},
+          sizesAtp: {},
           totalPairs: 0,
           totalValuation: 0
         };
         map.set(modelKey, row);
       }
       const sz = Number(item.size);
+      const onHand = Number(item.physical_stock ?? item.current_stock_pairs ?? 0);
+      const reserved = Number(item.reserved_stock ?? 0);
+      const atp = Number(item.available_to_promise ?? Math.max(0, onHand - reserved));
       if (!isNaN(sz)) {
-        row.sizes[sz] = (row.sizes[sz] || 0) + (item.current_stock_pairs || 0);
+        row.sizes[sz] = (row.sizes[sz] || 0) + onHand;
+        row.sizesReserved[sz] = (row.sizesReserved[sz] || 0) + reserved;
+        row.sizesAtp[sz] = (row.sizesAtp[sz] || 0) + atp;
       }
-      row.totalPairs += item.current_stock_pairs || 0;
+      row.totalPairs += onHand;
       row.totalValuation += item.estimated_value || 0;
     }
 
@@ -534,15 +543,24 @@ export function StockReportView({ userRole }: StockReportViewProps) {
                       <td style={{ color: "#475569", fontSize: "11px", padding: "6px 10px" }}>{row.color}</td>
                       {PARIS_POINTS.map((sz) => {
                         const count = row.sizes[sz] || 0;
+                        const resCount = row.sizesReserved?.[sz] || 0;
+                        const atpCount = row.sizesAtp?.[sz] ?? Math.max(0, count - resCount);
                         const isBrokenRunHole = hasStock && count === 0;
                         return (
                           <td
                             key={sz}
                             className={`matrix-cell ${count > 0 ? "has-stock" : isBrokenRunHole ? "broken-size-run" : "zero-stock"}`}
-                            style={{ height: "36px", padding: "6px 10px" }}
-                            title={isBrokenRunHole ? `Broken size run: stock available in other sizes, but Size ${sz} is depleted` : undefined}
+                            style={{ height: "40px", padding: "3px 4px", textAlign: "center" }}
+                            title={count > 0 ? `Size ${sz}: On-Hand: ${count}, Reserved: ${resCount}, Free (ATP): ${atpCount}` : isBrokenRunHole ? `Broken size run: Size ${sz} is depleted` : undefined}
                           >
-                            {count > 0 ? count : "-"}
+                            <div style={{ fontWeight: "700", fontSize: "12px", lineHeight: "1.1" }}>
+                              {count > 0 ? count : "-"}
+                            </div>
+                            {count > 0 && (
+                              <div style={{ fontSize: "9px", color: resCount > 0 ? "#D97706" : "#64748B", lineHeight: "1", marginTop: "1px" }}>
+                                {resCount > 0 ? `R:${resCount}/F:${atpCount}` : `F:${atpCount}`}
+                              </div>
+                            )}
                           </td>
                         );
                       })}

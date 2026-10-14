@@ -1,10 +1,13 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, Index
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Text, Boolean, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
 class Product(Base):
     __tablename__ = "products"
+    __table_args__ = (
+        UniqueConstraint("company_id", "code", name="uq_company_product_code"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
@@ -13,13 +16,16 @@ class Product(Base):
     category = Column(String(100), nullable=True)  # Boot, Slipper, Shoe, Sandal
     size = Column(String(50), nullable=True)      # e.g., 39, 40, 41, 42
     color = Column(String(50), nullable=True)     # Black, Brown, Red, Navy
-    unit_price = Column(Float, nullable=False, default=0.0)
+    unit_price = Column(Numeric, nullable=False, default=0.0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Note: NO stock_qty field here! Stock is derived strictly from StockMovement ledger per RULES.md §1
 
 class Warehouse(Base):
     __tablename__ = "warehouses"
+    __table_args__ = (
+        UniqueConstraint("company_id", "code", name="uq_company_warehouse_code"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
@@ -45,7 +51,7 @@ class StockMovement(Base):
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False, default=1, server_default="1")
     size = Column(String(20), nullable=True)
-    quantity = Column(Float, nullable=False)
+    quantity = Column(Numeric, nullable=False)
     direction = Column(Integer, nullable=False)  # +1 or -1
     ref_type = Column(String(50), nullable=False)
     ref_id = Column(Integer, nullable=True)

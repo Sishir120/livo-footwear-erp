@@ -36,6 +36,14 @@ services:
     volumes:
       - backend_backups:/app/backups
       - backend_logs:/app/logs
+      - backend_uploads:/app/static/uploads/products
+      - backend_storage:/app/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     expose:
       - "8000"
 
@@ -46,7 +54,8 @@ services:
     container_name: livo-frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -74,5 +83,7 @@ volumes:
   postgres_data:
   backend_backups:
   backend_logs:
+  backend_uploads:
+  backend_storage:
   caddy_data:
   caddy_config:

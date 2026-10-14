@@ -13,6 +13,8 @@ _product_locks = defaultdict(threading.RLock)
 _idempotency_locks = defaultdict(threading.RLock)
 _mutation_locks = defaultdict(threading.RLock)
 _credit_locks = defaultdict(threading.RLock)
+_raw_material_locks = defaultdict(threading.RLock)
+_purchase_locks = defaultdict(threading.RLock)
 _meta_lock = threading.RLock()
 
 def hash_args_to_bigint(*args: Any) -> int:
@@ -24,6 +26,18 @@ def hash_args_to_bigint(*args: Any) -> int:
     raw_hash = int(hashlib.sha256(raw_str.encode("utf-8")).hexdigest()[:15], 16)
     return raw_hash - (1 << 63) if raw_hash >= (1 << 63) else raw_hash
 
+def release_all_session_locks(db: Session):
+    """Releases all in-process thread locks registered to the given session."""
+    if not hasattr(db, "info"):
+        return
+    held = db.info.get("_held_thread_locks", [])
+    while held:
+        l = held.pop()
+        try:
+            l.release()
+        except RuntimeError:
+            pass
+
 def _register_thread_lock_release(db: Session, lock: threading.RLock):
     """Binds an in-process thread lock to the SQLAlchemy session lifecycle, releasing on commit/rollback/close."""
     if not hasattr(db, "info"):
@@ -31,15 +45,12 @@ def _register_thread_lock_release(db: Session, lock: threading.RLock):
     if "_held_thread_locks" not in db.info:
         db.info["_held_thread_locks"] = []
 
-        @event.listens_for(db, "after_transaction_end")
-        def _release_on_tx_end(session, transaction):
-            held = session.info.get("_held_thread_locks", [])
-            while held:
-                l = held.pop()
-                try:
-                    l.release()
-                except RuntimeError:
-                    pass
+        def _cleanup(session, *args, **kwargs):
+            release_all_session_locks(session)
+
+        event.listen(db, "after_transaction_end", _cleanup)
+        event.listen(db, "after_rollback", _cleanup)
+        event.listen(db, "after_soft_rollback", _cleanup)
 
     db.info["_held_thread_locks"].append(lock)
 
@@ -146,3 +157,67 @@ def acquire_idempotency_advisory_lock(db: Session, company_id: int, idempotency_
     except Exception:
         pass
     return lock_key
+
+def get_raw_material_mutation_mutex(company_id: int, raw_material_id: int) -> threading.RLock:
+    """Returns an in-process mutex dedicated to (company_id, raw_material_id)."""
+    with _meta_lock:
+        return _raw_material_locks[(company_id, raw_material_id)]
+
+def acquire_raw_material_mutation_lock(db: Session, company_id: int, raw_material_id: int) -> int:
+    """
+    Acquires a transaction-scoped PostgreSQL Advisory Lock on raw material mutations:
+      lock_id = hash_args_to_bigint("raw_material", company_id, raw_material_id)
+    Falls back to an in-process keyed threading lock on SQLite test runners, auto-released on tx end.
+    """
+    lock_id = hash_args_to_bigint("raw_material", company_id, raw_material_id)
+    bind = None
+    try:
+        bind = db.get_bind()
+    except Exception:
+        pass
+
+    if bind and bind.dialect.name == "postgresql":
+        try:
+            db.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": lock_id})
+        except Exception:
+            pass
+    else:
+        mutex = get_raw_material_mutation_mutex(company_id, raw_material_id)
+        mutex.acquire()
+        _register_thread_lock_release(db, mutex)
+
+    return lock_id
+
+
+def get_purchase_mutex(company_id: int, purchase_id: int) -> threading.RLock:
+    """Returns an in-process mutex dedicated to (company_id, purchase_id)."""
+    with _meta_lock:
+        return _purchase_locks[(company_id, purchase_id)]
+
+
+def acquire_purchase_lock(db: Session, company_id: int, purchase_id: int) -> int:
+    """
+    Acquires a transaction-scoped PostgreSQL Advisory Lock on purchase order receipt:
+      lock_id = hash_args_to_bigint("purchase", company_id, purchase_id)
+    Falls back to an in-process keyed threading lock on SQLite test runners, auto-released on tx end.
+    """
+    lock_id = hash_args_to_bigint("purchase", company_id, purchase_id)
+    bind = None
+    try:
+        bind = db.get_bind()
+    except Exception:
+        pass
+
+    if bind and bind.dialect.name == "postgresql":
+        try:
+            db.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": lock_id})
+        except Exception:
+            pass
+    else:
+        mutex = get_purchase_mutex(company_id, purchase_id)
+        mutex.acquire()
+        _register_thread_lock_release(db, mutex)
+
+    return lock_id
+
+

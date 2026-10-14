@@ -6,14 +6,16 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from pydantic import BaseModel, Field
+from app.core.sequence import generate_document_number, allocate_next_sequence
 from app.api.deps import get_db, get_current_user, require_editor
 from app.models.user import User
-from app.models.stock import Product, StockMovement
+from app.models.stock import Product, StockMovement, Warehouse
 from app.models.production import ProductionBatch, ProductionMaterialUsage
-from app.models.purchase import RawMaterial, Purchase
+from app.models.purchase import RawMaterial, Purchase, RawMaterialMovement
 from app.models.bom import BillOfMaterials
 from app.models.sync import ProductionSyncLog
-from app.core.locks import get_idempotency_mutex, acquire_idempotency_advisory_lock
+from app.core.locks import get_idempotency_mutex, acquire_idempotency_advisory_lock, acquire_raw_material_mutation_lock
+from app.core.nepali_date import parse_ad_date
 from app.db.repository import TenantRepository
 
 router = APIRouter(prefix="/production", tags=["Production & Products"])
@@ -36,7 +38,6 @@ class BOMItemCreate(BaseModel):
     quantity_required: Decimal = Field(..., gt=0)
 
 class ProductionBatchCreate(BaseModel):
-    batch_number: str = Field(..., min_length=1, max_length=50)
     product_id: int = Field(..., gt=0)
     target_quantity: Decimal = Field(..., gt=0)
     produced_quantity: Decimal = Field(..., gt=0)  # [M-01 FIX] Must be > 0; zero-pair batches are semantically invalid
@@ -44,43 +45,52 @@ class ProductionBatchCreate(BaseModel):
     date_ad: str = Field(..., max_length=20)
     date_bs: str = Field(..., max_length=20)
     notes: Optional[str] = Field(None, max_length=500)
+    color: Optional[str] = Field(None, max_length=50)
     material_usages: List[MaterialUsageItem] = []
 
-# Helper: check raw material available balance
+# Helper: check raw material available balance from append-only movement ledger
 def check_raw_material_stock(db: Session, company_id: int, raw_material_id: int, required_qty: Decimal, material_name: str) -> float:
-    total_purchased = db.query(
-        func.coalesce(func.sum(Purchase.quantity), Decimal('0.0'))
+    ledger_balance = db.query(
+        func.coalesce(func.sum(RawMaterialMovement.quantity * RawMaterialMovement.direction), 0.0)
     ).filter(
-        Purchase.company_id == company_id,
-        Purchase.raw_material_id == raw_material_id
+        RawMaterialMovement.company_id == company_id,
+        RawMaterialMovement.raw_material_id == raw_material_id
     ).scalar()
 
-    total_used = db.query(
-        func.coalesce(func.sum(ProductionMaterialUsage.quantity_used), Decimal('0.0'))
-    ).filter(
-        ProductionMaterialUsage.company_id == company_id,
-        ProductionMaterialUsage.raw_material_id == raw_material_id
-    ).scalar()
-
-    available = Decimal(total_purchased) - Decimal(total_used)
+    available = Decimal(str(round(float(ledger_balance), 4)))
     if available < required_qty:
         raise HTTPException(
             status_code=422,
-            detail=f"Insufficient Raw Material: {material_name} (Required: {required_qty:.2f}, Available: {available:.2f})"
+            detail=f"Insufficient Raw Material: {material_name} (INSUFFICIENT_RAW_MATERIAL, Required: {required_qty:.2f}, Available: {available:.2f})"
         )
-    return available
+    return float(available)
 
 # Products
 @router.get("/products")
-def list_products(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_products(
+    limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Returns bounded paginated list of products strictly scoped to current tenant."""
     repo = TenantRepository(Product, db, current_user.company_id)
-    return repo.get_all()
+    return repo.get_all(limit=limit, offset=offset)
 
 @router.post("/products")
 def create_product(data: ProductCreate, current_user: User = Depends(require_editor), db: Session = Depends(get_db)):
     repo = TenantRepository(Product, db, current_user.company_id)
     product = repo.create(**data.model_dump())
     db.commit()
+    return product
+
+@router.get("/products/{product_id}")
+def get_product(product_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Fetches a single product strictly scoped to current tenant company."""
+    repo = TenantRepository(Product, db, current_user.company_id)
+    product = repo.get_by_id(product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
     return product
 
 # Bill of Materials (BOM)
@@ -152,6 +162,15 @@ def list_batches(current_user: User = Depends(get_current_user), db: Session = D
     repo = TenantRepository(ProductionBatch, db, current_user.company_id)
     return repo.get_all()
 
+@router.get("/batches/{batch_id}")
+def get_batch(batch_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Fetches a single production batch strictly scoped to current tenant company."""
+    repo = TenantRepository(ProductionBatch, db, current_user.company_id)
+    batch = repo.get_by_id(batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Production batch not found")
+    return batch
+
 @router.post("/batches")
 def create_production_batch(data: ProductionBatchCreate, current_user: User = Depends(require_editor), db: Session = Depends(get_db)):
     # Defensive check: ensure product belongs strictly to caller's company (Tenant Isolation / IDOR prevention)
@@ -194,7 +213,7 @@ def create_production_batch(data: ProductionBatchCreate, current_user: User = De
 
     # 1. Create batch record
     batch = batch_repo.create(
-        batch_number=data.batch_number,
+        batch_number=generate_document_number(db, current_user.company_id, "PRODUCTION", "PROD"),
         product_id=data.product_id,
         target_quantity=data.target_quantity,
         produced_quantity=data.produced_quantity,
@@ -202,32 +221,57 @@ def create_production_batch(data: ProductionBatchCreate, current_user: User = De
         status="completed",
         date_ad=data.date_ad,
         date_bs=data.date_bs,
-        notes=data.notes
+        notes=data.notes,
+        color=data.color
     )
 
-    # 2. Record material usage deductions
+    # 2. Record material usage deductions and append RawMaterialMovement ledger entries
     for raw_mat_id, qty_used in usages_to_deduct:
+        acquire_raw_material_mutation_lock(db, current_user.company_id, raw_mat_id)
         usage_repo.create(
             batch_id=batch.id,
             raw_material_id=raw_mat_id,
             quantity_used=qty_used
         )
+        movement = RawMaterialMovement(
+            company_id=current_user.company_id,
+            raw_material_id=raw_mat_id,
+            movement_date=parse_ad_date(data.date_ad),
+            movement_date_bs=data.date_bs,
+            direction=-1,
+            quantity=float(qty_used),
+            unit_cost_paisa=0,
+            movement_type="BOM_ISSUE",
+            reference_voucher=batch.batch_number,
+            notes=f"Production Batch {batch.batch_number} BOM issue",
+            actor_id=current_user.id
+        )
+        db.add(movement)
+        mat = material_repo.get_by_id(raw_mat_id)
+        if mat:
+            mat.current_stock -= float(qty_used)
 
     # 3. Write finished product stock movement (+1 IN) per RULES.md §1
+    target_wh = db.query(Warehouse).filter(
+        Warehouse.company_id == current_user.company_id,
+        Warehouse.is_active == True
+    ).order_by(Warehouse.id.asc()).first()
+    target_wh_id = target_wh.id if target_wh else 1
+
     movement_repo.create(
         product_id=data.product_id,
-        warehouse_id=1,
+        warehouse_id=target_wh_id,
         size=product.size,
         quantity=data.produced_quantity,
         direction=1,
         ref_type="production",
         ref_id=batch.id,
         movement_type="PRODUCTION_IN",
-        source_doc_ref=data.batch_number,
+        source_doc_ref=batch.batch_number,
         actor_id=current_user.id,
         date_ad=data.date_ad,
         date_bs=data.date_bs,
-        notes=f"Production Batch {data.batch_number}"
+        notes=f"Production Batch {batch.batch_number}"
     )
 
     db.commit()
@@ -246,6 +290,7 @@ class ProductionDraftSyncRequest(BaseModel):
     date_bs: str = Field(..., max_length=20)
     size_quantities: Dict[str, Any] = Field(..., description="Mapping of continental size to quantity pairs")
     notes: Optional[str] = Field(None, max_length=500)
+    color: Optional[str] = Field(None, max_length=50)
 
 
 @router.post("/sync/draft")
@@ -274,6 +319,12 @@ def sync_production_draft(
         ).first()
 
         if existing_log:
+            if existing_log.payload_hash != payload_hash:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Idempotency key conflict: draft payload differs from previously submitted request for key '{payload.idempotency_key}'."
+                )
+
             if existing_log.status == "ACCEPTED":
                 batch = db.query(ProductionBatch).filter(
                     ProductionBatch.id == existing_log.batch_id,
@@ -309,6 +360,29 @@ def sync_production_draft(
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Product not found in current company"
+            )
+
+        # 3b. Verify warehouse ownership strictly within current tenant company (Tenant Isolation / IDOR)
+        target_wh = db.query(Warehouse).filter(
+            Warehouse.id == payload.warehouse_id,
+            Warehouse.company_id == current_user.company_id
+        ).first()
+        if not target_wh:
+            rejected_log = ProductionSyncLog(
+                company_id=current_user.company_id,
+                idempotency_key=payload.idempotency_key,
+                batch_id=None,
+                actor_id=current_user.id,
+                payload_hash=payload_hash,
+                status="REJECTED",
+                error_code="INVALID_WAREHOUSE",
+                error_message="Warehouse not found in current company"
+            )
+            db.add(rejected_log)
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Warehouse not found in current company"
             )
 
         # 4. Strict Non-Negative Whole Integer Size Quantities Validation
@@ -377,17 +451,8 @@ def sync_production_draft(
             )
 
         # 5. Monotonic Batch Number Generation
-        batch_count = db.query(func.count(ProductionBatch.id)).filter(
-            ProductionBatch.company_id == current_user.company_id
-        ).scalar() or 0
-        next_seq = batch_count + 1
-        batch_num = f"BATCH-{next_seq:04d}"
-        while db.query(ProductionBatch).filter(
-            ProductionBatch.company_id == current_user.company_id,
-            ProductionBatch.batch_number == batch_num
-        ).first():
-            next_seq += 1
-            batch_num = f"BATCH-{next_seq:04d}"
+        batch_seq = allocate_next_sequence(db, current_user.company_id, "BATCH")
+        batch_num = f"BATCH-{batch_seq:04d}"
 
         # 6. Insert ProductionBatch
         notes_str = payload.notes or f"Offline sync run: {payload.line or 'Main'} / {payload.shift or 'Shift 1'}"
@@ -401,7 +466,8 @@ def sync_production_draft(
             status="completed",
             date_ad=payload.date_ad,
             date_bs=payload.date_bs,
-            notes=notes_str
+            notes=notes_str,
+            color=payload.color
         )
         db.add(batch)
         db.flush()
@@ -413,12 +479,34 @@ def sync_production_draft(
         ).all()
         for bom in boms:
             qty_needed = Decimal(bom.quantity_required) * Decimal(total_pairs)
+            mat = db.query(RawMaterial).filter(
+                RawMaterial.company_id == current_user.company_id,
+                RawMaterial.id == bom.raw_material_id
+            ).first()
+            if mat:
+                check_raw_material_stock(db, current_user.company_id, bom.raw_material_id, qty_needed, mat.name)
+            acquire_raw_material_mutation_lock(db, current_user.company_id, bom.raw_material_id)
             db.add(ProductionMaterialUsage(
                 company_id=current_user.company_id,
                 batch_id=batch.id,
                 raw_material_id=bom.raw_material_id,
                 quantity_used=qty_needed
             ))
+            db.add(RawMaterialMovement(
+                company_id=current_user.company_id,
+                raw_material_id=bom.raw_material_id,
+                movement_date=parse_ad_date(payload.date_ad),
+                movement_date_bs=payload.date_bs,
+                direction=-1,
+                quantity=float(qty_needed),
+                unit_cost_paisa=0,
+                movement_type="BOM_ISSUE",
+                reference_voucher=batch.batch_number,
+                notes=f"Production Batch {batch.batch_number} BOM issue",
+                actor_id=current_user.id
+            ))
+            if mat:
+                mat.current_stock -= float(qty_needed)
 
         # 8. Append StockMovement (+1 INWARD per size)
         movement_repo = TenantRepository(StockMovement, db, current_user.company_id)

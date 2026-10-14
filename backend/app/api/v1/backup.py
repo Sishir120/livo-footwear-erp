@@ -1,7 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.api.deps import get_current_user, require_admin
 from app.models.user import User
-from app.services.backup_service import run_database_backup, get_latest_backup_status
+from app.services.backup_service import (
+    run_database_backup,
+    get_latest_backup_status,
+    get_backup_health_report
+)
 
 router = APIRouter(prefix="/backup", tags=["Backup"])
 
@@ -9,6 +13,14 @@ router = APIRouter(prefix="/backup", tags=["Backup"])
 def get_backup_status(current_user: User = Depends(get_current_user)):
     """Returns the latest database backup status for display in Settings screen."""
     return get_latest_backup_status()
+
+@router.get("/health")
+def get_backup_health(current_user: User = Depends(get_current_user)):
+    """
+    Returns an auditable operational backup health report.
+    Validates backup age, creation status, and restore verification integrity.
+    """
+    return get_backup_health_report()
 
 @router.post("/run")
 def trigger_backup(current_user: User = Depends(require_admin)):

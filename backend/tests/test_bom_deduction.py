@@ -48,7 +48,7 @@ def test_bom_automatic_deduction_and_insufficient_rejection(client):
     mat = client.post("/api/v1/purchase/raw-materials", json={
         "code": "RM-BOM-LEATHER",
         "name": "Calf Leather Premium",
-        "unit": "sqft",
+        "unit": "kg",
         "min_stock_alert": 10.0
     }).json()
     mat_id = mat["id"]

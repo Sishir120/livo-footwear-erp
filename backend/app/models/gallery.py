@@ -15,7 +15,9 @@ class ProductImage(Base):
     mime_type = Column(String(64), default="image/jpeg", nullable=False)
     file_size_bytes = Column(Integer, nullable=True)
     is_primary = Column(Boolean, default=True, nullable=False)
+    production_batch_id = Column(Integer, ForeignKey("production_batches.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     product = relationship("Product")
+    production_batch = relationship("ProductionBatch")
     company = relationship("Company")

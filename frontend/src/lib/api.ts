@@ -5,7 +5,7 @@
  * 2. End-to-end correlation tracing & support reference capture (X-Request-ID)
  * 3. Offline mutation interception, outbox queuing, and idempotency headers.
  */
-import { enqueueMutation } from "./offlineQueue";
+import { enqueueMutation, getActiveCompanyId } from "./offlineQueue";
 
 /**
  * Resolves the target API URL through the first-party reverse proxy.
@@ -45,6 +45,49 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   const rawEndpoint = typeof input === "string" ? input : input.toString();
   const targetUrl = resolveApiUrl(rawEndpoint);
 
+  // Extract or generate stable idempotency key for this mutation
+  let idempotencyKey: string | undefined = undefined;
+  let dependsOn: string[] | undefined = undefined;
+  let requestInit: RequestInit = {
+    credentials: "include",
+    ...init,
+  };
+
+  if (isMutation) {
+    const existingHeaders = init?.headers;
+    const headersObj: Record<string, string> = {};
+
+    if (existingHeaders) {
+      if (typeof Headers !== "undefined" && existingHeaders instanceof Headers) {
+        existingHeaders.forEach((v, k) => { headersObj[k] = v; });
+      } else if (Array.isArray(existingHeaders)) {
+        existingHeaders.forEach(([k, v]) => { headersObj[k] = v; });
+      } else {
+        Object.assign(headersObj, existingHeaders);
+      }
+    }
+
+    idempotencyKey = headersObj["Idempotency-Key"] || headersObj["X-Idempotency-Key"] || headersObj["idempotency-key"];
+    if (headersObj["X-Depends-On"]) {
+      dependsOn = headersObj["X-Depends-On"].split(",").map((s) => s.trim()).filter(Boolean);
+    }
+
+    if (!idempotencyKey) {
+      idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `mut_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    }
+
+    if (!headersObj["Idempotency-Key"] && !headersObj["X-Idempotency-Key"]) {
+      headersObj["Idempotency-Key"] = idempotencyKey;
+    }
+
+    requestInit = {
+      ...requestInit,
+      headers: headersObj,
+    };
+  }
+
+  const activeCompId = getActiveCompanyId();
+
   // 1. If explicitly offline and mutating, directly buffer into outbox
   if (typeof navigator !== "undefined" && !navigator.onLine && isMutation) {
     let payload = null;
@@ -57,9 +100,12 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
     }
 
     const queued = await enqueueMutation({
+      id: idempotencyKey,
+      companyId: activeCompId,
       endpoint: rawEndpoint,
       method,
       payload,
+      dependsOn,
     });
 
     if (typeof window !== "undefined") {
@@ -90,7 +136,7 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
 
   // 2. Attempt online network request
   try {
-    const res = await fetch(targetUrl, init);
+    const res = await fetch(targetUrl, requestInit);
 
     // Capture X-Request-ID on errors (4xx / 5xx)
     if (!res.ok) {
@@ -128,9 +174,12 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
       }
 
       const queued = await enqueueMutation({
+        id: idempotencyKey,
+        companyId: activeCompId,
         endpoint: rawEndpoint,
         method,
         payload,
+        dependsOn,
       });
 
       if (typeof window !== "undefined") {

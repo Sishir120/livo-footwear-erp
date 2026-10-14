@@ -5,9 +5,11 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from pydantic import BaseModel, Field
+from app.core.sequence import generate_document_number
 from app.api.deps import get_db, get_current_user, require_editor
 from app.models.user import User
 from app.models.stock import Product, Warehouse, StockMovement
+from app.models.sales import SalesOrder, SalesItem
 from app.models.stock_snapshot import StockSnapshot
 from app.db.repository import TenantRepository
 from app.config import settings
@@ -19,6 +21,7 @@ class SnapshotCreate(BaseModel):
 
 class StockMovementCreate(BaseModel):
     product_id: int
+    warehouse_id: Optional[int] = None
     quantity: Decimal
     direction: int = Field(..., description="1 for inward, -1 for outbound")
     reference_type: Optional[str] = "manual"
@@ -27,23 +30,60 @@ class StockMovementCreate(BaseModel):
 
 class StockAdjustmentCreate(BaseModel):
     product_id: int
-    warehouse_id: Optional[int] = 1
+    warehouse_id: Optional[int] = None
     size: Optional[str] = None
     quantity_delta: Decimal
     reason_code: Optional[str] = None
     reason_text: Optional[str] = None
     supervisor_token: Optional[str] = None
 
+
+def _get_default_or_validate_warehouse(db: Session, company_id: int, warehouse_id: Optional[int] = None) -> int:
+    """
+    Validates that a specified warehouse belongs strictly to the authenticated tenant company.
+    If warehouse_id is None, automatically resolves the active default warehouse for this company.
+    """
+    if warehouse_id is not None:
+        wh = db.query(Warehouse).filter(
+            Warehouse.id == warehouse_id,
+            Warehouse.company_id == company_id
+        ).first()
+        if not wh:
+            raise HTTPException(status_code=404, detail="Warehouse not found in current company")
+        return wh.id
+
+    wh = db.query(Warehouse).filter(
+        Warehouse.company_id == company_id,
+        Warehouse.is_active == True
+    ).order_by(Warehouse.id.asc()).first()
+    if not wh:
+        wh = db.query(Warehouse).filter(Warehouse.company_id == company_id).first()
+        if not wh:
+            wh = Warehouse(
+                company_id=company_id,
+                name="Main Finished Warehouse",
+                code=f"WH-MAIN-{company_id}",
+                location="Factory Premises",
+                is_active=True
+            )
+            db.add(wh)
+            db.flush()
+    return wh.id
+
+
 @router.get("/movements")
 def list_stock_movements(
     product_id: Optional[int] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """Returns bounded paginated list of stock movements strictly scoped to current tenant."""
     repo = TenantRepository(StockMovement, db, current_user.company_id)
     if product_id:
-        return repo.filter(StockMovement.product_id == product_id)
-    return repo.get_all()
+        return repo.filter(StockMovement.product_id == product_id, limit=limit, offset=offset)
+    return repo.get_all(limit=limit, offset=offset)
 
 from app.core.locks import get_stock_mutex, acquire_stock_advisory_lock, acquire_stock_mutation_lock
 
@@ -59,6 +99,9 @@ def create_stock_movement(
     """
     if payload.direction not in (-1, 1):
         raise HTTPException(status_code=400, detail="Direction must be 1 (inward) or -1 (outbound)")
+
+    target_warehouse_id = _get_default_or_validate_warehouse(db, current_user.company_id, payload.warehouse_id)
+
     if payload.quantity <= 0:
         raise HTTPException(status_code=400, detail="Quantity must be greater than 0")
 
@@ -109,11 +152,15 @@ def create_stock_movement(
                 raise HTTPException(
                     status_code=422,
                     detail={
+                        "status": "conflict",
                         "error": "INSUFFICIENT_STOCK",
+                        "resource": "stock_movement",
                         "sku": product.code,
                         "size": product.size or "",
                         "available": avail_str,
                         "requested": req_str,
+                        "reason": f"Insufficient physical stock for size variant {product.size} (Available: {avail_str}, Requested: {req_str})",
+                        "resolution": "Adjust issued quantity to available physical balance or record replenishment receipt first.",
                         "message": f"Insufficient physical stock for this size variant (Available: {avail_str}, Requested: {req_str})",
                         "Insufficient physical stock": True
                     }
@@ -123,7 +170,7 @@ def create_stock_movement(
             movement_repo = TenantRepository(StockMovement, db, current_user.company_id)
             movement = movement_repo.create(
                 product_id=payload.product_id,
-                warehouse_id=1,
+                warehouse_id=target_warehouse_id,
                 size=product.size,
                 direction=payload.direction,
                 quantity=payload.quantity,
@@ -150,7 +197,7 @@ def create_stock_movement(
     movement_repo = TenantRepository(StockMovement, db, current_user.company_id)
     movement = movement_repo.create(
         product_id=payload.product_id,
-        warehouse_id=1,
+        warehouse_id=target_warehouse_id,
         size=product.size,
         direction=payload.direction,
         quantity=payload.quantity,
@@ -186,7 +233,10 @@ def create_stock_snapshots(
     """
     Materializes current stock balance for all products into stock_snapshots.
     Enables O(1) query scaling: Stock = Snapshot Balance + SUM(movements after last_movement_id).
+    Uses batch upsert (INSERT ... ON CONFLICT DO UPDATE) for PostgreSQL, or fallback
+    per-row upsert for SQLite (test/dev). Eliminates O(N) per-product SELECT loop.
     """
+    from sqlalchemy import text
     target_date = date.today()
     if payload and payload.snapshot_date:
         try:
@@ -201,7 +251,7 @@ def create_stock_snapshots(
 
     product_ids = [p.id for p in products]
 
-    # Calculate full current balance and find max movement id for each product
+    # Single aggregation query: full balance + max movement id per product
     agg_rows = db.query(
         StockMovement.product_id,
         func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), Decimal('0.0')).label("balance"),
@@ -213,50 +263,74 @@ def create_stock_snapshots(
 
     agg_map = {row.product_id: (int(row.balance), int(row.last_movement_id)) for row in agg_rows}
 
-    created = []
-    for prod in products:
-        bal, last_id = agg_map.get(prod.id, (0, 0))
-        # Upsert or create snapshot for (company_id, product_id, snapshot_date)
-        existing = db.query(StockSnapshot).filter(
-            StockSnapshot.company_id == current_user.company_id,
-            StockSnapshot.product_id == prod.id,
-            StockSnapshot.snapshot_date == target_date
-        ).first()
+    db_url = str(db.bind.url) if hasattr(db, 'bind') and db.bind else ""
+    is_postgres = "postgresql" in db_url or "psycopg2" in db_url
 
-        if existing:
-            existing.balance = bal
-            existing.last_movement_id = last_id
-            created.append(existing)
-        else:
-            snap = StockSnapshot(
-                company_id=current_user.company_id,
-                product_id=prod.id,
-                balance=bal,
-                snapshot_date=target_date,
-                last_movement_id=last_id
+    created_count = 0
+    if is_postgres:
+        # Batch upsert: single round-trip for all products
+        rows_to_upsert = []
+        for prod in products:
+            bal, last_id = agg_map.get(prod.id, (0, 0))
+            rows_to_upsert.append({
+                "company_id": current_user.company_id,
+                "product_id": prod.id,
+                "balance": bal,
+                "snapshot_date": target_date,
+                "last_movement_id": last_id
+            })
+        if rows_to_upsert:
+            db.execute(
+                text("""
+                    INSERT INTO stock_snapshots (company_id, product_id, balance, snapshot_date, last_movement_id)
+                    VALUES (:company_id, :product_id, :balance, :snapshot_date, :last_movement_id)
+                    ON CONFLICT (company_id, product_id, snapshot_date)
+                    DO UPDATE SET balance = EXCLUDED.balance, last_movement_id = EXCLUDED.last_movement_id
+                """),
+                rows_to_upsert
             )
-            db.add(snap)
-            created.append(snap)
+            created_count = len(rows_to_upsert)
+        db.commit()
+    else:
+        # Fallback for SQLite (test/dev): per-row upsert
+        created = []
+        for prod in products:
+            bal, last_id = agg_map.get(prod.id, (0, 0))
+            existing = db.query(StockSnapshot).filter(
+                StockSnapshot.company_id == current_user.company_id,
+                StockSnapshot.product_id == prod.id,
+                StockSnapshot.snapshot_date == target_date
+            ).first()
+            if existing:
+                existing.balance = bal
+                existing.last_movement_id = last_id
+                created.append(existing)
+            else:
+                snap = StockSnapshot(
+                    company_id=current_user.company_id,
+                    product_id=prod.id,
+                    balance=bal,
+                    snapshot_date=target_date,
+                    last_movement_id=last_id
+                )
+                db.add(snap)
+                created.append(snap)
+        db.commit()
+        created_count = len(created)
 
-    db.commit()
+    # Return summary (re-fetch is skipped to avoid extra query; counts are accurate)
     return {
-        "created_snapshots": len(created),
+        "created_snapshots": created_count,
         "snapshot_date": str(target_date),
-        "snapshots": [
-            {
-                "id": s.id,
-                "product_id": s.product_id,
-                "balance": s.balance,
-                "last_movement_id": s.last_movement_id,
-                "snapshot_date": str(s.snapshot_date)
-            }
-            for s in created
-        ]
+        "message": f"Snapshot materialized for {created_count} products via batch upsert"
     }
 
 @router.get("/balance")
 def get_stock_balance(
+    product_id: Optional[int] = Query(None),
     category: Optional[str] = Query(None),
+    limit: int = Query(500, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -265,19 +339,22 @@ def get_stock_balance(
     O(1) Snapshot Math:
     Stock = Latest Snapshot Balance + SUM_{i > last_movement_id} (direction * quantity)
     Falls back to pure movement summation if no snapshot exists.
+    Bounded pagination: max 2000 products per page. Category and product_id filter applied at DB layer.
     """
-    product_repo = TenantRepository(Product, db, current_user.company_id)
-    products = product_repo.get_all()
-
+    # Push category and product_id filter to DB — never fetch all products then filter in Python
+    stmt = db.query(Product).filter(Product.company_id == current_user.company_id)
+    if product_id:
+        stmt = stmt.filter(Product.id == product_id)
     if category:
-        products = [p for p in products if p.category and p.category.lower() == category.lower()]
+        stmt = stmt.filter(func.lower(Product.category) == category.lower())
+    products = stmt.offset(offset).limit(limit).all()
 
     if not products:
         return []
 
     product_ids = [p.id for p in products]
 
-    # Fetch latest snapshot per product
+    # Fetch latest snapshot per product in one query
     all_snaps = db.query(StockSnapshot).filter(
         StockSnapshot.company_id == current_user.company_id,
         StockSnapshot.product_id.in_(product_ids)
@@ -321,9 +398,26 @@ def get_stock_balance(
         for row in pure_rows:
             balance_map[row.product_id] = Decimal(row.balance)
 
+    # Calculate committed undispatched orders (reserved stock) per product
+    reserved_rows = db.query(
+        SalesItem.product_id,
+        func.coalesce(func.sum(SalesItem.quantity), Decimal('0.0')).label("reserved")
+    ).join(
+        SalesOrder, SalesOrder.id == SalesItem.sales_order_id
+    ).filter(
+        SalesOrder.company_id == current_user.company_id,
+        SalesItem.product_id.in_(product_ids),
+        SalesOrder.status.in_(["CONFIRMED", "pending"]),
+        SalesOrder.delivered == False
+    ).group_by(SalesItem.product_id).all()
+
+    reserved_map = {row.product_id: Decimal(row.reserved) for row in reserved_rows}
+
     balance_results = []
     for prod in products:
         qty = balance_map.get(prod.id, Decimal('0.0'))
+        reserved = reserved_map.get(prod.id, Decimal('0.0'))
+        atp = max(Decimal('0.0'), qty - reserved)
         balance_results.append({
             "product_id": prod.id,
             "code": prod.code,
@@ -333,6 +427,9 @@ def get_stock_balance(
             "color": prod.color,
             "unit_price": prod.unit_price,
             "current_stock_pairs": qty,
+            "physical_stock": qty,
+            "reserved_stock": reserved,
+            "available_to_promise": atp,
             "pending_stock": qty if qty > 0 else Decimal('0.0')
         })
 
@@ -394,6 +491,25 @@ def list_warehouses(
         }
         for w in warehouses
     ]
+
+
+@router.get("/warehouses/{warehouse_id}")
+def get_warehouse(
+    warehouse_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Returns warehouse by ID strictly scoped to current tenant company."""
+    repo = TenantRepository(Warehouse, db, current_user.company_id)
+    wh = repo.get_by_id(warehouse_id)
+    if not wh:
+        raise HTTPException(status_code=404, detail="Warehouse not found")
+    return {
+        "id": wh.id,
+        "name": wh.name,
+        "code": wh.code,
+        "location": wh.location
+    }
 
 
 @router.get("/ledger")
@@ -467,9 +583,9 @@ def get_stock_ledger(
     w_ids = list({r.warehouse_id for r in rows if r.warehouse_id})
     u_ids = list({r.actor_id for r in rows if r.actor_id} | {r.approved_by_id for r in rows if r.approved_by_id})
 
-    prods = {p.id: p for p in db.query(Product).filter(Product.id.in_(p_ids)).all()} if p_ids else {}
-    warehouses = {w.id: w for w in db.query(Warehouse).filter(Warehouse.id.in_(w_ids)).all()} if w_ids else {}
-    users = {u.id: u for u in db.query(User).filter(User.id.in_(u_ids)).all()} if u_ids else {}
+    prods = {p.id: p for p in db.query(Product).filter(Product.id.in_(p_ids), Product.company_id == current_user.company_id).all()} if p_ids else {}
+    warehouses = {w.id: w for w in db.query(Warehouse).filter(Warehouse.id.in_(w_ids), Warehouse.company_id == current_user.company_id).all()} if w_ids else {}
+    users = {u.id: u for u in db.query(User).filter(User.id.in_(u_ids), User.company_id == current_user.company_id).all()} if u_ids else {}
 
     items = []
     for r in rows:
@@ -539,9 +655,6 @@ def create_stock_adjustment(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found in current company")
 
-    target_size = payload.size or product.size
-    target_warehouse_id = payload.warehouse_id or 1
-
     # Check RBAC for downward adjustment
     if payload.quantity_delta < 0:
         is_recount = (payload.reason_code or "").upper() in ("RECOUNT", "RECOUNT_CORRECTION")
@@ -565,6 +678,9 @@ def create_stock_adjustment(
                     detail="Downward stock adjustments for loss/damage require an administrator or valid supervisor authorization token."
                 )
 
+    target_size = payload.size or product.size
+    target_warehouse_id = _get_default_or_validate_warehouse(db, current_user.company_id, payload.warehouse_id)
+
     acquire_stock_advisory_lock(db, current_user.company_id, payload.product_id)
     mutex = get_stock_mutex(current_user.company_id, payload.product_id)
     with mutex:
@@ -582,7 +698,7 @@ def create_stock_adjustment(
         direction = 1 if payload.quantity_delta > 0 else -1
         qty = abs(payload.quantity_delta)
         m_type = "ADJUSTMENT_IN" if direction == 1 else "ADJUSTMENT_OUT"
-        doc_ref = f"ADJ-{datetime.now().strftime('%y%m%d%H%M%S')}"
+        doc_ref = generate_document_number(db, current_user.company_id, "ADJUSTMENT", "ADJ")
 
         movement_repo = TenantRepository(StockMovement, db, current_user.company_id)
         movement = movement_repo.create(

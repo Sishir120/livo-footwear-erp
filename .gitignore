@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 !.env.production.example
+!.env.staging.example
 
 # Python
 __pycache__/
@@ -22,8 +23,16 @@ backend/pg_binaries.zip
 backend/backups/*.sql
 backend/backups/*.sql.gz
 backend/backups/*.db
+backend/staging_pgdata/
+staging_pgdata/
 logs/
 backend/logs/
+
+# Scratch & Temporary
+scratch/
+scratch_*
+last_transcript.txt
+backend/tests_list.txt
 
 # Node & Next.js
 node_modules/
@@ -41,3 +50,5 @@ yarn-error.log*
 .idea/
 .DS_Store
 Thumbs.db
+
+frontend/tsconfig.tsbuildinfo

@@ -9,7 +9,8 @@ import {
   CheckCircle2,
   X,
   Trash2,
-  Send
+  Send,
+  RotateCcw
 } from "lucide-react";
 import {
   subscribeDraftChanges,
@@ -18,15 +19,33 @@ import {
   drainPendingProductionDrafts,
   ProductionDraft
 } from "@/lib/offlineDb";
+import {
+  subscribeQueueChange,
+  getAllMutations,
+  retryMutation,
+  discardMutation,
+  replayQueue,
+  QueuedMutation,
+  QueueTelemetry
+} from "@/lib/offlineQueue";
 import { useLocale } from "../context/LocaleContext";
 
 export function NetworkStatusBadge() {
   const { locale } = useLocale();
   const [isOnline, setIsOnline] = useState(true);
   const [draftStats, setDraftStats] = useState({ pending: 0, rejected: 0, syncing: 0 });
+  const [queueTelemetry, setQueueTelemetry] = useState<QueueTelemetry>({
+    total: 0,
+    queued: 0,
+    syncing: 0,
+    conflicts: 0,
+    failures: 0,
+  });
   const [syncingProgress, setSyncingProgress] = useState<{ current: number; total: number } | null>(null);
   const [showDrawer, setShowDrawer] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<"drafts" | "mutations">("drafts");
   const [draftsList, setDraftsList] = useState<ProductionDraft[]>([]);
+  const [mutationsList, setMutationsList] = useState<QueuedMutation[]>([]);
   const [isSyncingNow, setIsSyncingNow] = useState(false);
 
   // 1. Connection check with ping debounce
@@ -57,7 +76,6 @@ export function NetworkStatusBadge() {
 
     const handleOnline = () => {
       setIsOnline(true);
-      // Auto-drain drafts upon reconnection
       triggerSync();
     };
     const handleOffline = () => setIsOnline(false);
@@ -66,8 +84,13 @@ export function NetworkStatusBadge() {
     window.addEventListener("offline", handleOffline);
 
     // 2. Subscribe to draft queue changes
-    const unsub = subscribeDraftChanges((stats) => {
+    const unsubDrafts = subscribeDraftChanges((stats) => {
       if (mounted) setDraftStats(stats);
+    });
+
+    // 3. Subscribe to generic mutation queue changes
+    const unsubMutations = subscribeQueueChange((telemetry) => {
+      if (mounted) setQueueTelemetry(telemetry);
     });
 
     return () => {
@@ -75,7 +98,8 @@ export function NetworkStatusBadge() {
       clearInterval(interval);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
-      unsub();
+      unsubDrafts();
+      unsubMutations();
     };
   }, []);
 
@@ -86,10 +110,15 @@ export function NetworkStatusBadge() {
       await drainPendingProductionDrafts((curr, tot) => {
         setSyncingProgress({ current: curr, total: tot });
       });
+      await replayQueue();
       // Refresh drawer list if open
       if (showDrawer) {
-        const updated = await getAllDrafts();
-        setDraftsList(updated);
+        const [updatedDrafts, updatedMutations] = await Promise.all([
+          getAllDrafts(),
+          getAllMutations()
+        ]);
+        setDraftsList(updatedDrafts);
+        setMutationsList(updatedMutations);
       }
     } finally {
       setIsSyncingNow(false);
@@ -98,8 +127,12 @@ export function NetworkStatusBadge() {
   };
 
   const handleOpenDrawer = async () => {
-    const list = await getAllDrafts();
-    setDraftsList(list);
+    const [drafts, mutations] = await Promise.all([
+      getAllDrafts(),
+      getAllMutations()
+    ]);
+    setDraftsList(drafts);
+    setMutationsList(mutations);
     setShowDrawer(true);
   };
 
@@ -109,16 +142,29 @@ export function NetworkStatusBadge() {
     setDraftsList(updated);
   };
 
+  const handleRetryMutation = async (id: string) => {
+    await retryMutation(id);
+    const updated = await getAllMutations();
+    setMutationsList(updated);
+  };
+
+  const handleDiscardMutation = async (id: string) => {
+    await discardMutation(id);
+    const updated = await getAllMutations();
+    setMutationsList(updated);
+  };
+
   // Convert number to Nepali digits
   const toNeDigits = (num: number): string => {
     const neMap = ["०", "१", "२", "३", "४", "५", "६", "७", "८", "९"];
     return String(num).split("").map((d) => neMap[parseInt(d, 10)] ?? d).join("");
   };
 
-  // Determine visual badge state
-  const totalQueue = draftStats.pending + draftStats.syncing;
-  const hasConflicts = draftStats.rejected > 0;
-  const isSyncing = isSyncingNow || draftStats.syncing > 0;
+  // Determine unified visual badge state
+  const totalQueue = draftStats.pending + draftStats.syncing + queueTelemetry.queued + queueTelemetry.syncing;
+  const hasConflicts = draftStats.rejected > 0 || queueTelemetry.conflicts > 0 || queueTelemetry.failures > 0;
+  const totalConflicts = draftStats.rejected + queueTelemetry.conflicts + queueTelemetry.failures;
+  const isSyncing = isSyncingNow || draftStats.syncing > 0 || queueTelemetry.syncing > 0;
 
   let badgeBg = "#DCFCE7";
   let badgeBorder = "#86EFAC";
@@ -132,10 +178,10 @@ export function NetworkStatusBadge() {
     badgeText = "#92400E";
     badgeIcon = <WifiOff size={13} color="#92400E" />;
     if (locale === "en") {
-      badgeLabel = totalQueue > 0 ? `Offline (${totalQueue} batches stored)` : "Offline";
+      badgeLabel = totalQueue > 0 ? `Offline (${totalQueue} queued)` : "Offline";
     } else {
       badgeLabel = totalQueue > 0
-        ? `अफलाइन (Offline — ${toNeDigits(totalQueue)} ब्याच सुरक्षित)`
+        ? `अफलाइन (Offline — ${toNeDigits(totalQueue)} सुरक्षित)`
         : "अफलाइन (Offline)";
     }
   } else if (hasConflicts) {
@@ -144,8 +190,8 @@ export function NetworkStatusBadge() {
     badgeText = "#991B1B";
     badgeIcon = <AlertTriangle size={13} color="#991B1B" />;
     badgeLabel = locale === "en"
-      ? `Sync conflict (${draftStats.rejected} batches require review)`
-      : `सिंक समस्या (Sync conflict — ${toNeDigits(draftStats.rejected)} ब्याच समीक्षा आवश्यक)`;
+      ? `Sync conflict (${totalConflicts} require review)`
+      : `सिंक समस्या (Sync conflict — ${toNeDigits(totalConflicts)} समीक्षा आवश्यक)`;
   } else if (isSyncing) {
     badgeBg = "#DBEAFE";
     badgeBorder = "#93C5FD";
@@ -166,8 +212,8 @@ export function NetworkStatusBadge() {
     badgeText = "#92400E";
     badgeIcon = <RefreshCw size={13} color="#92400E" />;
     badgeLabel = locale === "en"
-      ? `${totalQueue} batches queued`
-      : `${toNeDigits(totalQueue)} ब्याच सिंक पर्खाइमा (Queued)`;
+      ? `${totalQueue} transactions queued`
+      : `${toNeDigits(totalQueue)} सिंक पर्खाइमा (Queued)`;
   }
 
   return (
@@ -217,10 +263,10 @@ export function NetworkStatusBadge() {
                 <RefreshCw size={18} color="#1E3A8A" />
                 <div>
                   <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#0F172A", margin: 0 }}>
-                    Offline Production Draft Queue (IndexedDB)
+                    Offline Resilience & Reconciliation Drawer
                   </h3>
                   <div style={{ fontSize: "11px", color: "#64748B" }}>
-                    Durable local device storage • Idempotent reconciliation
+                    Tenant-isolated IndexedDB • Stable Idempotency • Conflict Resolution
                   </div>
                 </div>
               </div>
@@ -232,13 +278,47 @@ export function NetworkStatusBadge() {
               </button>
             </div>
 
+            {/* Subsystem Tabs */}
+            <div style={{ display: "flex", borderBottom: "1px solid #CBD5E1", background: "#F8FAFC", padding: "0 16px" }}>
+              <button
+                onClick={() => setDrawerTab("drafts")}
+                style={{
+                  padding: "8px 14px",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  border: "none",
+                  background: "none",
+                  borderBottom: drawerTab === "drafts" ? "2px solid #1E3A8A" : "2px solid transparent",
+                  color: drawerTab === "drafts" ? "#1E3A8A" : "#64748B",
+                  cursor: "pointer",
+                }}
+              >
+                Production Batches ({draftsList.length})
+              </button>
+              <button
+                onClick={() => setDrawerTab("mutations")}
+                style={{
+                  padding: "8px 14px",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  border: "none",
+                  background: "none",
+                  borderBottom: drawerTab === "mutations" ? "2px solid #1E3A8A" : "2px solid transparent",
+                  color: drawerTab === "mutations" ? "#1E3A8A" : "#64748B",
+                  cursor: "pointer",
+                }}
+              >
+                Transaction Outbox ({mutationsList.length})
+              </button>
+            </div>
+
             {/* Queue List Content */}
             <div style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                 <div style={{ fontSize: "12px", color: "#475569" }}>
-                  Status: <strong>{isOnline ? "Online (Connected)" : "Offline (Local Only)"}</strong> • Total Drafts: <strong>{draftsList.length}</strong>
+                  Status: <strong>{isOnline ? "Online (Connected)" : "Offline (Local Only)"}</strong>
                 </div>
-                {isOnline && draftsList.some((d) => d.status === "PENDING" || d.status === "REJECTED") && (
+                {isOnline && (
                   <button
                     onClick={triggerSync}
                     disabled={isSyncingNow}
@@ -259,103 +339,220 @@ export function NetworkStatusBadge() {
                 )}
               </div>
 
-              {draftsList.length === 0 ? (
-                <div style={{ padding: "40px", textAlign: "center", color: "#64748B" }}>
-                  <CheckCircle2 size={32} color="#047857" style={{ margin: "0 auto 8px" }} />
-                  <div style={{ fontWeight: "600", color: "#0F172A" }}>All batches synchronized</div>
-                  <div style={{ fontSize: "12px", marginTop: "2px" }}>No pending or uncommitted offline drafts on this workstation.</div>
-                </div>
+              {drawerTab === "drafts" ? (
+                draftsList.length === 0 ? (
+                  <div style={{ padding: "40px", textAlign: "center", color: "#64748B" }}>
+                    <CheckCircle2 size={32} color="#047857" style={{ margin: "0 auto 8px" }} />
+                    <div style={{ fontWeight: "600", color: "#0F172A" }}>All batches synchronized</div>
+                    <div style={{ fontSize: "12px", marginTop: "2px" }}>No pending offline drafts on this workstation.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {draftsList.map((draft) => {
+                      const isRejected = draft.status === "REJECTED" || draft.status === "CONFLICT";
+                      const isDraftSyncing = draft.status === "SYNCING";
+
+                      return (
+                        <div
+                          key={draft.idempotencyKey}
+                          style={{
+                            border: `1px solid ${isRejected ? "#FCA5A5" : "#CBD5E1"}`,
+                            background: isRejected ? "#FEF2F2" : "#FFFFFF",
+                            borderRadius: "4px",
+                            padding: "12px"
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <span style={{ fontWeight: "700", fontSize: "13px", color: "#0F172A" }}>
+                                  {draft.modelName || `Product #${draft.productId}`}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: "10px",
+                                    fontWeight: "700",
+                                    padding: "1px 6px",
+                                    borderRadius: "3px",
+                                    background: isRejected ? "#FEE2E2" : isDraftSyncing ? "#DBEAFE" : "#FEF3C7",
+                                    color: isRejected ? "#B91C1C" : isDraftSyncing ? "#1E40AF" : "#92400E",
+                                    border: `1px solid ${isRejected ? "#FCA5A5" : isDraftSyncing ? "#93C5FD" : "#FCD34D"}`
+                                  }}
+                                >
+                                  {draft.status}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: "11px", color: "#64748B", marginTop: "3px" }}>
+                                Key: <code style={{ fontSize: "10.5px" }}>{draft.idempotencyKey.slice(0, 32)}...</code>
+                                {" • "}
+                                Device: {new Date(draft.createdAtDevice).toLocaleTimeString()}
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => handleDeleteDraft(draft.idempotencyKey)}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                color: "#94A3B8",
+                                padding: "4px"
+                              }}
+                              title="Discard local draft"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+
+                          <div style={{ marginTop: "8px", fontSize: "12px", color: "#334155" }}>
+                            Total Pairs: <strong>{draft.totalPairs}</strong>
+                            {" • "}
+                            Sizes: {Object.entries(draft.sizeQuantities || {})
+                              .map(([sz, q]) => `${sz}:${q}`)
+                              .join(", ")}
+                          </div>
+
+                          {draft.errorDetails && (
+                            <div
+                              style={{
+                                marginTop: "8px",
+                                padding: "6px 10px",
+                                background: "#FFFFFF",
+                                border: "1px solid #FCA5A5",
+                                borderRadius: "3px",
+                                fontSize: "11.5px",
+                                color: "#B91C1C",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "6px"
+                              }}
+                            >
+                              <AlertTriangle size={13} />
+                              <span>Server rejection reason: {draft.errorDetails}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {draftsList.map((draft) => {
-                    const isRejected = draft.status === "REJECTED" || draft.status === "CONFLICT";
-                    const isDraftSyncing = draft.status === "SYNCING";
+                mutationsList.length === 0 ? (
+                  <div style={{ padding: "40px", textAlign: "center", color: "#64748B" }}>
+                    <CheckCircle2 size={32} color="#047857" style={{ margin: "0 auto 8px" }} />
+                    <div style={{ fontWeight: "600", color: "#0F172A" }}>Outbox is empty</div>
+                    <div style={{ fontSize: "12px", marginTop: "2px" }}>No queued or conflicted transactions in browser outbox.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {mutationsList.map((item) => {
+                      const isConflict = item.status === "CONFLICT";
+                      const isFailure = item.status === "VALIDATION_FAILURE" || item.status === "PERMANENT_FAILURE" || item.status === "AUTH_FAILURE";
+                      const isSyncing = item.status === "SYNCING";
 
-                    return (
-                      <div
-                        key={draft.idempotencyKey}
-                        style={{
-                          border: `1px solid ${isRejected ? "#FCA5A5" : "#CBD5E1"}`,
-                          background: isRejected ? "#FEF2F2" : "#FFFFFF",
-                          borderRadius: "4px",
-                          padding: "12px"
-                        }}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                          <div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <span style={{ fontWeight: "700", fontSize: "13px", color: "#0F172A" }}>
-                                {draft.modelName || `Product #${draft.productId}`}
-                              </span>
-                              <span
+                      return (
+                        <div
+                          key={item.id}
+                          style={{
+                            border: `1px solid ${isConflict ? "#FCA5A5" : isFailure ? "#FCD34D" : "#CBD5E1"}`,
+                            background: isConflict ? "#FEF2F2" : isFailure ? "#FFFBEB" : "#FFFFFF",
+                            borderRadius: "4px",
+                            padding: "12px"
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <span style={{ fontWeight: "700", fontSize: "13px", color: "#0F172A" }}>
+                                  {item.method} {item.endpoint}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: "10px",
+                                    fontWeight: "700",
+                                    padding: "1px 6px",
+                                    borderRadius: "3px",
+                                    background: isConflict ? "#FEE2E2" : isFailure ? "#FEF3C7" : isSyncing ? "#DBEAFE" : "#E2E8F0",
+                                    color: isConflict ? "#B91C1C" : isFailure ? "#92400E" : isSyncing ? "#1E40AF" : "#334155",
+                                  }}
+                                >
+                                  {item.status}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: "11px", color: "#64748B", marginTop: "3px" }}>
+                                Key: <code style={{ fontSize: "10.5px" }}>{item.id.slice(0, 24)}...</code>
+                                {" • "}
+                                Tenant: {item.companyId}
+                                {" • "}
+                                Retries: {item.retryCount}
+                                {item.dependsOn && item.dependsOn.length > 0 && (
+                                  <> • Depends on: {item.dependsOn.map((d) => d.slice(0, 8)).join(", ")}</>
+                                )}
+                              </div>
+                            </div>
+
+                            <div style={{ display: "flex", gap: "4px" }}>
+                              {(isConflict || isFailure) && (
+                                <button
+                                  onClick={() => handleRetryMutation(item.id)}
+                                  style={{
+                                    background: "#EFF6FF",
+                                    border: "1px solid #BFDBFE",
+                                    borderRadius: "3px",
+                                    cursor: "pointer",
+                                    color: "#1E40AF",
+                                    padding: "3px 6px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                    fontSize: "11px",
+                                  }}
+                                  title="Retry mutation"
+                                >
+                                  <RotateCcw size={12} />
+                                  <span>Retry</span>
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDiscardMutation(item.id)}
                                 style={{
-                                  fontSize: "10px",
-                                  fontWeight: "700",
-                                  padding: "1px 6px",
-                                  borderRadius: "3px",
-                                  background: isRejected ? "#FEE2E2" : isDraftSyncing ? "#DBEAFE" : "#FEF3C7",
-                                  color: isRejected ? "#B91C1C" : isDraftSyncing ? "#1E40AF" : "#92400E",
-                                  border: `1px solid ${isRejected ? "#FCA5A5" : isDraftSyncing ? "#93C5FD" : "#FCD34D"}`
+                                  background: "none",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  color: "#94A3B8",
+                                  padding: "4px"
                                 }}
+                                title="Discard outbox record"
                               >
-                                {draft.status}
-                              </span>
-                            </div>
-                            <div style={{ fontSize: "11px", color: "#64748B", marginTop: "3px" }}>
-                              Key: <code style={{ fontSize: "10.5px" }}>{draft.idempotencyKey.slice(0, 32)}...</code>
-                              {" • "}
-                              Device: {new Date(draft.createdAtDevice).toLocaleTimeString()}
+                                <Trash2 size={14} />
+                              </button>
                             </div>
                           </div>
 
-                          <button
-                            onClick={() => handleDeleteDraft(draft.idempotencyKey)}
-                            style={{
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              color: "#94A3B8",
-                              padding: "4px"
-                            }}
-                            title="Discard local draft"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          {item.errorDetails && (
+                            <div
+                              style={{
+                                marginTop: "8px",
+                                padding: "6px 10px",
+                                background: "#FFFFFF",
+                                border: "1px solid #FCA5A5",
+                                borderRadius: "3px",
+                                fontSize: "11.5px",
+                                color: "#B91C1C",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "6px"
+                              }}
+                            >
+                              <AlertTriangle size={13} />
+                              <span>{item.errorDetails}</span>
+                            </div>
+                          )}
                         </div>
-
-                        {/* Size quantities summary */}
-                        <div style={{ marginTop: "8px", fontSize: "12px", color: "#334155" }}>
-                          Total Pairs: <strong>{draft.totalPairs}</strong>
-                          {" • "}
-                          Sizes: {Object.entries(draft.sizeQuantities || {})
-                            .map(([sz, q]) => `${sz}:${q}`)
-                            .join(", ")}
-                        </div>
-
-                        {/* Error reason if rejected */}
-                        {draft.errorDetails && (
-                          <div
-                            style={{
-                              marginTop: "8px",
-                              padding: "6px 10px",
-                              background: "#FFFFFF",
-                              border: "1px solid #FCA5A5",
-                              borderRadius: "3px",
-                              fontSize: "11.5px",
-                              color: "#B91C1C",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "6px"
-                            }}
-                          >
-                            <AlertTriangle size={13} />
-                            <span>Server rejection reason: {draft.errorDetails}</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )
               )}
             </div>
 

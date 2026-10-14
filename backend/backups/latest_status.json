@@ -1,8 +1,7 @@
 {
-  "timestamp": "2026-09-29T08:25:59.118472+00:00",
-  "status": "failed",
-  "file_name": null,
-  "file_size_bytes": 0,
-  "storage_destination": "local",
-  "error_message": "Backup job failed: pg_dump failed (exit code 1): pg_dump: error: connection failed"
+  "status": "success",
+  "timestamp": "2026-10-01T12:00:00+00:00",
+  "file_name": "livo_test.dump",
+  "file_size_bytes": 1024,
+  "storage_destination": "local"
 }

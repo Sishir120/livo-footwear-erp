@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index, func
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index, UniqueConstraint, func
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
@@ -9,7 +9,7 @@ class ProductionSyncLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
-    idempotency_key = Column(String(128), unique=True, nullable=False, index=True)
+    idempotency_key = Column(String(128), unique=False, nullable=False, index=True)
     batch_id = Column(Integer, ForeignKey("production_batches.id"), nullable=True)
     actor_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     payload_hash = Column(String(64), nullable=False)
@@ -23,5 +23,7 @@ class ProductionSyncLog(Base):
     actor = relationship("User")
 
     __table_args__ = (
+        UniqueConstraint("company_id", "idempotency_key", name="uq_sync_company_idempotency_key"),
         Index("ix_sync_company_key", "company_id", "idempotency_key"),
     )
+

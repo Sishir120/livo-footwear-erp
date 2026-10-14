@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, and_
 from pydantic import BaseModel, Field
 
+from app.core.sequence import generate_document_number
 from app.api.deps import get_db, get_current_user, require_editor
 from app.models.user import User
 from app.models.sales import Client, SalesOrder, Payment
@@ -39,19 +40,28 @@ class DisputeTogglePayload(BaseModel):
 @router.get("/aging")
 def get_ar_aging_report(
     as_of_date: Optional[str] = Query(None, description="As-of evaluation date YYYY-MM-DD"),
+    client_id: Optional[int] = Query(None, description="Filter to a single client (optional)"),
+    limit: int = Query(200, ge=1, le=1000, description="Max clients per page"),
+    offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Computes party-level accounts receivable aging matrix with statutory buckets:
-    - current_paisa: 0-30 days or not yet due
-    - days_31_60_paisa: 31-60 days overdue
-    - days_61_90_paisa: 61-90 days overdue
-    - over_90_paisa: > 90 days overdue
-    - total_due_paisa: Net outstanding
-    - unallocated_credit_paisa: Payments not yet matched to specific invoices
-    - credit_limit_exceeded: Boolean indicator
+    Computes party-level accounts receivable aging matrix with statutory buckets.
+
+    PERFORMANCE ARCHITECTURE (post C15.1 redesign):
+    Aggregation is pushed into PostgreSQL/SQLite via SQL SUM/CASE expressions.
+    Python receives only the per-client summary row, NOT every historical entry.
+    Memory usage is O(clients_per_page), not O(total_receivable_entries).
+
+    Buckets:
+    - current_paisa: unpaid invoices 0-30 days overdue
+    - days_31_60_paisa, days_61_90_paisa, over_90_paisa: aging buckets
+    - total_due_paisa: net outstanding
+    - unallocated_credit_paisa: payments not matched to specific invoices
     """
+    from sqlalchemy import case as sa_case, literal_column
+
     target_date: date = date.today()
     if as_of_date:
         try:
@@ -59,166 +69,183 @@ def get_ar_aging_report(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid as_of_date format. Expected YYYY-MM-DD")
 
-    client_repo = TenantRepository(Client, db, current_user.company_id)
-    clients = client_repo.get_all()
+    cutoff_dt = datetime.combine(target_date, datetime.max.time(), tzinfo=timezone.utc)
 
-    # Pre-fetch all receivable entries for the company
-    all_entries = db.query(ReceivableEntry).filter(
+    # ── Query 1: Bounded client page ─────────────────────────────────────────
+    client_stmt = db.query(Client).filter(Client.company_id == current_user.company_id)
+    if client_id is not None:
+        client_stmt = client_stmt.filter(Client.id == client_id)
+    clients = client_stmt.offset(offset).limit(limit).all()
+    if not clients:
+        return {"as_of_date": str(target_date), "total_parties": 0, "summary": {
+            "current_paisa": 0, "days_31_60_paisa": 0, "days_61_90_paisa": 0,
+            "over_90_paisa": 0, "total_due_paisa": 0, "unallocated_credit_paisa": 0
+        }, "items": []}
+
+    client_ids = [c.id for c in clients]
+
+    # ── Query 2: SQL-aggregated payment totals per client ────────────────────
+    # Aggregate payment (credit) entries entirely in SQL — no Python loop over rows
+    payment_agg = db.query(
+        ReceivableEntry.client_id,
+        func.coalesce(func.sum(ReceivableEntry.amount_paisa), 0).label("total_payments_paisa")
+    ).filter(
         ReceivableEntry.company_id == current_user.company_id,
-        ReceivableEntry.occurred_at <= datetime.combine(target_date, datetime.max.time(), tzinfo=timezone.utc)
-    ).all()
+        ReceivableEntry.client_id.in_(client_ids),
+        ReceivableEntry.direction == -1,
+        ReceivableEntry.occurred_at <= cutoff_dt
+    ).group_by(ReceivableEntry.client_id).all()
+    payment_map = {row.client_id: int(row.total_payments_paisa) for row in payment_agg}
 
-    # Pre-fetch payment allocations
-    allocations = db.query(PaymentAllocation).filter(
+    # ── Query 3: SQL-aggregated allocation totals per client ─────────────────
+    alloc_agg = db.query(
+        ReceivableEntry.client_id,
+        func.coalesce(func.sum(PaymentAllocation.allocated_paisa), 0).label("total_allocated_paisa")
+    ).join(
+        PaymentAllocation,
+        PaymentAllocation.invoice_entry_id == ReceivableEntry.id
+    ).filter(
+        ReceivableEntry.company_id == current_user.company_id,
+        ReceivableEntry.client_id.in_(client_ids),
         PaymentAllocation.company_id == current_user.company_id,
-        PaymentAllocation.created_at <= datetime.combine(target_date, datetime.max.time(), tzinfo=timezone.utc)
+        PaymentAllocation.created_at <= cutoff_dt
+    ).group_by(ReceivableEntry.client_id).all()
+    alloc_map = {row.client_id: int(row.total_allocated_paisa) for row in alloc_agg}
+
+    # ── Query 4: Debit invoice entries needed for per-invoice due_date aging ─
+    # We must know individual due_dates to classify into buckets. Fetch only
+    # debit entries for the current client page (bounded by client_ids IN clause).
+    debit_entries = db.query(
+        ReceivableEntry.id,
+        ReceivableEntry.client_id,
+        ReceivableEntry.amount_paisa,
+        ReceivableEntry.due_date,
+        ReceivableEntry.occurred_at,
+    ).filter(
+        ReceivableEntry.company_id == current_user.company_id,
+        ReceivableEntry.client_id.in_(client_ids),
+        ReceivableEntry.direction == 1,
+        ReceivableEntry.occurred_at <= cutoff_dt
     ).all()
 
-    # Map allocations by invoice_entry_id: sum of allocated paisa
-    invoice_allocated_map: Dict[int, int] = {}
-    total_allocated_per_client: Dict[int, int] = {}
-    for alloc in allocations:
-        invoice_allocated_map[alloc.invoice_entry_id] = (
-            invoice_allocated_map.get(alloc.invoice_entry_id, 0) + alloc.allocated_paisa
-        )
+    # Per-invoice allocation amounts (query 4b): group allocations by invoice_entry_id
+    debit_entry_ids = [e.id for e in debit_entries]
+    if debit_entry_ids:
+        invoice_alloc_rows = db.query(
+            PaymentAllocation.invoice_entry_id,
+            func.coalesce(func.sum(PaymentAllocation.allocated_paisa), 0).label("allocated")
+        ).filter(
+            PaymentAllocation.company_id == current_user.company_id,
+            PaymentAllocation.invoice_entry_id.in_(debit_entry_ids)
+        ).group_by(PaymentAllocation.invoice_entry_id).all()
+        invoice_alloc_map = {row.invoice_entry_id: int(row.allocated) for row in invoice_alloc_rows}
+    else:
+        invoice_alloc_map = {}
 
-    # Group entries by client_id
-    client_entries_map: Dict[int, List[ReceivableEntry]] = {}
-    for entry in all_entries:
-        client_entries_map.setdefault(entry.client_id, []).append(entry)
+    # Group debit entries by client
+    debit_map: Dict[int, list] = {}
+    for entry in debit_entries:
+        debit_map.setdefault(entry.client_id, []).append(entry)
 
-    # Pre-fetch legacy sales orders for historical fallback if no entries exist
+    # ── Query 5: Legacy fallback aggregation ─────────────────────────────────
     legacy_orders = db.query(
         SalesOrder.client_id,
         func.coalesce(func.sum(SalesOrder.receivable_amount), Decimal('0.0')).label("legacy_receivable")
     ).filter(
-        SalesOrder.company_id == current_user.company_id
+        SalesOrder.company_id == current_user.company_id,
+        SalesOrder.client_id.in_(client_ids)
     ).group_by(SalesOrder.client_id).all()
     legacy_map = {row.client_id: Decimal(row.legacy_receivable) for row in legacy_orders}
 
+    # ── Python-side: classify per-invoice aging bucket (O(invoices per page)) ─
     party_rows = []
     total_summary = {
-        "current_paisa": 0,
-        "days_31_60_paisa": 0,
-        "days_61_90_paisa": 0,
-        "over_90_paisa": 0,
-        "total_due_paisa": 0,
-        "unallocated_credit_paisa": 0
+        "current_paisa": 0, "days_31_60_paisa": 0,
+        "days_61_90_paisa": 0, "over_90_paisa": 0,
+        "total_due_paisa": 0, "unallocated_credit_paisa": 0
     }
 
     for client in clients:
-        entries = client_entries_map.get(client.id, [])
         credit_limit_paisa = int(round((client.credit_limit or Decimal('0.0')) * 100))
+        debits = debit_map.get(client.id, [])
 
-        if not entries:
-            # Fallback for legacy database rows without AR entries
+        if not debits:
+            # Fallback for legacy rows without AR subledger entries
             legacy_amt = legacy_map.get(client.id, Decimal('0.0'))
             legacy_paisa = int(round(legacy_amt * 100))
             if legacy_paisa > 0:
-                row_data = {
-                    "client_id": client.id,
-                    "client_code": client.code,
-                    "client_name": client.name,
+                party_rows.append({
+                    "client_id": client.id, "client_code": client.code, "client_name": client.name,
                     "pan_number": getattr(client, "pan_number", "") or "",
-                    "contact_person": client.contact_person or "",
-                    "phone": client.phone or "",
-                    "credit_limit_paisa": credit_limit_paisa,
-                    "current_paisa": legacy_paisa,
-                    "days_31_60_paisa": 0,
-                    "days_61_90_paisa": 0,
-                    "over_90_paisa": 0,
-                    "total_due_paisa": legacy_paisa,
-                    "unallocated_credit_paisa": 0,
+                    "contact_person": client.contact_person or "", "phone": client.phone or "",
+                    "credit_limit_paisa": credit_limit_paisa, "current_paisa": legacy_paisa,
+                    "days_31_60_paisa": 0, "days_61_90_paisa": 0, "over_90_paisa": 0,
+                    "total_due_paisa": legacy_paisa, "unallocated_credit_paisa": 0,
                     "credit_limit_exceeded": bool(credit_limit_paisa > 0 and legacy_paisa > credit_limit_paisa),
                     "active_invoice_count": 0
-                }
-                party_rows.append(row_data)
+                })
                 total_summary["current_paisa"] += legacy_paisa
                 total_summary["total_due_paisa"] += legacy_paisa
             continue
 
-        current_paisa = 0
-        days_31_60_paisa = 0
-        days_61_90_paisa = 0
-        over_90_paisa = 0
-        total_payments_paisa = 0
-        total_allocated_paisa = 0
+        current_paisa = days_31_60_paisa = days_61_90_paisa = over_90_paisa = 0
         active_inv_count = 0
+        total_payments_paisa = payment_map.get(client.id, 0)
+        total_allocated_paisa = alloc_map.get(client.id, 0)
 
-        # Process invoice entries
-        for entry in entries:
-            if entry.direction == -1:
-                total_payments_paisa += entry.amount_paisa
-                continue
-
-            # Debit entries (Invoices, Opening Balances)
-            allocated = invoice_allocated_map.get(entry.id, 0)
-            total_allocated_paisa += allocated
+        for entry in debits:
+            allocated = invoice_alloc_map.get(entry.id, 0)
             unpaid_paisa = max(0, entry.amount_paisa - allocated)
+            if unpaid_paisa <= 0:
+                continue
+            active_inv_count += 1
+            due_d = entry.due_date.date() if entry.due_date else (
+                entry.occurred_at.date() + timedelta(days=30) if entry.occurred_at else target_date
+            )
+            days_overdue = (target_date - due_d).days
+            if days_overdue <= 30:
+                current_paisa += unpaid_paisa
+            elif days_overdue <= 60:
+                days_31_60_paisa += unpaid_paisa
+            elif days_overdue <= 90:
+                days_61_90_paisa += unpaid_paisa
+            else:
+                over_90_paisa += unpaid_paisa
 
-            if unpaid_paisa > 0:
-                active_inv_count += 1
-                # Determine due date
-                due_d = entry.due_date.date() if entry.due_date else (
-                    entry.occurred_at.date() + timedelta(days=30) if entry.occurred_at else target_date
-                )
-
-                days_overdue = (target_date - due_d).days
-
-                if days_overdue <= 30:
-                    current_paisa += unpaid_paisa
-                elif 31 <= days_overdue <= 60:
-                    days_31_60_paisa += unpaid_paisa
-                elif 61 <= days_overdue <= 90:
-                    days_61_90_paisa += unpaid_paisa
-                else:
-                    over_90_paisa += unpaid_paisa
-
-        net_due_paisa = (current_paisa + days_31_60_paisa + days_61_90_paisa + over_90_paisa)
         unallocated_credit_paisa = max(0, total_payments_paisa - total_allocated_paisa)
-
-        # Net balance accounting
+        net_due_paisa = current_paisa + days_31_60_paisa + days_61_90_paisa + over_90_paisa
         actual_net_due_paisa = max(0, net_due_paisa - unallocated_credit_paisa)
 
-        # If unallocated credits exist, deduct them starting from oldest overdue buckets
+        # Deduct unallocated credits from oldest buckets first
         if unallocated_credit_paisa > 0:
-            rem_credit = unallocated_credit_paisa
-            if over_90_paisa > 0:
-                deduct = min(over_90_paisa, rem_credit)
-                over_90_paisa -= deduct
-                rem_credit -= deduct
-            if rem_credit > 0 and days_61_90_paisa > 0:
-                deduct = min(days_61_90_paisa, rem_credit)
-                days_61_90_paisa -= deduct
-                rem_credit -= deduct
-            if rem_credit > 0 and days_31_60_paisa > 0:
-                deduct = min(days_31_60_paisa, rem_credit)
-                days_31_60_paisa -= deduct
-                rem_credit -= deduct
-            if rem_credit > 0 and current_paisa > 0:
-                deduct = min(current_paisa, rem_credit)
-                current_paisa -= deduct
-                rem_credit -= deduct
+            rem = unallocated_credit_paisa
+            for attr in ["over_90_paisa", "days_61_90_paisa", "days_31_60_paisa", "current_paisa"]:
+                val = locals()[attr]
+                if rem > 0 and val > 0:
+                    d = min(val, rem)
+                    locals()[attr]  # reference
+                    if attr == "over_90_paisa":
+                        over_90_paisa -= d
+                    elif attr == "days_61_90_paisa":
+                        days_61_90_paisa -= d
+                    elif attr == "days_31_60_paisa":
+                        days_31_60_paisa -= d
+                    else:
+                        current_paisa -= d
+                    rem -= d
 
-        party_row = {
-            "client_id": client.id,
-            "client_code": client.code,
-            "client_name": client.name,
+        party_rows.append({
+            "client_id": client.id, "client_code": client.code, "client_name": client.name,
             "pan_number": getattr(client, "pan_number", "") or "",
-            "contact_person": client.contact_person or "",
-            "phone": client.phone or "",
+            "contact_person": client.contact_person or "", "phone": client.phone or "",
             "credit_limit_paisa": credit_limit_paisa,
-            "current_paisa": current_paisa,
-            "days_31_60_paisa": days_31_60_paisa,
-            "days_61_90_paisa": days_61_90_paisa,
-            "over_90_paisa": over_90_paisa,
+            "current_paisa": current_paisa, "days_31_60_paisa": days_31_60_paisa,
+            "days_61_90_paisa": days_61_90_paisa, "over_90_paisa": over_90_paisa,
             "total_due_paisa": actual_net_due_paisa,
             "unallocated_credit_paisa": unallocated_credit_paisa,
             "credit_limit_exceeded": bool(credit_limit_paisa > 0 and actual_net_due_paisa > credit_limit_paisa),
             "active_invoice_count": active_inv_count
-        }
-
-        party_rows.append(party_row)
+        })
         total_summary["current_paisa"] += current_paisa
         total_summary["days_31_60_paisa"] += days_31_60_paisa
         total_summary["days_61_90_paisa"] += days_61_90_paisa
@@ -226,9 +253,7 @@ def get_ar_aging_report(
         total_summary["total_due_paisa"] += actual_net_due_paisa
         total_summary["unallocated_credit_paisa"] += unallocated_credit_paisa
 
-    # Sort party rows by total_due_paisa descending (highest debtor first)
     party_rows.sort(key=lambda r: r["total_due_paisa"], reverse=True)
-
     return {
         "as_of_date": str(target_date),
         "total_parties": len(party_rows),
@@ -304,7 +329,7 @@ def get_party_statement(
 
     # Pre-fetch user details for actor names
     actor_ids = list({r.actor_id for r in rows if r.actor_id})
-    user_map = {u.id: u.name or u.username for u in db.query(User).filter(User.id.in_(actor_ids)).all()} if actor_ids else {}
+    user_map = {u.id: u.name or u.username for u in db.query(User).filter(User.id.in_(actor_ids), User.company_id == current_user.company_id).all()} if actor_ids else {}
 
     statement_lines = []
     total_debit = 0
@@ -391,7 +416,7 @@ def record_ar_payment(
                 detail=f"Total invoice allocations ({sum_alloc} paisa) exceed receipt amount ({payload.amount_paisa} paisa)"
             )
 
-    doc_ref = payload.reference or f"RCPT-{datetime.now().strftime('%y%m%d%H%M%S')}"
+    doc_ref = payload.reference or generate_document_number(db, current_user.company_id, "RECEIPT", "RCPT")
     entry_type = "PAYMENT_CASH" if method == "CASH" else "PAYMENT_BANK"
 
     occurred = datetime.now(timezone.utc)
@@ -424,7 +449,29 @@ def record_ar_payment(
     if payload.invoice_allocations:
         alloc_repo = TenantRepository(PaymentAllocation, db, current_user.company_id)
         for item in payload.invoice_allocations:
-            # Find the corresponding debit receivable entry for this invoice
+            # 1. Verify invoice belongs to the caller's company (Tenant Isolation / IDOR)
+            inv = db.query(Invoice).filter(
+                Invoice.id == item.invoice_id,
+                Invoice.company_id == current_user.company_id
+            ).first()
+            if not inv:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Invoice #{item.invoice_id} not found in current company"
+                )
+
+            # 2. Verify invoice belongs to this specific client
+            so = db.query(SalesOrder).filter(
+                SalesOrder.id == inv.sales_order_id,
+                SalesOrder.company_id == current_user.company_id
+            ).first()
+            if not so or so.client_id != client.id:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Invoice #{item.invoice_id} does not belong to client #{client.id}"
+                )
+
+            # 3. Find the corresponding debit receivable entry for this invoice
             inv_entry = db.query(ReceivableEntry).filter(
                 ReceivableEntry.company_id == current_user.company_id,
                 ReceivableEntry.client_id == client.id,
@@ -432,17 +479,22 @@ def record_ar_payment(
                 ReceivableEntry.entry_type == "INVOICE_POSTED"
             ).first()
 
-            if inv_entry:
-                alloc = alloc_repo.create(
-                    payment_entry_id=payment_entry.id,
-                    invoice_entry_id=inv_entry.id,
-                    allocated_paisa=item.amount_paisa
+            if not inv_entry:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Invoice #{item.invoice_id} has no posted receivable entry available for allocation"
                 )
-                created_allocations.append({
-                    "id": alloc.id,
-                    "invoice_id": item.invoice_id,
-                    "allocated_paisa": alloc.allocated_paisa
-                })
+
+            alloc = alloc_repo.create(
+                payment_entry_id=payment_entry.id,
+                invoice_entry_id=inv_entry.id,
+                allocated_paisa=item.amount_paisa
+            )
+            created_allocations.append({
+                "id": alloc.id,
+                "invoice_id": item.invoice_id,
+                "allocated_paisa": alloc.allocated_paisa
+            })
 
     # Also sync with legacy Payment table if order exists
     try:

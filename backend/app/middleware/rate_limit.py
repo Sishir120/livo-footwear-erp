@@ -41,11 +41,30 @@ class BasicRateLimitMiddleware(BaseHTTPMiddleware):
             ]
             
             if len(self.requests[client_ip]) >= self.max_requests:
+                from app.core.metrics import metrics
+                from app.core.error_taxonomy import ErrorCode
+                from app.middleware.correlation import get_request_id, get_correlation_id
+                
+                metrics.inc("rate_limited_requests_total", labels={"route": "auth_login"})
+                req_id = get_request_id() or get_correlation_id() or "unknown"
+                msg = "Too many login attempts. Please wait a minute before retrying."
+                
                 return JSONResponse(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    content={"detail": "Too many login attempts. Please wait a minute before retrying."}
+                    content={
+                        "error": ErrorCode.RATE_LIMITED,
+                        "message": msg,
+                        "detail": msg,
+                        "request_id": req_id
+                    },
+                    headers={
+                        "Retry-After": str(self.window_seconds),
+                        "X-Request-ID": req_id,
+                        "X-Correlation-ID": req_id
+                    }
                 )
                 
             self.requests[client_ip].append(now)
 
         return await call_next(request)
+

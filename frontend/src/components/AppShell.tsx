@@ -25,7 +25,7 @@ import {
 import { LegalModal } from "./LegalModal";
 import { NetworkStatusBadge } from "./NetworkStatusBadge";
 import { useLocale } from "../context/LocaleContext";
-import { subscribeQueueChange, replayQueue } from "../lib/offlineQueue";
+import { subscribeQueueChange, replayQueue, setActiveCompanyId, QueueTelemetry } from "../lib/offlineQueue";
 
 interface AppShellProps {
   activeTab: string;
@@ -44,9 +44,21 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
 
   // Offline outbox queue state
   const [isOnline, setIsOnline] = useState(true);
-  const [queuedCount, setQueuedCount] = useState(0);
+  const [queueTelemetry, setQueueTelemetry] = useState<QueueTelemetry>({
+    total: 0,
+    queued: 0,
+    syncing: 0,
+    conflicts: 0,
+    failures: 0,
+  });
   const [isSyncing, setIsSyncing] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.company_id) {
+      setActiveCompanyId(user.company_id);
+    }
+  }, [user?.company_id]);
 
   useEffect(() => {
     setIsOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
@@ -61,8 +73,8 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    const unsubscribe = subscribeQueueChange((count) => {
-      setQueuedCount(count);
+    const unsubscribe = subscribeQueueChange((telemetry) => {
+      setQueueTelemetry(telemetry);
     });
 
     const handleToast = (e: any) => {
@@ -71,12 +83,26 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
         setTimeout(() => setToastMessage(null), 4000);
       }
     };
+    const handleAuthReq = () => {
+      setToastMessage("Session expired while offline. Please log in again to sync queued changes.");
+      setTimeout(() => setToastMessage(null), 6000);
+    };
+    const handleConflict = (e: any) => {
+      const reason = e.detail?.reason || "Conflict detected";
+      setToastMessage(`Offline sync conflict: ${reason}. Check offline drawer.`);
+      setTimeout(() => setToastMessage(null), 6000);
+    };
+
     window.addEventListener("livo:toast", handleToast);
+    window.addEventListener("livo:auth-required", handleAuthReq);
+    window.addEventListener("livo:conflict-detected", handleConflict);
 
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("livo:toast", handleToast);
+      window.removeEventListener("livo:auth-required", handleAuthReq);
+      window.removeEventListener("livo:conflict-detected", handleConflict);
       unsubscribe();
     };
   }, []);

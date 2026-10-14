@@ -12,13 +12,18 @@ import {
   AlertTriangle,
   Receipt,
   Ban,
-  Building2
+  Building2,
+  Truck,
+  Wallet,
+  Trash2
 } from "lucide-react";
 import { exportToCSV } from "../utils/csvExport";
 import { useBarcodeScanner } from "../hooks/useBarcodeScanner";
 import { apiFetch, extractSupportReference } from "../lib/api";
-import { toPaisa, fromPaisa, calculateVat, calculateVatPaisa } from "../lib/currency";
+import { toPaisa, fromPaisa, calculateVat, calculateVatPaisa, amountToEnglishWords, amountToNepaliWords } from "../lib/currency";
 import { useLocale } from "../context/LocaleContext";
+import { NepaliDatePicker } from "./NepaliDatePicker";
+import { getTodayAd, getTodayBs } from "../lib/nepaliDate";
 
 const COMPANY_PAN = "609823412";
 const COMPANY_NAME = "LIVO FOOTWEAR INDUSTRIES PVT. LTD.";
@@ -30,9 +35,44 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
   const [products, setProducts] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [stockBalances, setStockBalances] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeSubTab, setActiveSubTab] = useState<"invoices" | "orders">("invoices");
+  const [activeSubTab, setActiveSubTab] = useState<"invoices" | "orders" | "expenses">("invoices");
+
+  // Orders status filtering
+  const [orderStatusFilter, setOrderStatusFilter] = useState<"ALL" | "CONFIRMED" | "DISPATCHED">("ALL");
+
+  // Sales Expenses Subledger State
+  const [expenseTotalPaisa, setExpenseTotalPaisa] = useState(0);
+  const [expenseTotalNpr, setExpenseTotalNpr] = useState(0);
+  const [selectedExpenseCategoryFilter, setSelectedExpenseCategoryFilter] = useState("ALL");
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [expenseDateAd, setExpenseDateAd] = useState(() => getTodayAd());
+  const [expenseDateBs, setExpenseDateBs] = useState(() => getTodayBs().formatted);
+  const [expenseParticular, setExpenseParticular] = useState("");
+  const [expenseCategory, setExpenseCategory] = useState("PACKAGING_MATERIAL");
+  const [expenseAmount, setExpenseAmount] = useState("");
+  const [expensePaymentMethod, setExpensePaymentMethod] = useState("CASH");
+  const [expenseOrderId, setExpenseOrderId] = useState("");
+  const [expenseRemarks, setExpenseRemarks] = useState("");
+  const [expenseSubmitting, setExpenseSubmitting] = useState(false);
+  const [expenseError, setExpenseError] = useState<string | null>(null);
+  const [expensePage, setExpensePage] = useState(1);
+
+  // Dispatch Modal State (Deferred Dispatch Action)
+  const [dispatchingOrder, setDispatchingOrder] = useState<any | null>(null);
+  const [dispatchDateAd, setDispatchDateAd] = useState(() => getTodayAd());
+  const [dispatchDateBs, setDispatchDateBs] = useState(() => getTodayBs().formatted);
+  const [carrierName, setCarrierName] = useState("");
+  const [vehicleNumber, setVehicleNumber] = useState("");
+  const [dispatchNotes, setDispatchNotes] = useState("");
+  const [dispatchSubmitting, setDispatchSubmitting] = useState(false);
+  const [dispatchError, setDispatchError] = useState<string | null>(null);
+
+  // One-click Immediate Dispatch toggle for direct counter sales
+  const [dispatchNow, setDispatchNow] = useState(false);
 
   // In-App Nepal IRD Physical Tax Invoice Preview Modal State
   const [previewInvoice, setPreviewInvoice] = useState<any | null>(null);
@@ -46,8 +86,8 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
   const [quantity, setQuantity] = useState("12");
   const [unitPrice, setUnitPrice] = useState("3200");
   const [receivedAmount, setReceivedAmount] = useState("10000");
-  const [orderDateAd, setOrderDateAd] = useState(new Date().toISOString().split("T")[0]);
-  const [orderDateBs, setOrderDateBs] = useState("2083-06-09");
+  const [orderDateAd, setOrderDateAd] = useState(() => getTodayAd());
+  const [orderDateBs, setOrderDateBs] = useState(() => getTodayBs().formatted);
   const [submitting, setSubmitting] = useState(false);
   const [continuousMode, setContinuousMode] = useState(true);
   const [keepClient, setKeepClient] = useState(true);
@@ -144,23 +184,156 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
     }
   }, [showOrderModal]);
 
+  const loadExpenses = async () => {
+    try {
+      const res = await fetch("/api/v1/sales/expenses?limit=250");
+      if (res.ok) {
+        const expData = await res.json();
+        setExpenses(expData.items || []);
+        setExpenseTotalPaisa(expData.total_amount_paisa || 0);
+        setExpenseTotalNpr(expData.total_amount_npr || 0);
+      }
+    } catch (e) {
+      console.error("Failed to load expenses:", e);
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const [cliRes, prodRes, ordRes, invRes] = await Promise.all([
+      const [cliRes, prodRes, ordRes, invRes, expRes, stockRes] = await Promise.all([
         fetch("/api/v1/sales/clients"),
         fetch("/api/v1/production/products"),
         fetch("/api/v1/sales/orders"),
-        fetch("/api/v1/invoices")
+        fetch("/api/v1/invoices"),
+        fetch("/api/v1/sales/expenses?limit=250"),
+        fetch("/api/v1/stock/balance")
       ]);
       if (cliRes.ok) setClients(await cliRes.json());
       if (prodRes.ok) setProducts(await prodRes.json());
       if (ordRes.ok) setOrders(await ordRes.json());
       if (invRes.ok) setInvoices(await invRes.json());
+      if (expRes.ok) {
+        const expData = await expRes.json();
+        setExpenses(expData.items || []);
+        setExpenseTotalPaisa(expData.total_amount_paisa || 0);
+        setExpenseTotalNpr(expData.total_amount_npr || 0);
+      }
+      if (stockRes.ok) setStockBalances(await stockRes.json());
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmDispatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dispatchingOrder) return;
+    setDispatchSubmitting(true);
+    setDispatchError(null);
+    try {
+      const res = await apiFetch(`/api/v1/sales/orders/${dispatchingOrder.id}/dispatch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dispatch_date_ad: dispatchDateAd,
+          dispatch_date_bs: dispatchDateBs,
+          carrier_name: carrierName.trim() || undefined,
+          vehicle_number: vehicleNumber.trim() || undefined,
+          dispatch_notes: dispatchNotes.trim() || undefined
+        })
+      });
+
+      if (res.ok) {
+        setSuccessFeedback(`✓ Order ${dispatchingOrder.order_number} successfully dispatched from warehouse!`);
+        setTimeout(() => setSuccessFeedback(""), 4000);
+        setDispatchingOrder(null);
+        await loadData();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        let msg = "Failed to dispatch sales order";
+        if (err.detail) {
+          if (typeof err.detail === "string") {
+            msg = err.detail;
+          } else if (err.detail.message) {
+            msg = err.detail.message;
+          } else if (err.detail.error) {
+            msg = `${err.detail.error}: ${err.detail.message || "Insufficient stock"}`;
+          }
+        }
+        setDispatchError(msg);
+      }
+    } catch (err: any) {
+      setDispatchError(err.message || "Network error dispatching order");
+    } finally {
+      setDispatchSubmitting(false);
+    }
+  };
+
+  const handleCreateExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!expenseParticular.trim() || !expenseAmount || parseFloat(expenseAmount) <= 0) {
+      setExpenseError("Particular and valid amount are required.");
+      return;
+    }
+    setExpenseSubmitting(true);
+    setExpenseError(null);
+    try {
+      const paisa = toPaisa(expenseAmount);
+      const payload: any = {
+        expense_date_ad: expenseDateAd,
+        expense_date_bs: expenseDateBs,
+        particular: expenseParticular.trim(),
+        category: expenseCategory,
+        amount_paisa: paisa,
+        payment_method: expensePaymentMethod,
+        remarks: expenseRemarks.trim() || undefined
+      };
+      if (expenseOrderId) {
+        payload.sales_order_id = parseInt(expenseOrderId);
+      }
+      const res = await apiFetch("/api/v1/sales/expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        setShowExpenseModal(false);
+        setExpenseParticular("");
+        setExpenseAmount("");
+        setExpenseRemarks("");
+        setExpenseOrderId("");
+        setSuccessFeedback("✓ Sales expense recorded in subledger successfully.");
+        setTimeout(() => setSuccessFeedback(""), 3500);
+        await loadExpenses();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setExpenseError(err.detail || "Failed to record sales expense");
+      }
+    } catch (err: any) {
+      setExpenseError(err.message || "Network error recording sales expense");
+    } finally {
+      setExpenseSubmitting(false);
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId: number) => {
+    if (!confirm("Are you sure you want to delete this sales expense entry?")) return;
+    try {
+      const res = await apiFetch(`/api/v1/sales/expenses/${expenseId}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        setSuccessFeedback("Expense entry deleted.");
+        setTimeout(() => setSuccessFeedback(""), 3000);
+        await loadExpenses();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || "Failed to delete expense");
+      }
+    } catch (err) {
+      alert("Network error deleting expense");
     }
   };
 
@@ -211,22 +384,21 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
 
     setSubmitting(true);
     try {
-      const orderNum = `SO-${Date.now().toString().slice(-4)}`;
       const res = await apiFetch("/api/v1/sales/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          order_number: orderNum,
           client_id: parseInt(clientId),
           order_date_ad: orderDateAd,
           order_date_bs: orderDateBs,
-          received_amount: parseFloat(receivedAmount || "0"),
-          delivered: true,
+          received_amount: (receivedAmount || "0").toString(),
+          dispatch_now: dispatchNow,
+          status: dispatchNow ? "DISPATCHED" : "CONFIRMED",
           items: [
             {
               product_id: parseInt(productId),
               quantity: parseFloat(quantity),
-              unit_price: parseFloat(unitPrice)
+              unit_price: (unitPrice || "0").toString()
             }
           ]
         })
@@ -251,6 +423,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
           setUnitPrice("");
           setReceivedAmount("0");
         } else {
+          const orderNum = order.order_number || `#${order.id}`;
           const invMsg = invData?.invoice_number ? ` (Tax Invoice #${invData.invoice_number})` : "";
           setSuccessFeedback(`✓ Order ${orderNum}${invMsg} issued! Ready for next sale.`);
           setTimeout(() => setSuccessFeedback(""), 3500);
@@ -344,14 +517,43 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
       const clientStr = client ? `${client.name} ${client.code} ${client.pan_number || ""}`.toLowerCase() : "";
       const q = searchQuery.toLowerCase();
 
-      return (
-        o.order_number.toLowerCase().includes(q) ||
+      const matchesSearch = (
+        o.order_number?.toLowerCase().includes(q) ||
         clientStr.includes(q) ||
-        o.order_date_ad.includes(q) ||
-        o.order_date_bs.includes(q)
+        o.order_date_ad?.includes(q) ||
+        o.order_date_bs?.includes(q)
+      );
+      if (!matchesSearch) return false;
+
+      if (orderStatusFilter === "CONFIRMED") {
+        return o.status === "CONFIRMED" || (!o.delivered && o.status !== "DISPATCHED");
+      }
+      if (orderStatusFilter === "DISPATCHED") {
+        return o.status === "DISPATCHED" || o.delivered;
+      }
+      return true;
+    });
+  }, [orders, clients, searchQuery, orderStatusFilter]);
+
+  // Filtered Expenses
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter((exp) => {
+      if (selectedExpenseCategoryFilter !== "ALL" && exp.category !== selectedExpenseCategoryFilter) {
+        return false;
+      }
+      const q = searchQuery.toLowerCase();
+      if (!q) return true;
+      return (
+        (exp.particular && exp.particular.toLowerCase().includes(q)) ||
+        (exp.category && exp.category.toLowerCase().includes(q)) ||
+        (exp.expense_date_ad && exp.expense_date_ad.includes(q)) ||
+        (exp.expense_date_bs && exp.expense_date_bs.includes(q)) ||
+        (exp.payment_method && exp.payment_method.toLowerCase().includes(q)) ||
+        (exp.remarks && exp.remarks.toLowerCase().includes(q)) ||
+        (exp.sales_order_id && String(exp.sales_order_id).includes(q))
       );
     });
-  }, [orders, clients, searchQuery]);
+  }, [expenses, selectedExpenseCategoryFilter, searchQuery]);
 
   // Pagination
   const [invoicePage, setInvoicePage] = useState(1);
@@ -369,6 +571,12 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
     const start = (orderPage - 1) * ITEMS_PER_PAGE;
     return filteredOrders.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredOrders, orderPage]);
+
+  const totalExpensePages = Math.ceil(filteredExpenses.length / ITEMS_PER_PAGE) || 1;
+  const paginatedExpenses = useMemo(() => {
+    const start = (expensePage - 1) * ITEMS_PER_PAGE;
+    return filteredExpenses.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredExpenses, expensePage]);
 
   // CSV Exporters
   const handleExportInvoices = () => {
@@ -390,7 +598,8 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
     const rows = filteredInvoices.map((inv) => {
       const client = getClientByOrderId(inv.sales_order_id);
       const subtotal = inv.subtotal ?? (inv.total_amount ? (inv.total_amount / 1.13) : 0);
-      const vat = inv.vat_amount ?? (inv.total_amount - subtotal);
+      const vat = (inv.vat_amount && inv.vat_amount > 0) ? inv.vat_amount : Math.round(subtotal * 0.13 * 100) / 100;
+      const totalAmount = inv.total_amount || (subtotal + vat);
       return [
         inv.invoice_number,
         client?.name || "-",
@@ -400,7 +609,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
         inv.date_bs,
         fmtNpr(subtotal),
         fmtNpr(vat),
-        fmtNpr(inv.total_amount),
+        fmtNpr(totalAmount),
         fmtNpr(inv.received_amount),
         fmtNpr(inv.receivable_amount),
         inv.is_void ? "VOID" : "ACTIVE"
@@ -420,7 +629,9 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
       "Total Amount (NPR)",
       "Received (NPR)",
       "Receivable Balance (NPR)",
-      "Status"
+      "Status",
+      "Carrier",
+      "Vehicle"
     ];
     const rows = filteredOrders.map((o) => {
       const client = getClientById(o.client_id);
@@ -433,10 +644,39 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
         fmtNpr(o.total_amount),
         fmtNpr(o.received_amount),
         fmtNpr(o.receivable_amount),
-        o.delivered ? "Delivered" : "Pending"
+        o.status === "DISPATCHED" || o.delivered ? "Dispatched" : "Pending Dispatch",
+        o.carrier_name || "-",
+        o.vehicle_number || "-"
       ];
     });
     exportToCSV("Sales_Orders_Ledger", headers, rows);
+  };
+
+  const handleExportExpenses = () => {
+    if (!filteredExpenses.length) return;
+    const headers = [
+      "S.N.",
+      "Date AD",
+      "Date BS",
+      "Particular",
+      "Category",
+      "Order Ref",
+      "Payment Mode",
+      "Amount (NPR)",
+      "Remarks"
+    ];
+    const rows = filteredExpenses.map((exp, idx) => [
+      idx + 1,
+      exp.expense_date_ad,
+      exp.expense_date_bs,
+      exp.particular,
+      exp.category,
+      exp.sales_order_id ? `#${exp.sales_order_id}` : "-",
+      exp.payment_method,
+      fmtNpr(exp.amount_paisa ? exp.amount_paisa / 100 : exp.amount || 0),
+      exp.remarks || "-"
+    ]);
+    exportToCSV("Sales_Expenses_Ledger", headers, rows);
   };
 
   return (
@@ -513,7 +753,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
       {/* Tabs & Search Filter Bar */}
       <div style={{ background: "#FFFFFF", border: "1px solid #CBD5E1", borderRadius: "4px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
         {/* Sub-tabs */}
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
           <button
             onClick={() => setActiveSubTab("invoices")}
             style={{
@@ -552,20 +792,124 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
           >
             <ShoppingBag size={13} /> Sales Orders ({orders.length})
           </button>
+          <button
+            onClick={() => setActiveSubTab("expenses")}
+            style={{
+              padding: "5px 12px",
+              borderRadius: "3px",
+              border: "1px solid",
+              borderColor: activeSubTab === "expenses" ? "#1E3A8A" : "#CBD5E1",
+              fontSize: "12px",
+              fontWeight: "700",
+              cursor: "pointer",
+              background: activeSubTab === "expenses" ? "#1E3A8A" : "#FFFFFF",
+              color: activeSubTab === "expenses" ? "#FFFFFF" : "#475569",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px"
+            }}
+          >
+            <Wallet size={13} /> Sales Expenses ({expenses.length})
+          </button>
+
+          {/* Subtab contextual filter controls */}
+          {activeSubTab === "orders" && (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", marginLeft: "8px" }}>
+              <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748B" }}>Status:</span>
+              <select
+                value={orderStatusFilter}
+                onChange={(e) => setOrderStatusFilter(e.target.value as any)}
+                style={{
+                  fontSize: "11px",
+                  fontWeight: "600",
+                  padding: "3px 8px",
+                  borderRadius: "3px",
+                  border: "1px solid #CBD5E1",
+                  background: "#F8FAFC",
+                  color: "#0F172A",
+                  cursor: "pointer"
+                }}
+              >
+                <option value="ALL">All Orders ({orders.length})</option>
+                <option value="CONFIRMED">Pending Dispatch / Confirmed ({orders.filter(o => o.status === "CONFIRMED" || (!o.delivered && o.status !== "DISPATCHED")).length})</option>
+                <option value="DISPATCHED">Dispatched ({orders.filter(o => o.status === "DISPATCHED" || o.delivered).length})</option>
+              </select>
+            </div>
+          )}
+
+          {activeSubTab === "expenses" && (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", marginLeft: "8px" }}>
+              <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748B" }}>Category:</span>
+              <select
+                value={selectedExpenseCategoryFilter}
+                onChange={(e) => setSelectedExpenseCategoryFilter(e.target.value)}
+                style={{
+                  fontSize: "11px",
+                  fontWeight: "600",
+                  padding: "3px 8px",
+                  borderRadius: "3px",
+                  border: "1px solid #CBD5E1",
+                  background: "#F8FAFC",
+                  color: "#0F172A",
+                  cursor: "pointer"
+                }}
+              >
+                <option value="ALL">All Categories</option>
+                <option value="PACKAGING_MATERIAL">Packaging Material</option>
+                <option value="TRANSPORT_FREIGHT">Transport & Freight</option>
+                <option value="LOADING_UNLOADING">Loading / Unloading</option>
+                <option value="SALES_COMMISSION">Sales Commission</option>
+                <option value="MARKETING_PROMOTION">Marketing & Promotion</option>
+                <option value="OTHER">Other Expenses</option>
+              </select>
+            </div>
+          )}
 
           {/* Dual-Unit Packaging Floor Hint */}
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "3px", padding: "4px 8px", fontSize: "11px", fontWeight: "700", color: "#1E3A8A" }}>
-            <span>{locale === "en" ? "1 Carton = 12 Pairs" : "१ कार्टुन = १२ जोर (1 Carton = 12 Pairs)"}</span>
-          </div>
+          {activeSubTab !== "expenses" && (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "3px", padding: "4px 8px", fontSize: "11px", fontWeight: "700", color: "#1E3A8A" }}>
+              <span>{locale === "en" ? "1 Carton = 12 Pairs" : "१ कार्टुन = १२ जोर (1 Carton = 12 Pairs)"}</span>
+            </div>
+          )}
         </div>
 
-        {/* Search & Export */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        {/* Search & Actions */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          {activeSubTab === "expenses" && userRole === "editor" && (
+            <button
+              onClick={() => {
+                setExpenseParticular("");
+                setExpenseAmount("");
+                setExpenseRemarks("");
+                setExpenseOrderId("");
+                setExpenseError(null);
+                setExpenseDateAd(getTodayAd());
+                setExpenseDateBs(getTodayBs().formatted);
+                setShowExpenseModal(true);
+              }}
+              style={{
+                background: "#047857",
+                border: "1px solid #047857",
+                color: "#FFFFFF",
+                padding: "4px 10px",
+                borderRadius: "3px",
+                fontSize: "11.5px",
+                fontWeight: "700",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                cursor: "pointer"
+              }}
+            >
+              <PlusCircle size={13} /> + Record Sales Expense
+            </button>
+          )}
+
           <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "#F8FAFC", padding: "4px 8px", borderRadius: "3px", border: "1px solid #CBD5E1" }}>
             <Search size={13} color="#64748B" />
             <input
               type="text"
-              placeholder="Search invoice #, PAN, client..."
+              placeholder={activeSubTab === "expenses" ? "Search expense particulars..." : "Search invoice #, PAN, client..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{ background: "none", border: "none", color: "#0F172A", fontSize: "12px", outline: "none", width: "190px" }}
@@ -573,7 +917,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
           </div>
 
           <button
-            onClick={activeSubTab === "invoices" ? handleExportInvoices : handleExportOrders}
+            onClick={activeSubTab === "invoices" ? handleExportInvoices : activeSubTab === "orders" ? handleExportOrders : handleExportExpenses}
             className="btn-export"
           >
             <Download size={13} /> Export to CSV
@@ -612,7 +956,8 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                   {paginatedInvoices.map((inv) => {
                     const client = getClientByOrderId(inv.sales_order_id);
                     const subtotal = inv.subtotal ?? (inv.total_amount ? Math.round((inv.total_amount / 1.13) * 100) / 100 : 0);
-                    const vatAmount = inv.vat_amount ?? (inv.total_amount - subtotal);
+                    const vatAmount = (inv.vat_amount && inv.vat_amount > 0) ? inv.vat_amount : Math.round(subtotal * 0.13 * 100) / 100;
+                    const grandTotal = inv.total_amount || (subtotal + vatAmount);
 
                     return (
                       <tr key={inv.id} style={{ opacity: inv.is_void ? 0.65 : 1 }}>
@@ -646,7 +991,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                           Rs. {fmtNpr(vatAmount)}
                         </td>
                         <td style={{ textAlign: "right", fontWeight: "700", color: "#0F172A" }} className="num-mono-bold">
-                          Rs. {fmtNpr(inv.total_amount)}
+                          Rs. {fmtNpr(grandTotal)}
                         </td>
                         <td style={{ textAlign: "right", color: "#059669", fontWeight: "600" }} className="num-mono">
                           Rs. {fmtNpr(inv.received_amount)}
@@ -672,7 +1017,8 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                                   client,
                                   order: ord,
                                   subtotal,
-                                  vatAmount
+                                  vatAmount,
+                                  total_amount: grandTotal
                                 });
                               }}
                               style={{
@@ -746,7 +1092,7 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
               )}
             </div>
           )
-        ) : (
+        ) : activeSubTab === "orders" ? (
           /* ORDERS TABLE */
           filteredOrders.length === 0 ? (
             <div style={{ padding: "30px", textAlign: "center", color: "#64748B", fontSize: "13px" }}>
@@ -764,12 +1110,13 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     <th style={{ textAlign: "right", width: "130px" }}>Total Amount (NPR)</th>
                     <th style={{ textAlign: "right", width: "120px" }}>Received</th>
                     <th style={{ textAlign: "right", width: "130px" }}>Balance Due</th>
-                    <th style={{ width: "95px", textAlign: "center" }}>Dispatch</th>
+                    <th style={{ width: "140px", textAlign: "center" }}>Dispatch Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedOrders.map((o) => {
                     const client = getClientById(o.client_id);
+                    const isDispatched = o.status === "DISPATCHED" || o.delivered;
                     return (
                       <tr key={o.id}>
                         <td style={{ fontWeight: "700", color: "#1E3A8A" }} className="num-mono">
@@ -807,9 +1154,67 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                           Rs. {fmtNpr(o.receivable_amount)}
                         </td>
                         <td style={{ textAlign: "center" }}>
-                          <span className={`badge ${o.delivered ? "badge-success" : "badge-warning"}`}>
-                            {o.delivered ? "Delivered" : "Pending"}
-                          </span>
+                          {isDispatched ? (
+                            <div>
+                              <span className="badge badge-success" style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                <CheckCircle2 size={11} /> DISPATCHED
+                              </span>
+                              {o.carrier_name && (
+                                <div style={{ fontSize: "10px", color: "#64748B", marginTop: "2px" }}>
+                                  {o.carrier_name} {o.vehicle_number ? `(${o.vehicle_number})` : ""}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "3px" }}>
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                  fontSize: "10.5px",
+                                  fontWeight: "700",
+                                  background: "#FEF3C7",
+                                  color: "#92400E",
+                                  border: "1px solid #FCD34D",
+                                  padding: "2px 6px",
+                                  borderRadius: "3px"
+                                }}
+                              >
+                                <AlertTriangle size={11} color="#D97706" /> PENDING DISPATCH
+                              </span>
+                              {userRole === "editor" && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDispatchingOrder(o);
+                                    setDispatchDateAd(getTodayAd());
+                                    setDispatchDateBs(getTodayBs().formatted);
+                                    setCarrierName(o.carrier_name || "");
+                                    setVehicleNumber(o.vehicle_number || "");
+                                    setDispatchNotes(o.dispatch_notes || "");
+                                    setDispatchError(null);
+                                  }}
+                                  style={{
+                                    background: "#1E3A8A",
+                                    color: "#FFFFFF",
+                                    border: "none",
+                                    padding: "2px 7px",
+                                    borderRadius: "3px",
+                                    fontSize: "10.5px",
+                                    fontWeight: "700",
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px"
+                                  }}
+                                  title="Dispatch physical stock from warehouse"
+                                >
+                                  <Truck size={11} /> Dispatch Now
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
@@ -845,6 +1250,147 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
               )}
             </div>
           )
+        ) : (
+          /* SALES EXPENSES SUBLEDGER TABLE */
+          <div>
+            {/* KPI Summary Cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px", marginBottom: "14px" }}>
+              <div style={{ background: "#F8FAFC", border: "1px solid #CBD5E1", borderRadius: "4px", padding: "10px 14px" }}>
+                <div style={{ fontSize: "11px", fontWeight: "700", color: "#64748B", textTransform: "uppercase" }}>
+                  Total Sales Expenses (बिक्री खर्च)
+                </div>
+                <div className="num-mono-bold" style={{ fontSize: "18px", color: "#0F172A", marginTop: "4px" }}>
+                  Rs. {fmtNpr(expenseTotalNpr)}
+                </div>
+                <div style={{ fontSize: "10.5px", color: "#64748B", marginTop: "2px" }}>
+                  Exact integer-paisa subledger: {expenseTotalPaisa.toLocaleString()} paisa
+                </div>
+              </div>
+
+              <div style={{ background: "#F8FAFC", border: "1px solid #CBD5E1", borderRadius: "4px", padding: "10px 14px" }}>
+                <div style={{ fontSize: "11px", fontWeight: "700", color: "#64748B", textTransform: "uppercase" }}>
+                  Recorded Expense Vouchers
+                </div>
+                <div className="num-mono-bold" style={{ fontSize: "18px", color: "#1E3A8A", marginTop: "4px" }}>
+                  {expenses.length} Entries
+                </div>
+                <div style={{ fontSize: "10.5px", color: "#64748B", marginTop: "2px" }}>
+                  Packaging, Freight, Loading, Commission, Marketing
+                </div>
+              </div>
+            </div>
+
+            {filteredExpenses.length === 0 ? (
+              <div style={{ padding: "30px", textAlign: "center", color: "#64748B", fontSize: "13px" }}>
+                No sales expense vouchers found matching filter criteria.
+              </div>
+            ) : (
+              <div className="table-container-dense">
+                <table className="table-dense">
+                  <thead>
+                    <tr>
+                      <th style={{ width: "45px", textAlign: "center" }}>#</th>
+                      <th style={{ width: "125px" }}>Date (AD / BS)</th>
+                      <th>Particular / Description</th>
+                      <th style={{ width: "155px" }}>Category</th>
+                      <th style={{ width: "95px", textAlign: "center" }}>Order Ref</th>
+                      <th style={{ width: "105px" }}>Payment Mode</th>
+                      <th style={{ textAlign: "right", width: "120px" }}>Amount (NPR)</th>
+                      <th>Remarks</th>
+                      {userRole === "editor" && <th style={{ width: "60px", textAlign: "center" }}>Action</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedExpenses.map((exp, idx) => {
+                      const rowNum = (expensePage - 1) * ITEMS_PER_PAGE + idx + 1;
+                      const nprAmount = exp.amount_paisa ? exp.amount_paisa / 100 : exp.amount || 0;
+                      return (
+                        <tr key={exp.id}>
+                          <td style={{ textAlign: "center", color: "#64748B", fontSize: "11px" }}>{rowNum}</td>
+                          <td style={{ fontSize: "12px", color: "#475569" }}>
+                            {exp.expense_date_ad} <span style={{ fontSize: "11px", color: "#64748B" }}>({exp.expense_date_bs})</span>
+                          </td>
+                          <td style={{ fontWeight: "600", color: "#0F172A" }}>
+                            {exp.particular}
+                          </td>
+                          <td>
+                            <span style={{ fontSize: "10.5px", fontWeight: "700", background: "#EFF6FF", color: "#1E3A8A", border: "1px solid #BFDBFE", padding: "1px 6px", borderRadius: "3px" }}>
+                              {exp.category}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: "center" }}>
+                            {exp.sales_order_id ? (
+                              <span className="num-mono" style={{ fontSize: "11px", fontWeight: "700", color: "#1E3A8A", background: "#F1F5F9", padding: "1px 5px", borderRadius: "3px" }}>
+                                #{exp.sales_order_id}
+                              </span>
+                            ) : (
+                              <span style={{ color: "#94A3B8", fontSize: "11px" }}>-</span>
+                            )}
+                          </td>
+                          <td style={{ fontSize: "11.5px", color: "#475569" }}>
+                            {exp.payment_method}
+                          </td>
+                          <td style={{ textAlign: "right", fontWeight: "700", color: "#0F172A" }} className="num-mono-bold">
+                            Rs. {fmtNpr(nprAmount)}
+                          </td>
+                          <td style={{ fontSize: "11.5px", color: "#64748B" }}>
+                            {exp.remarks || "-"}
+                          </td>
+                          {userRole === "editor" && (
+                            <td style={{ textAlign: "center" }}>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteExpense(exp.id)}
+                                style={{
+                                  background: "#FFFFFF",
+                                  border: "1px solid #FECACA",
+                                  color: "#DC2626",
+                                  padding: "2px 5px",
+                                  borderRadius: "3px",
+                                  fontSize: "11px",
+                                  cursor: "pointer"
+                                }}
+                                title="Delete expense voucher"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                {filteredExpenses.length > ITEMS_PER_PAGE && (
+                  <div className="pagination-bar">
+                    <span>
+                      Showing {(expensePage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(expensePage * ITEMS_PER_PAGE, filteredExpenses.length)} of {filteredExpenses.length} expense vouchers
+                    </span>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <button
+                        className="pagination-btn"
+                        onClick={() => setExpensePage((p) => Math.max(1, p - 1))}
+                        disabled={expensePage === 1}
+                      >
+                        Previous
+                      </button>
+                      <span style={{ fontSize: "12px", color: "#475569" }}>
+                        Page {expensePage} of {totalExpensePages}
+                      </span>
+                      <button
+                        className="pagination-btn"
+                        onClick={() => setExpensePage((p) => Math.min(totalExpensePages, p + 1))}
+                        disabled={expensePage === totalExpensePages}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -978,88 +1524,120 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                 </div>
               </div>
 
-              {/* Items Table */}
-              <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid #0F172A", marginBottom: "14px", fontSize: "12px" }}>
-                <thead>
-                  <tr style={{ background: "#F1F5F9", borderBottom: "1px solid #0F172A" }}>
-                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "40px", textAlign: "center" }}>{locale === "en" ? "S.N." : "क्र.सं."}</th>
-                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", textAlign: "left" }}>{locale === "en" ? "Particulars" : "विवरण (Particulars)"}</th>
-                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "80px", textAlign: "right" }}>{locale === "en" ? "Quantity" : "परिमाण (Qty)"}</th>
-                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "95px", textAlign: "right" }}>{locale === "en" ? "Rate (Rs.)" : "दर (Rate Rs.)"}</th>
-                    <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "115px", textAlign: "right" }}>{locale === "en" ? "Amount (Rs.)" : "जम्मा रकम (Rs.)"}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(previewInvoice.order?.items && previewInvoice.order.items.length > 0) ? (
-                    previewInvoice.order.items.map((it: any, idx: number) => {
-                      const prod = products.find((p) => p.id === it.product_id);
-                      return (
-                        <tr key={idx} style={{ height: "32px" }}>
-                          <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "center" }}>{idx + 1}</td>
-                          <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", fontWeight: "600" }}>
-                            {prod ? `${prod.name} (${prod.code} · Size ${prod.size || "-"})` : `Product #${it.product_id}`}
-                          </td>
-                          <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace" }}>
-                            {it.quantity} pairs
-                          </td>
-                          <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace" }}>
-                            {fmtNpr(it.unit_price)}
-                          </td>
-                          <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "700" }}>
-                            {fmtNpr(it.total_price || (it.quantity * it.unit_price))}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr style={{ height: "32px" }}>
-                      <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "center" }}>1</td>
-                      <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", fontWeight: "600" }}>Wholesale Finished Footwear Dispatch</td>
-                      <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace" }}>1 lot</td>
-                      <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace" }}>{fmtNpr(previewInvoice.subtotal)}</td>
-                      <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "700" }}>{fmtNpr(previewInvoice.subtotal)}</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+              {/* Schedule-5 Invariants & Calculations */}
+              {(() => {
+                const previewTaxable = previewInvoice.subtotal ?? (previewInvoice.total_amount ? Math.round((previewInvoice.total_amount / 1.13) * 100) / 100 : 0);
+                const previewVat = (previewInvoice.vat_amount && previewInvoice.vat_amount > 0)
+                  ? previewInvoice.vat_amount
+                  : (previewInvoice.vatAmount && previewInvoice.vatAmount > 0)
+                  ? previewInvoice.vatAmount
+                  : Math.round(previewTaxable * 0.13 * 100) / 100;
+                const previewGrandTotal = previewInvoice.total_amount || (previewTaxable + previewVat);
+                const wordsNp = amountToNepaliWords(previewGrandTotal);
+                const wordsEn = amountToEnglishWords(previewGrandTotal);
 
-              {/* Statutory Calculation Breakdown Strip */}
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
-                <table style={{ width: "320px", borderCollapse: "collapse", fontSize: "12px" }}>
-                  <tbody>
-                    <tr>
-                      <td style={{ padding: "4px 8px", color: "#475569" }}>{locale === "en" ? "Taxable Subtotal:" : "कुल करयोग्य रकम (Taxable Subtotal):"}</td>
-                      <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "600" }}>
-                        Rs. {fmtNpr(previewInvoice.subtotal)}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: "4px 8px", color: "#475569" }}>{locale === "en" ? "Value Added Tax (13% VAT):" : "मूल्य अभिवृद्धि कर १३% (13% VAT):"}</td>
-                      <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "600", color: "#1E3A8A" }}>
-                        Rs. {fmtNpr(previewInvoice.vatAmount)}
-                      </td>
-                    </tr>
-                    <tr style={{ borderTop: "2px solid #0F172A", borderBottom: "2px solid #0F172A", background: "#F8FAFC" }}>
-                      <td style={{ padding: "6px 8px", fontWeight: "800", color: "#0F172A" }}>{locale === "en" ? "Grand Total (NPR):" : "कूल जम्मा रकम (Grand Total NPR):"}</td>
-                      <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "800", fontSize: "13px", color: "#0F172A" }}>
-                        Rs. {fmtNpr(previewInvoice.total_amount)}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: "4px 8px", color: "#059669", fontWeight: "600" }}>{locale === "en" ? "Amount Received:" : "प्राप्त रकम (Amount Received):"}</td>
-                      <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "600", color: "#059669" }}>
-                        Rs. {fmtNpr(previewInvoice.received_amount)}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: "4px 8px", color: "#DC2626", fontWeight: "700" }}>{locale === "en" ? "Receivable Balance Due:" : "बाँकी बक्यौता (Receivable Balance):"}</td>
-                      <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "700", color: "#DC2626" }}>
-                        Rs. {fmtNpr(previewInvoice.receivable_amount)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                return (
+                  <>
+                    {/* Items Table */}
+                    <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid #0F172A", marginBottom: "14px", fontSize: "12px" }}>
+                      <thead>
+                        <tr style={{ background: "#F1F5F9", borderBottom: "1px solid #0F172A" }}>
+                          <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "40px", textAlign: "center" }}>{locale === "en" ? "S.N." : "क्र.सं."}</th>
+                          <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", textAlign: "left" }}>{locale === "en" ? "Description / SKU" : "विवरण / वस्तु (Description)"}</th>
+                          <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "80px", textAlign: "center" }}>HS Code</th>
+                          <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "80px", textAlign: "right" }}>{locale === "en" ? "Quantity" : "परिमाण (Qty)"}</th>
+                          <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "95px", textAlign: "right" }}>{locale === "en" ? "Rate (Rs.)" : "दर (Rate Rs.)"}</th>
+                          <th style={{ border: "1px solid #CBD5E1", padding: "6px 8px", width: "115px", textAlign: "right" }}>{locale === "en" ? "Amount (Rs.)" : "जम्मा रकम (Rs.)"}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(previewInvoice.order?.items && previewInvoice.order.items.length > 0) ? (
+                          previewInvoice.order.items.map((it: any, idx: number) => {
+                            const prod = products.find((p) => p.id === it.product_id);
+                            return (
+                              <tr key={idx} style={{ height: "32px" }}>
+                                <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "center" }}>{idx + 1}</td>
+                                <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", fontWeight: "600" }}>
+                                  {prod ? `${prod.name} (${prod.code} · Size ${prod.size || "-"})` : `Product #${it.product_id}`}
+                                </td>
+                                <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "center", fontFamily: "monospace", fontSize: "11px" }}>
+                                  {prod?.hs_code || "6403.99"}
+                                </td>
+                                <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace" }}>
+                                  {it.quantity} pairs
+                                </td>
+                                <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace" }}>
+                                  {fmtNpr(it.unit_price)}
+                                </td>
+                                <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "700" }}>
+                                  {fmtNpr(it.total_price || (it.quantity * it.unit_price))}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr style={{ height: "32px" }}>
+                            <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "center" }}>1</td>
+                            <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", fontWeight: "600" }}>Wholesale Finished Footwear Dispatch</td>
+                            <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "center", fontFamily: "monospace", fontSize: "11px" }}>6403.99</td>
+                            <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace" }}>1 lot</td>
+                            <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace" }}>{fmtNpr(previewTaxable)}</td>
+                            <td style={{ border: "1px solid #CBD5E1", padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "700" }}>{fmtNpr(previewTaxable)}</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+
+                    {/* Statutory Calculation Breakdown Strip */}
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "14px" }}>
+                      <table style={{ width: "350px", borderCollapse: "collapse", fontSize: "12px" }}>
+                        <tbody>
+                          <tr>
+                            <td style={{ padding: "4px 8px", color: "#475569" }}>{locale === "en" ? "Taxable Subtotal:" : "जम्मा रकम (Sub-Total / Taxable Amount):"}</td>
+                            <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "600" }}>
+                              Rs. {fmtNpr(previewTaxable)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style={{ padding: "4px 8px", color: "#1E3A8A", fontWeight: "600" }}>{locale === "en" ? "13% Value Added Tax:" : "१३% मूल्य अभिवृद्धि कर (13% VAT):"}</td>
+                            <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "600", color: "#1E3A8A" }}>
+                              Rs. {fmtNpr(previewVat)}
+                            </td>
+                          </tr>
+                          <tr style={{ borderTop: "2px solid #0F172A", borderBottom: "2px solid #0F172A", background: "#F8FAFC" }}>
+                            <td style={{ padding: "6px 8px", fontWeight: "800", color: "#0F172A" }}>{locale === "en" ? "Grand Total (NPR):" : "कुल जम्मा (Grand Total):"}</td>
+                            <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "800", fontSize: "13px", color: "#0F172A" }}>
+                              Rs. {fmtNpr(previewGrandTotal)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style={{ padding: "4px 8px", color: "#059669", fontWeight: "600" }}>{locale === "en" ? "Amount Received:" : "प्राप्त रकम (Amount Received):"}</td>
+                            <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "600", color: "#059669" }}>
+                              Rs. {fmtNpr(previewInvoice.received_amount)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style={{ padding: "4px 8px", color: "#DC2626", fontWeight: "700" }}>{locale === "en" ? "Receivable Balance Due:" : "बाँकी बक्यौता (Receivable Balance):"}</td>
+                            <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: "700", color: "#DC2626" }}>
+                              Rs. {fmtNpr(previewInvoice.receivable_amount)}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Schedule-5 In Words (अक्षरमा) */}
+                    <div style={{ marginTop: "10px", marginBottom: "20px", padding: "10px 14px", background: "#F8FAFC", border: "1px solid #CBD5E1", borderRadius: "4px", fontSize: "12px" }}>
+                      <span style={{ fontWeight: "700", color: "#334155" }}>
+                        {locale === "en" ? "In Words: " : "अक्षरमा (In Words): "}
+                      </span>
+                      <span style={{ fontStyle: "italic", color: "#0F172A", marginLeft: "4px" }}>
+                        {locale === "en" ? wordsEn : `${wordsNp} (${wordsEn})`}
+                      </span>
+                    </div>
+                  </>
+                );
+              })()}
 
               {/* Statutory Signature Block */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "40px", paddingTop: "10px", fontSize: "11px", color: "#475569" }}>
@@ -1164,6 +1742,24 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                       <span>Retain selected client for multiple lines</span>
                     </label>
                   )}
+                </div>
+
+                {/* Immediate vs Deferred Dispatch Toggle */}
+                <div style={{ background: "#F8FAFC", border: "1px solid #CBD5E1", borderRadius: "3px", padding: "8px 10px" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#0F172A", cursor: "pointer", userSelect: "none" }}>
+                    <input
+                      type="checkbox"
+                      checked={dispatchNow}
+                      onChange={(e) => setDispatchNow(e.target.checked)}
+                      style={{ accentColor: "#1E3A8A", cursor: "pointer" }}
+                    />
+                    <span style={{ fontWeight: "700" }}>Dispatch Immediately (तुरुन्तै निकासी गर्नुहोस् — Counter Sale)</span>
+                  </label>
+                  <div style={{ fontSize: "11px", color: "#64748B", marginLeft: "22px", marginTop: "2px" }}>
+                    {dispatchNow
+                      ? "Deducts physical stock immediately upon booking (Counter / Cash Sale)."
+                      : "Reserves stock under Available-to-Promise (ATP) without deducting physical inventory."}
+                  </div>
                 </div>
 
                 <div>
@@ -1341,51 +1937,43 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                   return (
                     <div style={{ background: "#F8FAFC", border: "1px solid #CBD5E1", borderRadius: "3px", padding: "8px 12px", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", textAlign: "center" }}>
                       <div>
-                        <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase", fontWeight: "700" }}>Subtotal</div>
+                        <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase", fontWeight: "700" }}>
+                          {locale === "en" ? "Taxable Amount" : "करयोग्य रकम"}
+                        </div>
                         <div className="num-mono-bold" style={{ fontSize: "12px", color: "#0F172A" }}>Rs. {fromPaisa(subtotalPaisa)}</div>
                       </div>
                       <div>
-                        <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase", fontWeight: "700" }}>13% VAT</div>
-                        <div className="num-mono" style={{ fontSize: "12px", color: "#475569" }}>Rs. {fromPaisa(vatPaisa)}</div>
+                        <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase", fontWeight: "700" }}>
+                          {locale === "en" ? "13% VAT" : "मूल्य अभिवृद्धि कर १३%"}
+                        </div>
+                        <div className="num-mono" style={{ fontSize: "12px", color: "#1E3A8A", fontWeight: "700" }}>Rs. {fromPaisa(vatPaisa)}</div>
                       </div>
                       <div>
-                        <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase", fontWeight: "700" }}>Grand Total</div>
+                        <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase", fontWeight: "700" }}>
+                          {locale === "en" ? "Grand Total" : "कुल रकम"}
+                        </div>
                         <div className="num-mono-bold" style={{ fontSize: "12px", color: "#1E3A8A" }}>Rs. {fromPaisa(grandTotalPaisa)}</div>
                       </div>
                       <div>
-                        <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase", fontWeight: "700" }}>Balance Due</div>
+                        <div style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase", fontWeight: "700" }}>
+                          {locale === "en" ? "Balance Due" : "बाँकी बक्यौता"}
+                        </div>
                         <div className="num-mono-bold" style={{ fontSize: "12px", color: duePaisa > 0 ? "#DC2626" : "#059669" }}>Rs. {fromPaisa(duePaisa)}</div>
                       </div>
                     </div>
                   );
                 })()}
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                  <div>
-                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Order Date (AD)</label>
-                    <input
-                      ref={orderDateAdRef}
-                      type="date"
-                      className="input-field"
-                      value={orderDateAd}
-                      onChange={(e) => setOrderDateAd(e.target.value)}
-                      onKeyDown={(e) => handleKeyDown(e, orderDateBsRef)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>Order Date (BS)</label>
-                    <input
-                      ref={orderDateBsRef}
-                      type="text"
-                      className="input-field"
-                      value={orderDateBs}
-                      onChange={(e) => setOrderDateBs(e.target.value)}
-                      onKeyDown={(e) => handleKeyDown(e, submitButtonRef)}
-                      required
-                    />
-                  </div>
-                </div>
+                <NepaliDatePicker
+                  label={locale === "en" ? "Order Date" : "अर्डर मिति (Order Date)"}
+                  valueAd={orderDateAd}
+                  valueBs={orderDateBs}
+                  onChange={({ ad, bs }) => {
+                    setOrderDateAd(ad);
+                    setOrderDateBs(bs);
+                  }}
+                  required
+                />
               </div>
 
               <div className="modal-footer">
@@ -1416,6 +2004,343 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                     {submitting ? "Writing to Ledger..." : continuousMode ? "Commit & Next Sale ↵" : "Commit Sale & Issue Invoice"}
                   </button>
                 </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DEFERRED DISPATCH MODAL */}
+      {dispatchingOrder && (
+        <div className="modal-overlay" role="presentation" style={{ zIndex: 9999 }}>
+          <div
+            className="modal-drawer"
+            role="dialog"
+            aria-modal="true"
+            style={{
+              maxWidth: "620px",
+              background: "#FFFFFF",
+              border: "1px solid #CBD5E1",
+              borderRadius: "4px",
+              padding: "0"
+            }}
+          >
+            <div style={{ background: "#F1F5F9", borderBottom: "1px solid #CBD5E1", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Truck size={17} color="#1E3A8A" />
+                <div>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A", textTransform: "uppercase" }}>
+                    Physical Warehouse Dispatch (सामान निकासी)
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#64748B" }}>
+                    Order {dispatchingOrder.order_number} · Client #{dispatchingOrder.client_id}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDispatchingOrder(null)}
+                style={{ background: "none", border: "none", color: "#64748B", cursor: "pointer", padding: "4px" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmDispatch} style={{ display: "flex", flexDirection: "column" }}>
+              <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "16px" }}>
+                {dispatchError && (
+                  <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #EF4444", borderRadius: "3px", padding: "10px 12px", display: "flex", gap: "8px", alignItems: "flex-start", color: "#991B1B", fontSize: "12px" }}>
+                    <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: "1px" }} />
+                    <div>{dispatchError}</div>
+                  </div>
+                )}
+
+                {/* Stock Check Table */}
+                {dispatchingOrder.items && dispatchingOrder.items.length > 0 && (
+                  <div style={{ background: "#F8FAFC", border: "1px solid #CBD5E1", borderRadius: "4px", padding: "10px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: "700", color: "#475569", textTransform: "uppercase", marginBottom: "6px" }}>
+                      Order Line Items & Physical Stock Check
+                    </div>
+                    <table style={{ width: "100%", fontSize: "11.5px", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid #CBD5E1", textAlign: "left", color: "#64748B" }}>
+                          <th style={{ padding: "4px" }}>Product SKU</th>
+                          <th style={{ padding: "4px", textAlign: "right" }}>Req. Pairs</th>
+                          <th style={{ padding: "4px", textAlign: "right" }}>Physical On-Hand</th>
+                          <th style={{ padding: "4px", textAlign: "center" }}>Stock Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dispatchingOrder.items.map((it: any, idx: number) => {
+                          const prod = products.find((p) => p.id === it.product_id);
+                          const stock = stockBalances.find((s) => s.product_id === it.product_id);
+                          const onHand = stock ? (stock.physical_stock ?? 0) : null;
+                          const isShort = onHand !== null && onHand < it.quantity;
+                          return (
+                            <tr key={idx} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                              <td style={{ padding: "4px", fontWeight: "600", color: "#0F172A" }}>
+                                {prod ? `${prod.code} (${prod.name})` : `SKU #${it.product_id}`}
+                              </td>
+                              <td style={{ padding: "4px", textAlign: "right", fontFamily: "monospace", fontWeight: "700" }}>
+                                {it.quantity}
+                              </td>
+                              <td style={{ padding: "4px", textAlign: "right", fontFamily: "monospace", color: isShort ? "#DC2626" : "#059669", fontWeight: "700" }}>
+                                {onHand !== null ? onHand : "-"}
+                              </td>
+                              <td style={{ padding: "4px", textAlign: "center" }}>
+                                {isShort ? (
+                                  <span style={{ fontSize: "10px", color: "#DC2626", background: "#FEF2F2", padding: "1px 5px", borderRadius: "2px", fontWeight: "700" }}>Insufficient</span>
+                                ) : (
+                                  <span style={{ fontSize: "10px", color: "#059669", background: "#ECFDF5", padding: "1px 5px", borderRadius: "2px", fontWeight: "700" }}>Available</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <NepaliDatePicker
+                  label={locale === "en" ? "Dispatch Date" : "निकासी मिति (Dispatch Date)"}
+                  valueAd={dispatchDateAd}
+                  valueBs={dispatchDateBs}
+                  onChange={({ ad, bs }) => {
+                    setDispatchDateAd(ad);
+                    setDispatchDateBs(bs);
+                  }}
+                  required
+                />
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>
+                      Carrier / Transport Name
+                    </label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder="e.g. Sajha Transport / Local Cargo"
+                      value={carrierName}
+                      onChange={(e) => setCarrierName(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>
+                      Vehicle Number
+                    </label>
+                    <input
+                      type="text"
+                      className="input-field num-mono"
+                      placeholder="e.g. BA 2 KHA 4521"
+                      value={vehicleNumber}
+                      onChange={(e) => setVehicleNumber(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>
+                    Dispatch Notes / Waybill Details
+                  </label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="Gate pass number, driver phone, carton packaging notes..."
+                    value={dispatchNotes}
+                    onChange={(e) => setDispatchNotes(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer" style={{ padding: "12px 16px", display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid #CBD5E1" }}>
+                <button type="button" className="btn-secondary" onClick={() => setDispatchingOrder(null)}>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={dispatchSubmitting}
+                  style={{ background: "#1E3A8A", borderColor: "#1E3A8A", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                >
+                  <Truck size={14} /> {dispatchSubmitting ? "Dispatching..." : "Confirm Physical Dispatch"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* RECORD SALES EXPENSE MODAL */}
+      {showExpenseModal && (
+        <div className="modal-overlay" role="presentation" style={{ zIndex: 9999 }}>
+          <div
+            className="modal-drawer"
+            role="dialog"
+            aria-modal="true"
+            style={{
+              maxWidth: "520px",
+              background: "#FFFFFF",
+              border: "1px solid #CBD5E1",
+              borderRadius: "4px",
+              padding: "0"
+            }}
+          >
+            <div style={{ background: "#F1F5F9", borderBottom: "1px solid #CBD5E1", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Wallet size={16} color="#047857" />
+                <span style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A", textTransform: "uppercase" }}>
+                  Record Sales Expense (बिक्री खर्च प्रविष्टि)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExpenseModal(false)}
+                style={{ background: "none", border: "none", color: "#64748B", cursor: "pointer", padding: "4px" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateExpense} style={{ display: "flex", flexDirection: "column" }}>
+              <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "16px" }}>
+                {expenseError && (
+                  <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #EF4444", borderRadius: "3px", padding: "8px 12px", display: "flex", gap: "8px", alignItems: "flex-start", color: "#991B1B", fontSize: "12px" }}>
+                    <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: "1px" }} />
+                    <div>{expenseError}</div>
+                  </div>
+                )}
+
+                <NepaliDatePicker
+                  label={locale === "en" ? "Expense Date" : "खर्च मिति (Expense Date)"}
+                  valueAd={expenseDateAd}
+                  valueBs={expenseDateBs}
+                  onChange={({ ad, bs }) => {
+                    setExpenseDateAd(ad);
+                    setExpenseDateBs(bs);
+                  }}
+                  required
+                />
+
+                <div>
+                  <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>
+                    Particular / Description *
+                  </label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="e.g. Master carton boxes for Pokhara shipment"
+                    value={expenseParticular}
+                    onChange={(e) => setExpenseParticular(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>
+                      Category *
+                    </label>
+                    <select
+                      className="input-field"
+                      value={expenseCategory}
+                      onChange={(e) => setExpenseCategory(e.target.value)}
+                      required
+                    >
+                      <option value="PACKAGING_MATERIAL">Packaging Material (प्याकेजिङ)</option>
+                      <option value="TRANSPORT_FREIGHT">Transport & Freight (ढुवानी)</option>
+                      <option value="LOADING_UNLOADING">Loading / Unloading (लोडिङ)</option>
+                      <option value="SALES_COMMISSION">Sales Commission (कमिसन)</option>
+                      <option value="MARKETING_PROMOTION">Marketing & Promotion (प्रचार)</option>
+                      <option value="OTHER">Other Sales Expense (अन्य)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>
+                      Amount (NPR) *
+                    </label>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      className="input-field num-mono"
+                      placeholder="0.00"
+                      value={expenseAmount}
+                      onChange={(e) => setExpenseAmount(e.target.value)}
+                      required
+                    />
+                    {expenseAmount && (
+                      <div style={{ fontSize: "10px", color: "#64748B", marginTop: "2px" }}>
+                        = {toPaisa(expenseAmount)} paisa (Exact Integer Paisa)
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>
+                      Payment Method
+                    </label>
+                    <select
+                      className="input-field"
+                      value={expensePaymentMethod}
+                      onChange={(e) => setExpensePaymentMethod(e.target.value)}
+                    >
+                      <option value="CASH">Cash (नगद)</option>
+                      <option value="BANK_TRANSFER">Bank Transfer (बैंक ट्रान्सफर)</option>
+                      <option value="CHEQUE">Cheque (चेक)</option>
+                      <option value="CREDIT">Credit / Payable (उधारो)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>
+                      Link to Sales Order (Optional)
+                    </label>
+                    <select
+                      className="input-field"
+                      value={expenseOrderId}
+                      onChange={(e) => setExpenseOrderId(e.target.value)}
+                    >
+                      <option value="">-- None / General Expense --</option>
+                      {orders.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.order_number} ({o.order_date_ad})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", fontWeight: "700" }}>
+                    Remarks / Voucher Note
+                  </label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="Bill / receipt number, payee name..."
+                    value={expenseRemarks}
+                    onChange={(e) => setExpenseRemarks(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer" style={{ padding: "12px 16px", display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid #CBD5E1" }}>
+                <button type="button" className="btn-secondary" onClick={() => setShowExpenseModal(false)}>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={expenseSubmitting}
+                  style={{ background: "#047857", borderColor: "#047857" }}
+                >
+                  {expenseSubmitting ? "Recording..." : "Record Expense (खर्च प्रविष्टि)"}
+                </button>
               </div>
             </form>
           </div>

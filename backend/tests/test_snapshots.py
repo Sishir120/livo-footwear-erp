@@ -65,7 +65,7 @@ def test_stock_snapshot_materialization_and_math(client):
     assert b1_res.status_code == 200
 
     # 3. Before snapshot: derived stock should be 30 via pure movement summation
-    bal_res1 = client.get("/api/v1/stock/balance")
+    bal_res1 = client.get(f"/api/v1/stock/balance?product_id={prod_id}")
     assert bal_res1.status_code == 200
     prod_bal1 = next(item for item in bal_res1.json() if item["product_id"] == prod_id)
     assert prod_bal1["current_stock_pairs"] == 30.0
@@ -97,7 +97,7 @@ def test_stock_snapshot_materialization_and_math(client):
     assert b2_res.status_code == 200
 
     # 6. Verify derived stock = Snapshot (30) + Subsequent Delta (15) = 45.0
-    bal_res2 = client.get("/api/v1/stock/balance")
+    bal_res2 = client.get(f"/api/v1/stock/balance?product_id={prod_id}")
     assert bal_res2.status_code == 200
     prod_bal2 = next(item for item in bal_res2.json() if item["product_id"] == prod_id)
     assert prod_bal2["current_stock_pairs"] == 45.0

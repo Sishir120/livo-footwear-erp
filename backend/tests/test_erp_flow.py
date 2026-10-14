@@ -47,7 +47,7 @@ def test_full_erp_workflow(client):
     sup_id = sup_res.json()["id"]
 
     mat_res = client.post("/api/v1/purchase/raw-materials", json={
-        "code": "RM-LEATHER", "name": "Synthetic Leather Black", "unit": "meters", "min_stock_alert": 50.0
+        "code": "RM-LEATHER", "name": "Synthetic Leather Black", "unit": "kg", "min_stock_alert": 50.0
     })
     assert mat_res.status_code == 200
     mat_id = mat_res.json()["id"]
@@ -79,7 +79,7 @@ def test_full_erp_workflow(client):
     assert batch_res.status_code == 200
 
     # 3. Verify Stock Balance (+50)
-    stock_res = client.get("/api/v1/stock/balance")
+    stock_res = client.get("/api/v1/stock/balance?limit=1000")
     assert stock_res.status_code == 200
     stock_items = stock_res.json()
     product_stock = next(item for item in stock_items if item["product_id"] == product_id)
@@ -104,7 +104,7 @@ def test_full_erp_workflow(client):
     order_id = order_res.json()["id"]
 
     # Verify Stock Balance after sale
-    stock_res2 = client.get("/api/v1/stock/balance")
+    stock_res2 = client.get("/api/v1/stock/balance?limit=1000")
     assert stock_res2.status_code == 200
 
     # 5. Generate Invoice

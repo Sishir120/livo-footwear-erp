@@ -32,10 +32,12 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    """Prefer -x db_url=..., then DATABASE_URL env var, then alembic.ini."""
+    """Prefer -x db_url=..., then explicitly set config.get_main_option, then DATABASE_URL env var, then alembic.ini."""
     x_args = context.get_x_argument(as_dictionary=True)
     if x_args and "db_url" in x_args:
         url = x_args["db_url"]
+    elif config.get_main_option("sqlalchemy.url") and config.get_main_option("sqlalchemy.url") != "driver://user:pass@localhost/dbname":
+        url = config.get_main_option("sqlalchemy.url")
     else:
         url = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url", ""))
 
@@ -57,6 +59,8 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        render_as_batch=True,
+        version_num_length=128,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -76,6 +80,8 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
+            render_as_batch=True,
+            version_num_length=128,
         )
         with context.begin_transaction():
             context.run_migrations()

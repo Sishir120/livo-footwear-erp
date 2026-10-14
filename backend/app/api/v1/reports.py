@@ -103,6 +103,21 @@ def get_stock_report(
     total_stock_pairs = Decimal('0.0')
     total_stock_value = Decimal('0.0')
 
+    product_ids = [p.id for p in products]
+    reserved_rows = db.query(
+        SalesItem.product_id,
+        func.coalesce(func.sum(SalesItem.quantity), Decimal('0.0')).label("reserved")
+    ).join(
+        SalesOrder, SalesOrder.id == SalesItem.sales_order_id
+    ).filter(
+        SalesOrder.company_id == company_id,
+        SalesItem.product_id.in_(product_ids),
+        SalesOrder.status.in_(["CONFIRMED", "pending"]),
+        SalesOrder.delivered == False
+    ).group_by(SalesItem.product_id).all() if product_ids else []
+
+    reserved_map = {r.product_id: Decimal(r.reserved) for r in reserved_rows}
+
     for p in products:
         current_qty = db.query(
             func.coalesce(func.sum(StockMovement.direction * StockMovement.quantity), Decimal('0.0'))
@@ -116,6 +131,9 @@ def get_stock_report(
         total_stock_pairs += qty
         total_stock_value += val
 
+        reserved = reserved_map.get(p.id, Decimal('0.0'))
+        atp = max(Decimal('0.0'), qty - reserved)
+
         items_report.append({
             "product_id": p.id,
             "code": p.code,
@@ -125,6 +143,9 @@ def get_stock_report(
             "color": p.color,
             "unit_price": p.unit_price,
             "current_stock_pairs": qty,
+            "physical_stock": qty,
+            "reserved_stock": reserved,
+            "available_to_promise": atp,
             "estimated_value": val,
             "status": "In Stock" if qty > 10 else ("Low Stock" if qty > 0 else "Out of Stock")
         })

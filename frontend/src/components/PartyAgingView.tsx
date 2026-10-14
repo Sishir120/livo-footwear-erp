@@ -21,6 +21,8 @@ import {
 import { fromPaisa, toPaisa } from "@/lib/currency";
 import { PartyStatementModal } from "./PartyStatementModal";
 import { useLocale } from "@/context/LocaleContext";
+import { NepaliDatePicker } from "./NepaliDatePicker";
+import { getTodayAd } from "@/lib/nepaliDate";
 
 interface PartyAgingViewProps {
   userRole: string;
@@ -66,7 +68,7 @@ interface UnpaidInvoice {
 export function PartyAgingView({ userRole }: PartyAgingViewProps) {
   const { isNepali } = useLocale();
   const [loading, setLoading] = useState(true);
-  const [asOfDate, setAsOfDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [asOfDate, setAsOfDate] = useState(() => getTodayAd());
   const [parties, setParties] = useState<AgingParty[]>([]);
   const [summary, setSummary] = useState<AgingSummary | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -79,7 +81,7 @@ export function PartyAgingView({ userRole }: PartyAgingViewProps) {
   const [payAmountNpr, setPayAmountNpr] = useState("");
   const [payMethod, setPayMethod] = useState<"CASH" | "BANK">("BANK");
   const [payRef, setPayRef] = useState("");
-  const [payDate, setPayDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [payDate, setPayDate] = useState(() => getTodayAd());
   const [payNotes, setPayNotes] = useState("");
   const [unpaidInvoices, setUnpaidInvoices] = useState<UnpaidInvoice[]>([]);
   const [invoiceAllocations, setInvoiceAllocations] = useState<{ [invoiceId: number]: string }>({});
@@ -283,32 +285,12 @@ export function PartyAgingView({ userRole }: PartyAgingViewProps) {
 
         {/* Action Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          {/* As-Of Date Selector */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              background: "#FFFFFF",
-              border: "1px solid #CBD5E1",
-              padding: "4px 10px",
-              borderRadius: "4px"
-            }}
-          >
-            <Calendar size={14} color="#64748B" />
-            <span style={{ fontSize: "12px", color: "#475569", fontWeight: "500" }}>{isNepali ? "मिति:" : "As of:"}</span>
-            <input
-              type="date"
-              value={asOfDate}
-              onChange={(e) => setAsOfDate(e.target.value)}
-              style={{
-                border: "none",
-                fontSize: "12px",
-                color: "#0F172A",
-                fontWeight: "600",
-                outline: "none",
-                background: "transparent"
-              }}
+          {/* Dual As-Of Date Filter */}
+          <div style={{ minWidth: "220px" }}>
+            <NepaliDatePicker
+              compact
+              valueAd={asOfDate}
+              onChange={({ ad }) => setAsOfDate(ad)}
             />
           </div>
 
@@ -813,21 +795,11 @@ export function PartyAgingView({ userRole }: PartyAgingViewProps) {
                   </div>
 
                   <div>
-                    <label style={{ display: "block", fontSize: "11.5px", fontWeight: "600", color: "#475569", marginBottom: "4px" }}>
-                      Receipt Date:
-                    </label>
-                    <input
-                      type="date"
-                      value={payDate}
-                      onChange={(e) => setPayDate(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        fontSize: "12px",
-                        border: "1px solid #CBD5E1",
-                        borderRadius: "3px",
-                        boxSizing: "border-box"
-                      }}
+                    <NepaliDatePicker
+                      compact
+                      label="Receipt Date (रसिद मिति)"
+                      valueAd={payDate}
+                      onChange={({ ad }) => setPayDate(ad)}
                     />
                   </div>
                 </div>

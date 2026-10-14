@@ -35,6 +35,10 @@ interface GalleryItem {
   file_size_bytes: number | null;
   is_primary: boolean;
   created_at: string;
+  production_batch_id?: number | null;
+  batch_number?: string | null;
+  batch_color?: string | null;
+  batch_date_bs?: string | null;
 }
 
 interface ProductOption {
@@ -44,6 +48,14 @@ interface ProductOption {
   category: string | null;
 }
 
+interface BatchOption {
+  id: number;
+  batch_number: string;
+  product_id: number;
+  color?: string | null;
+  date_bs?: string | null;
+}
+
 export function ProductGalleryView({ userRole }: ProductGalleryViewProps) {
   const { isNepali, t } = useLocale();
   const isViewer = userRole === "viewer";
@@ -51,6 +63,7 @@ export function ProductGalleryView({ userRole }: ProductGalleryViewProps) {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [products, setProducts] = useState<ProductOption[]>([]);
+  const [batches, setBatches] = useState<BatchOption[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Filters
@@ -63,6 +76,7 @@ export function ProductGalleryView({ userRole }: ProductGalleryViewProps) {
 
   // Upload state
   const [uploadProductId, setUploadProductId] = useState<number | "">("");
+  const [uploadBatchId, setUploadBatchId] = useState<number | "">("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -94,10 +108,11 @@ export function ProductGalleryView({ userRole }: ProductGalleryViewProps) {
   // Fetch Products for Upload Select
   const fetchProducts = async () => {
     try {
-      const res = await fetch("/api/v1/stock/ledger");
+      const res = await fetch("/api/v1/production/products");
       if (res.ok) {
         const data = await res.json();
-        const prods: ProductOption[] = (data.ledger || data || []).map((p: any) => ({
+        const rawList: any[] = Array.isArray(data) ? data : (data.items || data.ledger || []);
+        const prods: ProductOption[] = rawList.map((p: any) => ({
           id: p.product_id || p.id,
           code: p.product_code || p.code,
           name: p.product_name || p.name,
@@ -112,10 +127,30 @@ export function ProductGalleryView({ userRole }: ProductGalleryViewProps) {
     }
   };
 
+  // Fetch Batches for Upload Select
+  const fetchBatches = async () => {
+    try {
+      const res = await fetch("/api/v1/production/batches");
+      if (res.ok) {
+        const data = await res.json();
+        setBatches(data);
+      }
+    } catch (e) {
+      console.error("Failed to load production batches for gallery", e);
+    }
+  };
+
   useEffect(() => {
     fetchGallery();
     fetchProducts();
+    fetchBatches();
   }, [categoryFilter]);
+
+  // Filter batches matching currently selected product
+  const availableBatches = React.useMemo(() => {
+    if (!uploadProductId) return [];
+    return batches.filter((b) => b.product_id === Number(uploadProductId));
+  }, [batches, uploadProductId]);
 
   // Handle local file selection with preview
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -150,7 +185,12 @@ export function ProductGalleryView({ userRole }: ProductGalleryViewProps) {
     formData.append("file", selectedFile);
 
     try {
-      const res = await fetch(`/api/v1/gallery/upload/${uploadProductId}`, {
+      let uploadUrl = `/api/v1/gallery/upload/${uploadProductId}`;
+      if (uploadBatchId) {
+        uploadUrl += `?production_batch_id=${uploadBatchId}`;
+      }
+
+      const res = await fetch(uploadUrl, {
         method: "POST",
         body: formData
       });
@@ -164,6 +204,7 @@ export function ProductGalleryView({ userRole }: ProductGalleryViewProps) {
       setSelectedFile(null);
       setFilePreviewUrl(null);
       setUploadProductId("");
+      setUploadBatchId("");
       fetchGallery();
     } catch (err: any) {
       setUploadError(err.message || "Failed to upload image");
@@ -215,7 +256,9 @@ export function ProductGalleryView({ userRole }: ProductGalleryViewProps) {
     return (
       it.product_code.toLowerCase().includes(term) ||
       it.product_name.toLowerCase().includes(term) ||
-      (it.category && it.category.toLowerCase().includes(term))
+      (it.category && it.category.toLowerCase().includes(term)) ||
+      (it.batch_number && it.batch_number.toLowerCase().includes(term)) ||
+      (it.batch_color && it.batch_color.toLowerCase().includes(term))
     );
   });
 
@@ -472,9 +515,30 @@ export function ProductGalleryView({ userRole }: ProductGalleryViewProps) {
                     </span>
                   </div>
 
-                  <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#0F172A", margin: "0 0 8px 0", lineHeight: "1.3" }}>
+                  <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#0F172A", margin: "0 0 6px 0", lineHeight: "1.3" }}>
                     {item.product_name}
                   </h3>
+
+                  {/* Batch / Color Metadata Tags */}
+                  {(item.batch_number || item.batch_color) && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "8px" }}>
+                      {item.batch_number && (
+                        <span style={{ fontSize: "10.5px", fontWeight: "600", background: "#EFF6FF", color: "#1E3A8A", padding: "1px 6px", borderRadius: "3px", border: "1px solid #BFDBFE" }}>
+                          Batch: {item.batch_number}
+                        </span>
+                      )}
+                      {item.batch_color && (
+                        <span style={{ fontSize: "10.5px", fontWeight: "600", background: "#FEF3C7", color: "#92400E", padding: "1px 6px", borderRadius: "3px", border: "1px solid #FDE68A" }}>
+                          {item.batch_color}
+                        </span>
+                      )}
+                      {item.batch_date_bs && (
+                        <span style={{ fontSize: "10.5px", color: "#64748B", padding: "1px 4px" }}>
+                          {item.batch_date_bs}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Action Buttons */}
@@ -578,7 +642,10 @@ export function ProductGalleryView({ userRole }: ProductGalleryViewProps) {
                 <select
                   required
                   value={uploadProductId}
-                  onChange={(e) => setUploadProductId(Number(e.target.value))}
+                  onChange={(e) => {
+                    setUploadProductId(e.target.value ? Number(e.target.value) : "");
+                    setUploadBatchId("");
+                  }}
                   style={{
                     width: "100%",
                     padding: "8px 10px",
@@ -596,6 +663,37 @@ export function ProductGalleryView({ userRole }: ProductGalleryViewProps) {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Optional Production Batch Association */}
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#334155", marginBottom: "4px" }}>
+                  Production Batch (Optional)
+                </label>
+                <select
+                  value={uploadBatchId}
+                  onChange={(e) => setUploadBatchId(e.target.value ? Number(e.target.value) : "")}
+                  disabled={!uploadProductId}
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    fontSize: "12.5px",
+                    border: "1px solid #CBD5E1",
+                    borderRadius: "4px",
+                    background: !uploadProductId ? "#F8FAFC" : "#FFFFFF",
+                    outline: "none"
+                  }}
+                >
+                  <option value="">-- No Batch Link (General Catalog) --</option>
+                  {availableBatches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.batch_number} {b.color ? `[Color: ${b.color}]` : ""} {b.date_bs ? `(${b.date_bs})` : ""}
+                    </option>
+                  ))}
+                </select>
+                <span style={{ fontSize: "11px", color: "#64748B", marginTop: "2px", display: "block" }}>
+                  Filter matches selected SKU. Leave blank for general catalog photos.
+                </span>
               </div>
 
               {/* File Upload Box */}

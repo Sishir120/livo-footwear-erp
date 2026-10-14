@@ -7,11 +7,14 @@ from app.models.user import User
 
 COOKIE_NAME = "livo_access_token"
 
+from app.core.locks import release_all_session_locks
+
 def get_db() -> Generator:
     db = SessionLocal()
     try:
         yield db
     finally:
+        release_all_session_locks(db)
         db.close()
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:

@@ -130,6 +130,16 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    # Graceful Shutdown Handler
+    try:
+        from app.core.logging import logger
+        logger.info("Executing graceful application shutdown: disposing DB engine and flushing logs.")
+        engine.dispose()
+        for handler in logger.handlers:
+            handler.flush()
+    except Exception as e:
+        print(f"Shutdown cleanup notice: {e}")
+
 # Initialize FastAPI App
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -139,13 +149,19 @@ app = FastAPI(
 )
 
 # Exception handlers
+from fastapi.exceptions import RequestValidationError
+from app.core.exceptions import validation_exception_handler
+
 app.add_exception_handler(Exception, global_exception_handler)
 app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
 
 from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
+from app.middleware.idempotency import IdempotencyMiddleware
 
 # Middlewares
+app.add_middleware(IdempotencyMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(AuditLogMiddleware)
@@ -158,8 +174,10 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Request-ID", "X-Correlation-ID"],
+    expose_headers=["X-Request-ID", "X-Correlation-ID", "X-Idempotency-Key", "X-Idempotent-Replay"],
 )
 
-# Include Versioned Routers
+# Include Versioned Routers & Root Health Probes
+from app.api.v1.health import router as health_router
+app.include_router(health_router)
 app.include_router(api_router, prefix=settings.API_V1_STR)

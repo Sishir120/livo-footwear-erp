@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi.testclient import TestClient
 from app.main import app
 from app.db.session import Base, engine, SessionLocal
-from app.models import Company, User, Product, StockMovement, Client
+from app.models import Company, User, Product, StockMovement, Client, Warehouse
 from app.core.security import get_password_hash, create_access_token
 from app.api.deps import COOKIE_NAME
 
@@ -37,6 +37,12 @@ def setup_race_env():
         db.add(user)
         db.commit()
         db.refresh(user)
+        
+    wh = db.query(Warehouse).filter_by(company_id=comp.id, code="WH-RACE").first()
+    if not wh:
+        wh = Warehouse(company_id=comp.id, code="WH-RACE", name="Race Warehouse", location="Test")
+        db.add(wh)
+        db.commit()
 
     token = create_access_token(
         data={"user_id": user.id, "company_id": comp.id, "role": user.role, "sub": user.username}
@@ -58,11 +64,13 @@ def test_concurrent_stock_dispatch_race(setup_race_env):
     token = setup_race_env["token"]
     company_id = setup_race_env["company_id"]
 
+    import uuid
+    unique_code = f"RACE-SNK-{uuid.uuid4().hex[:8]}"
     db = SessionLocal()
     # Create isolated product for this test
     product = Product(
         company_id=company_id,
-        code="RACE-SNK-42",
+        code=unique_code,
         name="Race Test Sneaker 42",
         category="Sneaker",
         size="42",
@@ -75,9 +83,16 @@ def test_concurrent_stock_dispatch_race(setup_race_env):
     product_id = product.id
 
     # Seed with exactly 20 pairs (direction = 1)
+    user = db.query(User).filter_by(company_id=company_id).first()
+    wh = db.query(Warehouse).filter_by(company_id=company_id).first()
+    
     seed_movement = StockMovement(
         company_id=company_id,
         product_id=product_id,
+        warehouse_id=wh.id,
+        size="42",
+        movement_type="PRODUCTION_IN",
+        actor_id=user.id,
         direction=1,
         quantity=20.0,
         ref_type="production_seed",
@@ -90,8 +105,10 @@ def test_concurrent_stock_dispatch_race(setup_race_env):
     db.commit()
     db.close()
 
-    def send_dispatch_request(worker_idx: int):
-        with TestClient(app, cookies={COOKIE_NAME: token}) as client:
+    # Fire 10 concurrent requests of 5 pairs each
+    results = []
+    with TestClient(app, cookies={COOKIE_NAME: token}) as client:
+        def send_dispatch_request(worker_idx: int):
             res = client.post(
                 "/api/v1/stock/movements",
                 json={
@@ -105,12 +122,10 @@ def test_concurrent_stock_dispatch_race(setup_race_env):
             )
             return res.status_code, res.text
 
-    # Fire 10 concurrent requests of 5 pairs each
-    results = []
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [executor.submit(send_dispatch_request, i) for i in range(10)]
-        for f in as_completed(futures):
-            results.append(f.result())
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(send_dispatch_request, i) for i in range(10)]
+            for f in as_completed(futures):
+                results.append(f.result())
 
     status_codes = [status for status, _ in results]
     success_count = sum(1 for sc in status_codes if sc in (200, 201))
@@ -126,6 +141,10 @@ def test_concurrent_stock_dispatch_race(setup_race_env):
         assert balance_res.status_code == 200
         items = balance_res.json()
         target_item = next((it for it in items if it["product_id"] == product_id), None)
+        if target_item is None:
+            print("ITEMS returned by balance endpoint:", items)
+            print("STATUS CODES from threads:", status_codes)
+            print("RESULTS:", results)
         assert target_item is not None
         assert target_item["current_stock_pairs"] == 0.0, f"Expected 0.0 stock, found {target_item['current_stock_pairs']}"
 
@@ -153,9 +172,10 @@ def test_concurrent_sales_orders_dispatch_race(setup_race_env):
     db.refresh(client_obj)
     client_id = client_obj.id
 
+    import uuid
     product = Product(
         company_id=company_id,
-        code="RACE-BOOT-43",
+        code=f"RACE-BOOT-{uuid.uuid4().hex[:8]}",
         name="Race Test Boot 43",
         category="Boot",
         size="43",
@@ -168,9 +188,16 @@ def test_concurrent_sales_orders_dispatch_race(setup_race_env):
     product_id = product.id
 
     # Seed with exactly 20 pairs
+    user = db.query(User).filter_by(company_id=company_id).first()
+    wh = db.query(Warehouse).filter_by(company_id=company_id).first()
+
     seed_movement = StockMovement(
         company_id=company_id,
         product_id=product_id,
+        warehouse_id=wh.id,
+        size="43",
+        movement_type="PRODUCTION_IN",
+        actor_id=user.id,
         direction=1,
         quantity=20.0,
         ref_type="production_seed",
@@ -183,12 +210,12 @@ def test_concurrent_sales_orders_dispatch_race(setup_race_env):
     db.commit()
     db.close()
 
-    def send_order_request(worker_idx: int):
-        with TestClient(app, cookies={COOKIE_NAME: token}) as client:
+    results = []
+    with TestClient(app, cookies={COOKIE_NAME: token}) as client:
+        def send_order_request(worker_idx: int):
             res = client.post(
                 "/api/v1/sales/orders",
                 json={
-                    "order_number": f"SO-RACE-{worker_idx:03d}",
                     "client_id": client_id,
                     "order_date_ad": "2026-10-01",
                     "order_date_bs": "2083-06-15",
@@ -198,11 +225,10 @@ def test_concurrent_sales_orders_dispatch_race(setup_race_env):
             )
             return res.status_code, res.text
 
-    results = []
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [executor.submit(send_order_request, i) for i in range(10)]
-        for f in as_completed(futures):
-            results.append(f.result())
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(send_order_request, i) for i in range(10)]
+            for f in as_completed(futures):
+                results.append(f.result())
 
     status_codes = [status for status, _ in results]
     success_count = sum(1 for sc in status_codes if sc in (200, 201))
@@ -232,9 +258,10 @@ def test_concurrent_single_pair_dispatch_race(setup_race_env):
     company_id = setup_race_env["company_id"]
 
     db = SessionLocal()
+    import uuid
     product = Product(
         company_id=company_id,
-        code="RACE-SNK-40-SOLO",
+        code=f"RACE-SNK-40-{uuid.uuid4().hex[:8]}",
         name="Solo Race Sneaker 40",
         category="Sneaker",
         size="40",
@@ -247,9 +274,16 @@ def test_concurrent_single_pair_dispatch_race(setup_race_env):
     product_id = product.id
 
     # Seed exactly 1 pair
+    user = db.query(User).filter_by(company_id=company_id).first()
+    wh = db.query(Warehouse).filter_by(company_id=company_id).first()
+
     seed = StockMovement(
         company_id=company_id,
         product_id=product_id,
+        warehouse_id=wh.id,
+        size="40",
+        movement_type="PRODUCTION_IN",
+        actor_id=user.id,
         direction=1,
         quantity=1.0,
         ref_type="production_seed",
@@ -262,8 +296,9 @@ def test_concurrent_single_pair_dispatch_race(setup_race_env):
     db.commit()
     db.close()
 
-    def send_dispatch(idx: int):
-        with TestClient(app, cookies={COOKIE_NAME: token}) as client:
+    results = []
+    with TestClient(app, cookies={COOKIE_NAME: token}) as client:
+        def send_dispatch(idx: int):
             res = client.post(
                 "/api/v1/stock/movements",
                 json={
@@ -277,11 +312,10 @@ def test_concurrent_single_pair_dispatch_race(setup_race_env):
             )
             return res.status_code, res.text
 
-    results = []
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = [executor.submit(send_dispatch, i) for i in range(2)]
-        for f in as_completed(futures):
-            results.append(f.result())
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(send_dispatch, i) for i in range(2)]
+            for f in as_completed(futures):
+                results.append(f.result())
 
     status_codes = [s for s, _ in results]
     success_count = sum(1 for sc in status_codes if sc in (200, 201))
@@ -358,7 +392,6 @@ def test_concurrent_credit_limit_race(setup_race_env):
             res = client.post(
                 "/api/v1/sales/orders",
                 json={
-                    "order_number": f"SO-CRACE-{idx:03d}",
                     "client_id": client_id,
                     "order_date_ad": "2026-10-01",
                     "order_date_bs": "2083-06-15",

@@ -142,24 +142,34 @@ def test_concurrent_invoice_generation_api():
         db.add(client_obj)
         db.commit()
 
-    order = db.query(SalesOrder).first()
-    if not order:
-        order = SalesOrder(
-            company_id=comp.id,
-            order_number="SO-CONC-001",
-            client_id=client_obj.id,
-            order_date_ad="2026-09-26",
-            order_date_bs="2083-06-10",
-            total_amount=5000.0,
-            received_amount=5000.0,
-            receivable_amount=0.0
-        )
-        db.add(order)
-        db.commit()
+    from uuid import uuid4
+    order1 = SalesOrder(
+        company_id=comp.id,
+        order_number=f"SO-CONC-{uuid4().hex[:6]}",
+        client_id=client_obj.id,
+        order_date_ad="2026-09-26",
+        order_date_bs="2083-06-10",
+        total_amount=5000.0,
+        received_amount=5000.0,
+        receivable_amount=0.0
+    )
+    order2 = SalesOrder(
+        company_id=comp.id,
+        order_number=f"SO-CONC-{uuid4().hex[:6]}",
+        client_id=client_obj.id,
+        order_date_ad="2026-09-26",
+        order_date_bs="2083-06-10",
+        total_amount=5000.0,
+        received_amount=5000.0,
+        receivable_amount=0.0
+    )
+    db.add(order1)
+    db.add(order2)
+    db.commit()
 
     # Create first invoice
-    data = InvoiceCreate(sales_order_id=order.id, vat_enabled=False)
-    inv1 = generate_invoice(data, current_user=ed, db=db)
+    data1 = InvoiceCreate(sales_order_id=order1.id)
+    inv1 = generate_invoice(data1, current_user=ed, db=db)
     assert inv1.sequence_number >= 1
 
     # Test retry loop explicitly: mock db.commit to fail with IntegrityError on 1st attempt, then succeed
@@ -174,7 +184,7 @@ def test_concurrent_invoice_generation_api():
 
     db.commit = mock_commit
 
-    data2 = InvoiceCreate(sales_order_id=order.id, vat_enabled=False)
+    data2 = InvoiceCreate(sales_order_id=order2.id)
     inv2 = generate_invoice(data2, current_user=ed, db=db)
     assert commit_attempts[0] == 2  # Proves 1st attempt failed with IntegrityError and 2nd attempt retried & succeeded!
     assert inv2.sequence_number > inv1.sequence_number

@@ -1,5 +1,5 @@
 from datetime import date, datetime, timezone
-from sqlalchemy import Column, Integer, ForeignKey, Date, DateTime, UniqueConstraint
+from sqlalchemy import Column, Integer, ForeignKey, Date, DateTime, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
@@ -20,6 +20,7 @@ class StockSnapshot(Base):
 
     __table_args__ = (
         UniqueConstraint("company_id", "product_id", "snapshot_date", name="uq_stock_snapshot"),
+        Index("ix_stock_snapshot_lookup", "company_id", "product_id"),
     )
 
     company = relationship("Company")

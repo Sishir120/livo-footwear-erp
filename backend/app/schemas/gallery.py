@@ -17,4 +17,8 @@ class ProductImageResponse(BaseModel):
     mime_type: str
     file_size_bytes: Optional[int] = None
     is_primary: bool
+    production_batch_id: Optional[int] = None
+    batch_number: Optional[str] = None
+    batch_color: Optional[str] = None
+    batch_date_bs: Optional[str] = None
     created_at: datetime

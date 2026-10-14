@@ -16,9 +16,32 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # DB-level UNIQUE constraint on (company_id, sequence_number) on invoices table (RULES.md §3)
-    with op.batch_alter_table('invoices') as batch_op:
-        batch_op.create_unique_constraint('uq_invoice_company_sequence', ['company_id', 'sequence_number'])
+    # Uses idempotent pattern for PostgreSQL: ignores duplicate_object if constraint already exists.
+    # SQLite requires batch_alter_table to add constraints.
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        with op.batch_alter_table('invoices') as batch_op:
+            batch_op.create_unique_constraint('uq_invoice_company_sequence', ['company_id', 'sequence_number'])
+    else:
+        # PostgreSQL: idempotent constraint creation (handles pre-existing constraint from create_all)
+        bind.execute(sa.text("""
+            DO $$
+            BEGIN
+                ALTER TABLE invoices
+                    ADD CONSTRAINT uq_invoice_company_sequence UNIQUE (company_id, sequence_number);
+            EXCEPTION
+                WHEN duplicate_object THEN NULL;
+                WHEN duplicate_table THEN NULL;
+            END
+            $$
+        """))
 
 def downgrade() -> None:
-    with op.batch_alter_table('invoices') as batch_op:
-        batch_op.drop_constraint('uq_invoice_company_sequence', type_='unique')
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        with op.batch_alter_table('invoices') as batch_op:
+            batch_op.drop_constraint('uq_invoice_company_sequence', type_='unique')
+    else:
+        bind.execute(sa.text(
+            "ALTER TABLE invoices DROP CONSTRAINT IF EXISTS uq_invoice_company_sequence"
+        ))

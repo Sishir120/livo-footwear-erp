@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from app.api.v1.auth import router as auth_router
 from app.api.v1.health import router as health_router
-from app.api.v1.purchase import router as purchase_router
+from app.api.v1.purchase import router as purchase_router, purchases_router
 from app.api.v1.production import router as production_router
 from app.api.v1.stock import router as stock_router
 from app.api.v1.sales import router as sales_router
@@ -13,11 +13,18 @@ from app.api.v1.ops import router as ops_router
 from app.api.v1.hr import router as hr_router
 from app.api.v1.gallery import router as gallery_router
 from app.api.v1.analytics import router as analytics_router
+from app.api.v1.metrics_endpoint import router as metrics_router
+
+from app.api.v1.assets import router as assets_router
+from app.api.v1.waste import router as waste_router
+from app.api.v1.factory_expenses import router as factory_expenses_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
+api_router.include_router(metrics_router)
 api_router.include_router(auth_router)
 api_router.include_router(purchase_router)
+api_router.include_router(purchases_router)
 api_router.include_router(production_router)
 api_router.include_router(stock_router)
 api_router.include_router(sales_router)
@@ -29,5 +36,8 @@ api_router.include_router(ops_router)
 api_router.include_router(hr_router)
 api_router.include_router(gallery_router)
 api_router.include_router(analytics_router)
+api_router.include_router(assets_router)
+api_router.include_router(waste_router)
+api_router.include_router(factory_expenses_router)
 
 

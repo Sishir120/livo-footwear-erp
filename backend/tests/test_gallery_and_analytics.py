@@ -229,15 +229,15 @@ def test_top_selling_products_ranking(setup_gallery_analytics_env):
 
     # Product 2 should be Rank 1 (120 pairs sold > 50 pairs)
     assert ranked[0]["product_id"] == p2_id
-    assert ranked[0]["rank"] == 1
-    assert ranked[0]["total_pairs_sold"] == 120.0
-    assert ranked[0]["total_revenue_paisa"] == 54000000  # 540,000 * 100
+    assert float(ranked[0]["rank"]) == 1
+    assert float(ranked[0]["total_pairs_sold"]) == 120.0
+    assert float(ranked[0]["total_revenue_paisa"]) == 54000000  # 540,000 * 100
 
     # Product 1 should be Rank 2 (50 pairs sold)
     assert ranked[1]["product_id"] == p1_id
-    assert ranked[1]["rank"] == 2
-    assert ranked[1]["total_pairs_sold"] == 50.0
-    assert ranked[1]["total_revenue_paisa"] == 12500000
+    assert float(ranked[1]["rank"]) == 2
+    assert float(ranked[1]["total_pairs_sold"]) == 50.0
+    assert float(ranked[1]["total_revenue_paisa"]) == 12500000
 
 
 def test_top_customers_ranking(setup_gallery_analytics_env):
@@ -285,13 +285,13 @@ def test_top_customers_ranking(setup_gallery_analytics_env):
 
     # Client 2 has 1,000,000 revenue > Client 1 (665,000) -> Serial 1
     assert ranked[0]["client_id"] == c2_id
-    assert ranked[0]["serial_no"] == 1
-    assert ranked[0]["total_pairs"] == 400.0
-    assert ranked[0]["total_revenue_paisa"] == 100000000
+    assert float(ranked[0]["serial_no"]) == 1
+    assert float(ranked[0]["total_pairs"]) == 400.0
+    assert float(ranked[0]["total_revenue_paisa"]) == 100000000
 
     # Client 1 -> Serial 2
-    assert ranked[1]["serial_no"] == 2
-    assert ranked[1]["total_pairs"] == 170.0  # 50 + 120
+    assert float(ranked[1]["serial_no"]) == 2
+    assert float(ranked[1]["total_pairs"]) == 170.0  # 50 + 120
 
 
 def test_production_ratios_and_timeframe_aggregation(setup_gallery_analytics_env):
@@ -342,12 +342,12 @@ def test_production_ratios_and_timeframe_aggregation(setup_gallery_analytics_env
 
     # Check today's record: 600 pairs / 50 workers = 12.0 pairs/worker, 600 / 400h = 1.5 pairs/hour
     today_rec = [r for r in records if r["date_ad"] == today_ad][0]
-    assert today_rec["pairs_produced"] == 600.0
-    assert today_rec["worker_count"] == 50
-    assert today_rec["pairs_per_worker"] == 12.0
-    assert today_rec["pairs_per_hour"] == 1.5
+    assert float(today_rec["pairs_produced"]) == 600.0
+    assert float(today_rec["worker_count"]) == 50
+    assert float(today_rec["pairs_per_worker"]) == 12.0
+    assert float(today_rec["pairs_per_hour"]) == 1.5
 
     # Check summary totals
-    assert data_1m["summary"]["total_pairs_produced"] >= 1000.0
-    assert data_1m["summary"]["avg_pairs_per_worker"] > 0
-    assert data_1m["summary"]["avg_pairs_per_man_hour"] > 0
+    assert float(data_1m["summary"]["total_pairs_produced"]) >= 1000.0
+    assert float(data_1m["summary"]["avg_pairs_per_worker"]) > 0
+    assert float(data_1m["summary"]["avg_pairs_per_man_hour"]) > 0

@@ -16,6 +16,7 @@ router = APIRouter(tags=["Health & System"])
 
 @router.get("/health")
 def health_check(db: Session = Depends(get_db)):
+    """General health check (backward-compatible)."""
     db_status = "unhealthy"
     try:
         db.execute(text("SELECT 1"))
@@ -29,6 +30,49 @@ def health_check(db: Session = Depends(get_db)):
         "version": settings.VERSION,
         "database": db_status,
         "app_name": settings.PROJECT_NAME
+    }
+
+@router.get("/health/live")
+def liveness_check():
+    """
+    Kubernetes/Container Liveness Probe:
+    Answers: Is the application process running and capable of servicing HTTP requests?
+    Does NOT depend on external databases or network services, preventing unnecessary restarts.
+    """
+    return {
+        "status": "alive",
+        "version": settings.VERSION,
+        "app_name": settings.PROJECT_NAME
+    }
+
+@router.get("/health/ready")
+def readiness_check(response: Response, db: Session = Depends(get_db)):
+    """
+    Kubernetes/Container Readiness Probe:
+    Answers: Can this instance safely serve production traffic?
+    Verifies database connectivity and essential operational dependencies.
+    Returns HTTP 200 when ready, HTTP 503 when degraded.
+    """
+    db_status = "unhealthy"
+    try:
+        db.execute(text("SELECT 1"))
+        db_status = "healthy"
+    except Exception as e:
+        logger.error(f"Readiness check database failure: {e}")
+        db_status = "unhealthy"
+
+    if db_status != "healthy":
+        response.status_code = 503
+        return {
+            "status": "unready",
+            "database": "unhealthy",
+            "detail": "Database connection probe failed."
+        }
+
+    return {
+        "status": "ready",
+        "database": "healthy",
+        "version": settings.VERSION
     }
 
 @router.get("/diagnostics/download")

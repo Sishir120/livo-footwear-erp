@@ -13,12 +13,15 @@ export interface CatalogItem {
   cachedAt: string;
 }
 
+import { getTodayAd, getTodayBs } from "./nepaliDate";
+
 export type DraftSyncStatus = "PENDING" | "SYNCING" | "ACCEPTED" | "CONFLICT" | "REJECTED";
 
 export interface ProductionDraft {
   idempotencyKey: string;
   createdAtDevice: string;
   productId: number;
+  color?: string;
   modelName: string;
   line: string;
   shift: string;
@@ -232,12 +235,13 @@ export async function drainPendingProductionDrafts(
         idempotency_key: draft.idempotencyKey,
         created_at_device: draft.createdAtDevice,
         product_id: draft.productId,
+        color: draft.color || null,
         warehouse_id: 1,
         line: draft.line || "Line 1",
         shift: draft.shift || "Shift 1",
         worker_count: 1,
-        date_ad: draft.dateAd || new Date().toISOString().split("T")[0],
-        date_bs: draft.dateBs || "2083-06-09",
+        date_ad: draft.dateAd || getTodayAd(),
+        date_bs: draft.dateBs || getTodayBs().formatted,
         size_quantities: draft.sizeQuantities,
         notes: draft.notes || `Offline sync batch (${draft.modelName})`
       };

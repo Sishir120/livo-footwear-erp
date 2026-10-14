@@ -91,9 +91,8 @@ def test_batch_creation_generates_positive_stock_movements(setup_db):
         prod = p_res.json()
         prod_id = prod["id"]
 
-        # Create production batch
+        # Create production batch (backend generates batch_number)
         b_res = client.post("/api/v1/production/batches", json={
-            "batch_number": "BATCH-TEST-001",
             "product_id": prod_id,
             "target_quantity": 40.0,
             "produced_quantity": 40.0,
@@ -113,7 +112,7 @@ def test_batch_creation_generates_positive_stock_movements(setup_db):
         assert latest["direction"] == 1
         assert latest["quantity"] == 40.0
         assert latest["size"] == "42"
-        assert latest["source_doc_ref"] == "BATCH-TEST-001"
+        assert latest["source_doc_ref"].startswith("PROD-"), f"Expected PROD- prefix, got: {latest['source_doc_ref']}"
         assert latest["running_balance"] == 40.0
 
 
@@ -134,7 +133,6 @@ def test_sales_dispatch_generates_negative_stock_movements(setup_db):
         prod_id = p_res.json()["id"]
 
         client.post("/api/v1/production/batches", json={
-            "batch_number": "BATCH-SLP-01",
             "product_id": prod_id,
             "target_quantity": 60.0,
             "produced_quantity": 60.0,

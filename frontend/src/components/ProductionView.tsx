@@ -18,6 +18,8 @@ import { ThermalLabelModal, BoxLabelData } from "./ThermalLabelModal";
 import { apiFetch } from "../lib/api";
 import { saveDraft, cacheCatalogItems, getCachedCatalog } from "../lib/offlineDb";
 import { useLocale } from "../context/LocaleContext";
+import { NepaliDatePicker } from "./NepaliDatePicker";
+import { getTodayAd, getTodayBs } from "../lib/nepaliDate";
 
 const SIZES = [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43] as const;
 
@@ -35,11 +37,12 @@ export function ProductionView({ userRole }: { userRole?: string }) {
   });
   const [batchPrefix, setBatchPrefix] = useState("BATCH");
   const [selectedModelKey, setSelectedModelKey] = useState<string>("");
+  const [customColor, setCustomColor] = useState("");
   const [productionLine, setProductionLine] = useState("Line 1");
   const [productionShift, setProductionShift] = useState("Shift 1");
   const [workerCount, setWorkerCount] = useState("4");
-  const [dateAd, setDateAd] = useState(new Date().toISOString().split("T")[0]);
-  const [dateBs, setDateBs] = useState("2083-06-09");
+  const [dateAd, setDateAd] = useState(() => getTodayAd());
+  const [dateBs, setDateBs] = useState(() => getTodayBs().formatted);
   
   // Horizontal size quantities map: size -> quantity string (default "0")
   const [sizeQuantities, setSizeQuantities] = useState<Record<number, string>>(() => {
@@ -163,10 +166,25 @@ export function ProductionView({ userRole }: { userRole?: string }) {
     return Array.from(map.values());
   }, [products]);
 
+  // Catalog colors for datalist combobox suggestions
+  const catalogColors = useMemo(() => {
+    const s = new Set<string>();
+    products.forEach((p) => {
+      if (p.color && p.color.trim()) s.add(p.color.trim());
+    });
+    return Array.from(s);
+  }, [products]);
+
   // Current selected group
   const activeGroup = useMemo(() => {
     return modelGroups.find((g) => g.key === selectedModelKey) || modelGroups[0] || null;
   }, [modelGroups, selectedModelKey]);
+
+  useEffect(() => {
+    if (activeGroup && !customColor && activeGroup.color && activeGroup.color !== "Standard") {
+      setCustomColor(activeGroup.color);
+    }
+  }, [activeGroup, customColor]);
 
   // Whole-pairs-only validation: every non-empty size string must be purely non-negative digits /^\d+$/
   const hasInvalidSizeInput = useMemo(() => {
@@ -317,10 +335,13 @@ export function ProductionView({ userRole }: { userRole?: string }) {
       const idempotencyKey = `prod:draft:${uuid}`;
       const createdAtDevice = new Date().toISOString();
 
+      const finalBatchColor = customColor.trim() || (activeGroup && activeGroup.color !== "Standard" ? activeGroup.color : null);
+
       const draftPayload = {
         idempotency_key: idempotencyKey,
         created_at_device: createdAtDevice,
         product_id: targetProductId,
+        color: finalBatchColor,
         warehouse_id: 1,
         line: productionLine,
         shift: productionShift,
@@ -373,6 +394,7 @@ export function ProductionView({ userRole }: { userRole?: string }) {
           idempotencyKey,
           createdAtDevice,
           productId: targetProductId,
+          color: finalBatchColor || undefined,
           modelName: activeGroup.name,
           line: productionLine,
           shift: productionShift,
@@ -400,7 +422,7 @@ export function ProductionView({ userRole }: { userRole?: string }) {
         productName: prod?.name || activeGroup.name,
         sku: prod?.code || recordedBatchNumber,
         size: activeEntries[0] ? String(activeEntries[0].size) : "40",
-        color: prod?.color || activeGroup.color,
+        color: finalBatchColor || prod?.color || activeGroup.color,
         batchNumber: recordedBatchNumber,
         dateStr: dateAd,
       });
@@ -446,6 +468,7 @@ export function ProductionView({ userRole }: { userRole?: string }) {
       const matchesSearch =
         b.batch_number.toLowerCase().includes(q) ||
         prodName.includes(q) ||
+        (b.color && b.color.toLowerCase().includes(q)) ||
         b.date_ad.includes(q) ||
         b.date_bs.includes(q);
 
@@ -575,7 +598,14 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                 <select
                   ref={modelSelectRef}
                   value={selectedModelKey}
-                  onChange={(e) => setSelectedModelKey(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedModelKey(val);
+                    const grp = modelGroups.find((g) => g.key === val);
+                    if (grp && grp.color && grp.color !== "Standard") {
+                      setCustomColor(grp.color);
+                    }
+                  }}
                   onKeyDown={handleGlobalCtrlEnter}
                   style={{
                     background: "#FFFFFF",
@@ -595,6 +625,36 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Batch-Specific Color Combobox with Catalog Suggestions */}
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", textTransform: "uppercase" }}>Color:</label>
+                <input
+                  type="text"
+                  list="catalog-color-suggestions"
+                  value={customColor}
+                  onChange={(e) => setCustomColor(e.target.value)}
+                  onKeyDown={handleGlobalCtrlEnter}
+                  placeholder={activeGroup?.color && activeGroup.color !== "Standard" ? activeGroup.color : "Color"}
+                  style={{
+                    background: "#FFFFFF",
+                    border: "1px solid #CBD5E1",
+                    borderRadius: "3px",
+                    padding: "4px 8px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    color: "#0F172A",
+                    width: "110px",
+                    outline: "none"
+                  }}
+                  title="Production Batch Color (Custom or Catalog)"
+                />
+                <datalist id="catalog-color-suggestions">
+                  {catalogColors.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
               </div>
 
               {/* Assembly Line Selector */}
@@ -670,11 +730,17 @@ export function ProductionView({ userRole }: { userRole?: string }) {
               </div>
             </div>
 
-            {/* Date Display */}
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "#475569" }}>
-              <span>AD: <strong style={{ color: "#0F172A" }}>{dateAd}</strong></span>
-              <span>•</span>
-              <span>BS: <strong style={{ color: "#0F172A" }}>{dateBs}</strong></span>
+            {/* Dual Synchronized Date Picker */}
+            <div style={{ minWidth: "220px" }}>
+              <NepaliDatePicker
+                compact
+                valueAd={dateAd}
+                valueBs={dateBs}
+                onChange={({ ad, bs }) => {
+                  setDateAd(ad);
+                  setDateBs(bs);
+                }}
+              />
             </div>
           </div>
 
@@ -902,7 +968,15 @@ export function ProductionView({ userRole }: { userRole?: string }) {
                           {p?.size || "-"}
                         </span>
                       </td>
-                      <td style={{ color: "#475569", fontSize: "11px" }}>{p?.color || "-"}</td>
+                      <td style={{ color: "#475569", fontSize: "11px" }}>
+                        {b.color ? (
+                          <span style={{ padding: "1px 6px", background: "#FEF3C7", color: "#92400E", borderRadius: "3px", fontWeight: "600", fontSize: "11px", border: "1px solid #FDE68A" }}>
+                            {b.color}
+                          </span>
+                        ) : (
+                          <span>{p?.color || "-"}</span>
+                        )}
+                      </td>
                       <td style={{ textAlign: "right" }} className="num-mono">
                         {b.target_quantity} prs
                       </td>

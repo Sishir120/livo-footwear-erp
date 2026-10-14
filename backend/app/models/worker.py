@@ -1,5 +1,5 @@
 from datetime import datetime, timezone, date
-from sqlalchemy import Column, Integer, BigInteger, String, Float, Date, DateTime, ForeignKey, Boolean, Index, UniqueConstraint, func
+from sqlalchemy import Column, Integer, BigInteger, String, Numeric, Date, DateTime, ForeignKey, Boolean, Index, UniqueConstraint, func, text
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
@@ -19,7 +19,17 @@ class Worker(Base):
     pay_type = Column(String(16), nullable=False)  # 'SALARY' or 'WAGE'
     basic_rate_paisa = Column(BigInteger, nullable=False)  # Monthly salary or hourly wage rate in integer paisa
     phone = Column(String(32), nullable=True)
+    photo_url = Column(String(512), nullable=True)
+    temporary_address = Column(String(255), nullable=True)
+    permanent_address = Column(String(255), nullable=True)
+    inactive_date = Column(Date, nullable=True)
+    inactive_reason = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False, index=True)
+    citizenship_doc_path = Column(String(512), nullable=True)
+    citizenship_doc_name = Column(String(255), nullable=True)
+    citizenship_uploaded_at = Column(DateTime(timezone=True), nullable=True)
+    standard_monthly_hours_override = Column(Numeric(precision=6, scale=2), nullable=True)
+    overtime_rate_paisa_override = Column(BigInteger, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
@@ -47,15 +57,31 @@ class WorkerAdvance(Base):
     date = Column(Date, nullable=False, default=date.today)
     notes = Column(String(255), nullable=True)
     actor_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # Phase 4B.4.2 fields
+    installment_amount_paisa = Column(BigInteger, nullable=True)
+    parent_advance_id = Column(Integer, ForeignKey("worker_advances.id", ondelete="RESTRICT"), nullable=True, index=True)
+    monthly_record_id = Column(Integer, ForeignKey("worker_monthly_records.id", ondelete="RESTRICT"), nullable=True, index=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index("ix_advances_worker_date", "company_id", "worker_id", "date"),
+        Index(
+            "uq_payroll_advance_recovery",
+            "monthly_record_id",
+            "parent_advance_id",
+            unique=True,
+            postgresql_where=text("monthly_record_id IS NOT NULL AND parent_advance_id IS NOT NULL"),
+            sqlite_where=text("monthly_record_id IS NOT NULL AND parent_advance_id IS NOT NULL")
+        ),
     )
 
     company = relationship("Company")
     worker = relationship("Worker", back_populates="advances")
     actor = relationship("User")
+    parent_advance = relationship("WorkerAdvance", remote_side=[id], backref="recoveries")
+    monthly_record = relationship("WorkerMonthlyRecord", back_populates="advance_recoveries")
 
 
 class WorkerMonthlyRecord(Base):
@@ -69,14 +95,24 @@ class WorkerMonthlyRecord(Base):
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     worker_id = Column(Integer, ForeignKey("workers.id"), nullable=False, index=True)
     month_year = Column(String(10), nullable=False, index=True)  # YYYY-MM
-    total_working_hours = Column(Float, default=0.0, nullable=False)
-    overtime_hours = Column(Float, default=0.0, nullable=False)
+    total_working_hours = Column(Numeric, default=0.0, nullable=False)
+    overtime_hours = Column(Numeric, default=0.0, nullable=False)
     gross_pay_paisa = Column(BigInteger, default=0, nullable=False)
     advance_deduction_paisa = Column(BigInteger, default=0, nullable=False)
     net_paid_paisa = Column(BigInteger, default=0, nullable=False)
     paid_date = Column(Date, nullable=True)
     payment_method = Column(String(32), nullable=True)  # 'CASH', 'BANK'
     status = Column(String(16), default="PENDING", nullable=False)  # 'PENDING', 'PAID'
+
+    # Phase 4B.4.1 calculation input/output snapshots
+    basic_rate_paisa_snapshot = Column(BigInteger, nullable=True)
+    standard_hours_snapshot = Column(Numeric(precision=6, scale=2), nullable=True)
+    overtime_multiplier_snapshot = Column(Numeric(precision=4, scale=2), nullable=True)
+    overtime_rate_paisa_snapshot = Column(BigInteger, nullable=True)
+    regular_pay_paisa = Column(BigInteger, nullable=True)
+    overtime_pay_paisa = Column(BigInteger, nullable=True)
+    ceiling_pct_snapshot = Column(Integer, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
@@ -86,3 +122,29 @@ class WorkerMonthlyRecord(Base):
 
     company = relationship("Company")
     worker = relationship("Worker", back_populates="monthly_records")
+    advance_recoveries = relationship("WorkerAdvance", back_populates="monthly_record")
+
+
+class CompanyHRSettings(Base):
+    """
+    Company-wide HR & compensation calculation configuration.
+    Provides defaults for standard working hours, overtime multiplier, and deduction ceiling.
+    Scoped by company_id for multi-tenant isolation.
+    """
+    __tablename__ = "company_hr_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    standard_monthly_hours = Column(Numeric(precision=6, scale=2), nullable=False, default=208.00)
+    overtime_multiplier = Column(Numeric(precision=4, scale=2), nullable=False, default=1.50)
+    max_advance_deduction_pct = Column(Integer, nullable=True, default=50)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("company_id", name="uq_company_hr_settings_company"),
+    )
+
+    company = relationship("Company")
+    updated_by = relationship("User")
+
