@@ -75,6 +75,7 @@ def allocate_next_sequence(db: Session, company_id: int, document_type: str) -> 
                         current_sequence=0
                     )
                     db.add(new_seq)
+                    db.flush()
             except IntegrityError:
                 pass  # Someone else created it, we can safely proceed to atomic update
 
@@ -92,6 +93,15 @@ def allocate_next_sequence(db: Session, company_id: int, document_type: str) -> 
         result = db.execute(stmt).scalar()
         
         if result is None:
+            # Fallback for concurrent transaction race
+            seq_record = db.query(DocumentSequence).filter(
+                DocumentSequence.company_id == company_id,
+                DocumentSequence.document_type == document_type
+            ).with_for_update().first()
+            if seq_record:
+                seq_record.current_sequence += 1
+                db.flush()
+                return seq_record.current_sequence
             raise RuntimeError(f"Failed to allocate sequence for {document_type}")
             
         db.flush()
