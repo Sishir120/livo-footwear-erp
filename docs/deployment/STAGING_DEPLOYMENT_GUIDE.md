@@ -136,6 +136,6 @@ Frontend requests to `/api/*` are automatically proxied via `next.config.js` to 
 ## 7. POST-DEPLOYMENT VERIFICATION SEQUENCE
 
 1. **Access Web App:** Navigate to `https://<staging-frontend-host>`.
-2. **Authenticate:** Log in with seeded staging credentials (`admin_demo` / `LivoAdmin2026!`).
+2. **Authenticate:** Log in with configured staging credentials (provisioned via `python backend/scripts/create_admin.py` or opt-in `ENABLE_DEMO_SEEDING=true`).
 3. **Verify Seeded Data:** Confirm seeded company `LIVO GROUP OF INDUSTRIES` and `WH-MAIN` warehouse are visible on the dashboard.
 4. **Execute Synthetic E2E Flow:** Run through Gate 4 test scenarios (Purchase GRN -> Production Batch -> Sales Dispatch -> HR Advance).

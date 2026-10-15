@@ -1,0 +1,11 @@
+[Unit]
+Description=LIVO Footwear ERP Nightly PostgreSQL Backup Timer (Daily at 01:45 NPT)
+
+[Timer]
+# 20:00 UTC corresponds to 01:45 AM Nepal Standard Time (+05:45)
+OnCalendar=*-*-* 20:00:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

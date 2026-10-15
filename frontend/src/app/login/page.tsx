@@ -1,15 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { Building2, Lock, UserCheck, ShieldAlert, Info, Eye, EyeOff } from "lucide-react";
+import { Building2, Lock, ShieldAlert, Info, Eye, EyeOff } from "lucide-react";
 import { LegalModal } from "@/components/LegalModal";
 import { useLocale } from "@/context/LocaleContext";
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("admin_demo");
-  const [password, setPassword] = useState("LivoAdmin2026!");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [clipboardNotice, setClipboardNotice] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginSubmitting, setLoginSubmitting] = useState(false);
   const [legalModal, setLegalModal] = useState<"privacy" | "terms" | null>(null);
@@ -41,16 +40,6 @@ export default function LoginPage() {
       setLoginError("Demo server is currently waking up or unreachable. Please retry in a few moments.");
     } finally {
       setLoginSubmitting(false);
-    }
-  };
-
-  const quickFillLogin = (role: "admin" | "viewer") => {
-    if (role === "admin") {
-      setUsername("admin_demo");
-      setPassword("LivoAdmin2026!");
-    } else {
-      setUsername("viewer_demo");
-      setPassword("LivoViewer2026!");
     }
   };
 
@@ -146,21 +135,6 @@ export default function LoginPage() {
                 style={{ paddingRight: "42px" }}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                onCopy={(e) => {
-                  e.preventDefault();
-                  setClipboardNotice("Clipboard copying is disabled for password security.");
-                  setTimeout(() => setClipboardNotice(""), 3500);
-                }}
-                onCut={(e) => {
-                  e.preventDefault();
-                  setClipboardNotice("Clipboard cutting is disabled for password security.");
-                  setTimeout(() => setClipboardNotice(""), 3500);
-                }}
-                onPaste={(e) => {
-                  e.preventDefault();
-                  setClipboardNotice("Direct paste is disabled for credential protection. Please type or use Presets.");
-                  setTimeout(() => setClipboardNotice(""), 3500);
-                }}
                 autoComplete="current-password"
                 required
                 aria-label={t("password")}
@@ -187,11 +161,6 @@ export default function LoginPage() {
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-            {clipboardNotice && (
-              <div style={{ fontSize: "11px", color: "#B45309", marginTop: "4px", display: "flex", alignItems: "center", gap: "5px", background: "#FEF3C7", padding: "4px 8px", borderRadius: "3px" }}>
-                <ShieldAlert size={12} color="#B45309" /> {clipboardNotice}
-              </div>
-            )}
           </div>
 
           <button type="submit" className="btn-primary" style={{ width: "100%", justifyContent: "center", padding: "10px", marginTop: "6px" }} disabled={loginSubmitting}>
@@ -199,18 +168,9 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Role Fill Shortcuts */}
-        <div style={{ marginTop: "20px", paddingTop: "18px", borderTop: "1px solid #CBD5E1", textAlign: "center" }}>
-          <div style={{ fontSize: "11.5px", color: "#475569", marginBottom: "8px" }}>Role Access Preset:</div>
-          <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
-            <button type="button" className="btn-secondary" style={{ fontSize: "12px", padding: "5px 12px" }} onClick={() => quickFillLogin("admin")}>
-              <UserCheck size={12} color="#047857" /> Admin Operator
-            </button>
-            <button type="button" className="btn-secondary" style={{ fontSize: "12px", padding: "5px 12px" }} onClick={() => quickFillLogin("viewer")}>
-              <UserCheck size={12} color="#1E40AF" /> Auditor Viewer
-            </button>
-          </div>
-          <div style={{ marginTop: "14px", padding: "8px 12px", background: "#F8FAFC", border: "1px solid #CBD5E1", borderRadius: "4px", fontSize: "11px", color: "#475569", textAlign: "left", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+        {/* Infrastructure Information */}
+        <div style={{ marginTop: "20px", paddingTop: "14px", borderTop: "1px solid #CBD5E1" }}>
+          <div style={{ padding: "8px 12px", background: "#F8FAFC", border: "1px solid #CBD5E1", borderRadius: "4px", fontSize: "11px", color: "#475569", textAlign: "left", display: "flex", alignItems: "flex-start", gap: "8px" }}>
             <Info size={14} color="#1E40AF" style={{ flexShrink: 0, marginTop: "2px" }} />
             <div>
               <strong>Infrastructure Notice:</strong> Cloud backend operates on standard container scaling. If sleeping after inactivity, initial connection takes ~45s.

@@ -1,0 +1,64 @@
+name: Automated Cloud Database Backup & Disaster Recovery
+
+'on':
+  schedule:
+    # Trigger nightly at 20:00 UTC (01:45 AM Nepal Standard Time)
+    - cron: '0 20 * * *'
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: 'Target Environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+concurrency:
+  group: cloud-db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Execute PostgreSQL Logical Backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL Client Binaries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Execute Backup Script
+        id: run_backup
+        env:
+          TARGET_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL || secrets.DATABASE_URL }}
+          BACKUP_RETENTION_DAYS: 7
+          ALERT_WEBHOOK_URL: ${{ secrets.BACKUP_ALERT_WEBHOOK_URL }}
+        run: |
+          if [ -z "${TARGET_DATABASE_URL}" ]; then
+            echo "::error::Secret STAGING_DATABASE_URL is not configured in repository settings."
+            exit 1
+          fi
+          chmod +x scripts/cloud_backup.sh
+          ./scripts/cloud_backup.sh
+
+      - name: Archive Encrypted Backup Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: backups/livo_backup_*.sql.gz
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Record Telemetry Status
+        if: always()
+        run: |
+          if [ -f "backups/latest_status.json" ]; then
+            cat backups/latest_status.json
+          fi

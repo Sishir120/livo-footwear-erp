@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { fromPaisa } from "@/lib/currency";
 import { useLocale } from "@/context/LocaleContext";
+import { adToBs } from "@/lib/nepaliDate";
 
 interface PartyStatementModalProps {
   clientId: number;
@@ -281,6 +282,12 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
                     background: "#FFFFFF"
                   }}
                 />
+                {dateFrom && (() => {
+                  try {
+                    const bs = adToBs(dateFrom);
+                    return <span style={{ fontSize: "11px", color: "#1E3A8A", fontWeight: "600" }}>({bs.formatted} BS)</span>;
+                  } catch { return null; }
+                })()}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: "#475569" }}>
                 <span>{isNepali ? "सम्म:" : "To:"}</span>
@@ -296,6 +303,12 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
                     background: "#FFFFFF"
                   }}
                 />
+                {dateTo && (() => {
+                  try {
+                    const bs = adToBs(dateTo);
+                    return <span style={{ fontSize: "11px", color: "#1E3A8A", fontWeight: "600" }}>({bs.formatted} BS)</span>;
+                  } catch { return null; }
+                })()}
               </div>
               {(dateFrom || dateTo) && (
                 <button
@@ -340,7 +353,7 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
             <table className="table-dense" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
               <thead>
                 <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #CBD5E1", color: "#475569", textAlign: "left" }}>
-                  <th style={{ padding: "8px 12px", width: "95px" }}>{isNepali ? "मिति (Date)" : "Date"}</th>
+                  <th style={{ padding: "8px 12px", width: "110px" }}>{isNepali ? "मिति (Date BS/AD)" : "Date (BS/AD)"}</th>
                   <th style={{ padding: "8px 12px", width: "130px" }}>{isNepali ? "भौचर / बिजक नं (Voucher Ref)" : "Voucher Ref"}</th>
                   <th style={{ padding: "8px 12px" }}>{isNepali ? "विवरण (Particulars)" : "Description / Entry Type"}</th>
                   <th style={{ padding: "8px 12px", width: "95px" }}>{isNepali ? "भाका मिति (Due Date)" : "Due Date"}</th>
@@ -362,8 +375,21 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
                         background: line.is_disputed ? "#FEF2F2" : "#FFFFFF"
                       }}
                     >
-                      <td style={{ padding: "7px 12px", color: "#475569", whiteSpace: "nowrap" }}>
-                        {dateStr}
+                      <td style={{ padding: "7px 12px", whiteSpace: "nowrap" }}>
+                        {(() => {
+                          if (!dateStr || dateStr === "—") return <span style={{ color: "#94A3B8" }}>—</span>;
+                          try {
+                            const bs = adToBs(dateStr);
+                            return (
+                              <div>
+                                <div style={{ fontWeight: "600", color: "#0F172A", fontSize: "12px" }}>{bs.formatted} BS</div>
+                                <div style={{ fontSize: "10px", color: "#64748B" }}>{dateStr} AD</div>
+                              </div>
+                            );
+                          } catch {
+                            return <div style={{ color: "#475569" }}>{dateStr}</div>;
+                          }
+                        })()}
                       </td>
                       <td style={{ padding: "7px 12px", whiteSpace: "nowrap" }}>
                         {line.invoice_id ? (
@@ -426,8 +452,21 @@ export function PartyStatementModal({ clientId, onClose, userRole }: PartyStatem
                           )}
                         </div>
                       </td>
-                      <td style={{ padding: "7px 12px", color: "#64748B", whiteSpace: "nowrap" }}>
-                        {dueStr}
+                      <td style={{ padding: "7px 12px", whiteSpace: "nowrap" }}>
+                        {(() => {
+                          if (!dueStr || dueStr === "—") return <span style={{ color: "#94A3B8" }}>—</span>;
+                          try {
+                            const bs = adToBs(dueStr);
+                            return (
+                              <div>
+                                <div style={{ color: "#334155", fontSize: "11px" }}>{bs.formatted} BS</div>
+                                <div style={{ fontSize: "10px", color: "#94A3B8" }}>{dueStr} AD</div>
+                              </div>
+                            );
+                          } catch {
+                            return <span style={{ color: "#64748B" }}>{dueStr}</span>;
+                          }
+                        })()}
                       </td>
                       <td className="erp-num" style={{ padding: "7px 12px", color: line.debit_paisa > 0 ? "#0F172A" : "#94A3B8" }}>
                         {line.debit_paisa > 0 ? fromPaisa(line.debit_paisa) : "—"}

@@ -7,6 +7,7 @@ from sqlalchemy import func, or_, and_
 from pydantic import BaseModel, Field
 
 from app.core.sequence import generate_document_number
+from app.core.nepali_date import ad_to_bs_str
 from app.api.deps import get_db, get_current_user, require_editor
 from app.models.user import User
 from app.models.sales import Client, SalesOrder, Payment
@@ -504,7 +505,7 @@ def record_ar_payment(
         ).order_by(SalesOrder.id.desc()).first()
         if last_order:
             ad_str = occurred.strftime("%Y-%m-%d")
-            bs_str = getattr(last_order, "order_date_bs", "2083-01-01") or "2083-01-01"
+            bs_str = ad_to_bs_str(occurred.date())
             legacy_payment = Payment(
                 company_id=current_user.company_id,
                 sales_order_id=last_order.id,

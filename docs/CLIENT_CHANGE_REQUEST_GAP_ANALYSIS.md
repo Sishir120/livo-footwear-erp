@@ -1,6 +1,8 @@
 # CLIENT CHANGE REQUEST — PHASE 0: REQUIREMENTS VALIDATION & CODEBASE GAP ANALYSIS
-**System:** Livo Footwear ERP  
-**Audit Date:** 2026-10-11  
+
+**Project:** LIVO Footwear ERP  
+**Working Directory:** `D:\Antigravity\Footwear app`  
+**Audit Date:** 2026-10-14  
 **Audit Phase:** Phase 0 (Requirements Validation & Codebase Gap Analysis)  
 **Status:** COMPLETE — NO APPLICATION CODE MODIFIED (STRICT AUDIT BASELINE)
 
@@ -8,649 +10,423 @@
 
 ## 1. Executive Summary
 
-This audit evaluates the verbal change requests from the client against the production-hardened baseline of the **Livo Footwear ERP** (Checkpoints 1–18). The existing system enforces strict multi-tenant isolation, row-level advisory locking for inventory and credit boundaries, integer paisa precision for financial transactions, append-only finished goods ledgers, and automated S3/B2 database backup routines.
+This forensic codebase audit evaluates the verbal change requests from the client against the production-hardened baseline of the **LIVO Footwear ERP** (Checkpoints 1–18, Alembic HEAD `020_fixed_assets_waste_and_expenses`).
 
-### Key Audit Discoveries
-1. **Existing Architecture is Robust but Asymmetric:** Finished goods inventory is strictly ledger-driven (`stock_movements`), protected by distributed advisory locks and pessimistic concurrency. However, raw material inventory is **virtual and unledgered**, calculated dynamically as `SUM(Purchase.quantity) - SUM(ProductionMaterialUsage.quantity_used)`. There is currently no raw material receiving workflow, scrap/waste tracking, or stock adjustment mechanism.
-2. **Date Subsystem:** Dual-date tracking (`date_ad` and `date_bs`) is already deeply integrated across invoices, production batches, sales orders, and finished goods stock movements. However, order lifecycles lack state-based date tracking: `sales_orders` has no separate `dispatch_date`, and `purchases` has no split between `ordered_date` and `receipt_date`.
-3. **Color & Production Batching:** `Product.color` is currently a catalog attribute tied to a product SKU. Allowing free-text typable colors at the production batch level without master catalog normalization threatens inventory integrity, as footwear finished goods stock tracking requires explicit variant identification (Model + Color + Size).
-4. **HR & Payroll Foundation:** Core worker profile management, real-time advance tracking (ISSUED/RECOVERED), and monthly payroll calculation (hours, overtime, advance deductions, cash/bank disbursement) are already built in `backend/app/api/v1/hr.py` and `frontend/src/components/HRManagementView.tsx`. However, worker photos, addresses, citizenship document uploads, inactive dates, and dedicated profile dialogs are missing.
-5. **Completely Missing Business Domains:** General Expenses, Sales Expenses, Purchase Expenses (landed costs), Fixed Assets, and Waste Materials currently have **zero implementation** in database schemas, backend APIs, or frontend components.
-6. **Operating Rule Enforcement:** In accordance with Phase 0 instructions, **no application code, database migrations, or schemas have been altered**. This document establishes the authoritative gap matrix and risk-managed implementation roadmap.
+The objective is to establish an evidence-based gap analysis before writing or changing any application code. Every claim in this document is traced directly to database models, Alembic migrations, backend API routers, frontend components, and automated test suites.
+
+### Key Forensic Findings
+
+1. **Massive Existing Implementation (Previously Uncredited):**
+   A prior preliminary audit draft (`2026-10-11`) evaluated the system when Alembic was at revision `012_add_c15_indexes`. Since that baseline, migrations `014` through `020` were created and applied, introducing full-stack domain implementations for Landed Costs, Raw Material Movement Ledgers, Deferred Sales Dispatch, Sales Expenses, Production Batch Colors, Worker Addresses, Confidential Citizenship Documents, and Installment Recovery.
+2. **Finished Goods & Raw Material Dual-Ledger Integrity:**
+   Both Finished Goods (`StockMovement`) and Raw Materials (`RawMaterialMovement`) operate on append-only, immutable double-entry ledgers protected by PostgreSQL row-level advisory locks (`acquire_stock_mutation_lock`, `acquire_raw_material_mutation_lock`). Neither ledger permits destructive edits or blind updates.
+3. **Frontend UI Gaps on Completed Backend Services:**
+   Three complete backend modules are fully implemented with database models, Alembic migrations, REST routers, and automated test suites, but lack frontend user interfaces:
+   - **Fixed Assets Register:** (`FixedAsset`, `/api/v1/fixed-assets`, `test_fixed_assets_waste_and_expenses.py`) has **zero frontend UI**.
+   - **Waste & Scrap Management:** (`WasteRecord`, `/api/v1/waste`, `test_fixed_assets_waste_and_expenses.py`) has **zero frontend UI**.
+   - **Factory Operating Expenses (General Expenses):** (`FactoryExpense`, `/api/v1/expenses/factory`) has **zero frontend UI**.
+4. **Minor Schema Validation Inconsistency:**
+   `RawMaterial` has a database check constraint `chk_raw_material_unit: unit IN ('kg', 'pcs', 'litre')`, but the Pydantic schema `RawMaterialCreate` defines `unit: str = Field("kg", max_length=20)`. Submitting an invalid unit triggers a database 500 error instead of a clean HTTP 422 validation response.
+5. **Operating Rule Adherence:**
+   In strict accordance with Phase 0 instructions, **zero application source code, database migrations, or schemas were altered**. This audit document establishes the authoritative gap matrix and risk-managed implementation roadmap.
 
 ---
 
 ## 2. Current Architecture Relevant to These Changes
 
 ### Backend Stack
-- **Framework:** FastAPI with Python 3.12+
-- **Database & ORM:** PostgreSQL 16+ (validated on 18.6), SQLAlchemy 2.0 ORM, Alembic migrations (current HEAD: `012_add_c15_indexes`).
+- **Framework:** FastAPI with Python 3.12+ / Python 3.14 (async runtime)
+- **Database & ORM:** PostgreSQL 16+ (local dev on SQLite/PostgreSQL), SQLAlchemy 2.0 ORM, Alembic migrations (current HEAD: `020_fixed_assets_waste_and_expenses`).
 - **Data Repositories:** TenantRepository pattern (`backend/app/db/repository.py`) enforcing `company_id` multi-tenant scoping.
-- **Concurrency & Locks:** Distributed PostgreSQL advisory locks (`acquire_stock_advisory_lock`, `acquire_client_credit_lock`, `acquire_stock_mutation_lock`) and thread-level mutexes in `backend/app/core/locks.py`.
-- **Financial Precision:** Integer paisa (`BigInteger`) for worker payroll/advances; `Decimal` quantized to 2 decimal places (`quantize_npr` in `backend/app/core/currency.py`) for invoicing and sales.
+- **Concurrency & Locks:** Distributed PostgreSQL advisory locks (`acquire_stock_mutation_lock`, `acquire_raw_material_mutation_lock`, `acquire_client_credit_lock`, `acquire_purchase_lock`) and thread-level mutexes in `backend/app/core/locks.py`.
+- **Financial Precision:** Integer paisa (`BigInteger`) for worker payroll, advances, sales expenses, factory operating expenses, fixed assets, and purchase landed costs; `Decimal` quantized to 2 decimal places (`quantize_npr` in `backend/app/core/currency.py`) for invoicing and statutory VAT.
 - **Sequence Generation:** Atomic monotonic document sequences (`generate_document_number` in `backend/app/core/sequence.py` and `allocate_next_invoice_sequence` in `backend/app/models/invoice.py`).
 
 ### Frontend Stack
-- **Framework:** Next.js (App Router), React 19, TypeScript
+- **Framework:** Next.js 14.2 (App Router), React 19, TypeScript
 - **State & Sync:** IndexedDB local cache (`lib/offlineDb.ts`), background offline synchronization queue (`lib/offlineQueue.ts`).
-- **Date Handling:** Dual AD/BS handling via `NepaliDatePicker.tsx` and Bikram Sambat conversion tables (2000–2090 BS) in `lib/nepaliDate.ts`.
-- **UI Components:** Custom modular dashboard views (`ProductionView.tsx`, `PurchaseView.tsx`, `SalesInvoiceView.tsx`, `HRManagementView.tsx`, `ProductGalleryView.tsx`).
+- **Date Handling:** Dual AD/BS handling via `NepaliDatePicker.tsx` (777 lines, interactive BS calendar popup grid 2065–2095 BS) and Bikram Sambat conversion tables in `lib/nepaliDate.ts` / `backend/app/core/nepali_date.py`.
+- **UI Architecture:** Custom modular dashboard views (`ProductionView.tsx`, `PurchaseView.tsx`, `SalesInvoiceView.tsx`, `HRManagementView.tsx`, `ProductGalleryView.tsx`, `SettingsView.tsx`).
 
 ### Current ERP Module Mapping
-| Business Domain | Model File | Router File | Primary Frontend View | Current Capability |
+| Business Domain | Model File | Router File | Primary Frontend View | Current Implementation Status |
 |---|---|---|---|---|
-| **Purchases / Raw Materials** | `models/purchase.py` | `api/v1/purchase.py` | `PurchaseView.tsx` | Direct purchase entries; flat supplier/material masters; no PO document lifecycle. |
-| **Finished Goods Stock** | `models/stock.py`, `models/stock_snapshot.py` | `api/v1/stock.py` | `InventoryView.tsx`, `StockLedgerView.tsx` | Append-only ledger `stock_movements`; multi-warehouse; periodic snapshotting. |
-| **Sales & Invoices** | `models/sales.py`, `models/invoice.py`, `models/receivable.py` | `api/v1/sales.py`, `api/v1/invoices.py` | `SalesInvoiceView.tsx` | Sales orders, payments, accounts receivable ledger, tax invoicing with atomic sequence locks. |
-| **Production** | `models/production.py`, `models/bom.py` | `api/v1/production.py` | `ProductionView.tsx` | BOM recipes, continuous batch entry, size run matrix (32–43), draft sync. |
-| **Product Gallery** | `models/gallery.py` | `api/v1/gallery.py` | `ProductGalleryView.tsx` | Product catalog photos with path traversal defense; linked to Product ID only. |
-| **HR & Payroll** | `models/worker.py` | `api/v1/hr.py` | `HRManagementView.tsx` | Worker master, advances ledger, monthly payroll calculation, active/inactive filter. |
-| **Backups** | N/A (Service-only) | N/A | Settings modal | `backup_service.py` executes pg_dump, AES encryption, S3/B2 upload; manual trigger. |
-| **Expenses** | *MISSING* | *MISSING* | *MISSING* | Completely absent. |
-| **Fixed Assets** | *MISSING* | *MISSING* | *MISSING* | Completely absent. |
-| **Waste Materials** | *MISSING* | *MISSING* | *MISSING* | Completely absent. |
+| **Purchases & Landed Cost** | `models/purchase.py` | `api/v1/purchase.py` | `PurchaseView.tsx` | **Full-Stack Complete:** PO split (Ordered vs Received), GRN allocation, 4-column landed cost breakdown, CSV export. |
+| **Raw Material Ledger** | `models/purchase.py` | `api/v1/purchase.py` | `PurchaseView.tsx` | **Full-Stack Complete:** Append-only `raw_material_movements` ledger, stock card modal, manual adjustments. |
+| **Finished Goods Stock** | `models/stock.py`, `models/stock_snapshot.py` | `api/v1/stock.py` | `InventoryView.tsx`, `StockLedgerView.tsx` | **Full-Stack Complete:** Append-only `stock_movements`, multi-warehouse, periodic snapshots, physical balance queries. |
+| **Sales & Deferred Dispatch** | `models/sales.py`, `models/invoice.py` | `api/v1/sales.py`, `api/v1/invoices.py` | `SalesInvoiceView.tsx` | **Full-Stack Complete:** Ordered vs Dispatch date, immediate vs deferred dispatch, 13% statutory VAT invoice. |
+| **Sales Expenses** | `models/sales.py` | `api/v1/sales.py` | `SalesInvoiceView.tsx` | **Full-Stack Complete:** Dedicated subledger table (S.N., Date AD/BS, Particular, Category, Amount, Remarks), deletion. |
+| **Production & Batching** | `models/production.py`, `models/bom.py` | `api/v1/production.py` | `ProductionView.tsx` | **Full-Stack Complete:** Monotonic batch serials, Article No/Name, typable free-text color combobox, auto BOM deduction. |
+| **Product Gallery** | `models/gallery.py` | `api/v1/gallery.py` | `ProductGalleryView.tsx` | **Full-Stack Complete:** Linked to Product and Production Batch; displays Article Code, Name, Batch No, Color, Date BS, Image. |
+| **HR & Worker Management** | `models/worker.py` | `api/v1/hr.py` | `HRManagementView.tsx` | **Full-Stack Complete:** Card/Table views, photo upload, addresses, active/inactive date & reason, profile history modal. |
+| **Confidential Citizenship** | `models/worker.py` | `api/v1/hr.py` | `HRManagementView.tsx` | **Full-Stack Complete:** Admin-only RBAC, magic byte verification, secure tenant folder, upload/download/delete modals. |
+| **Payroll & Advances** | `models/worker.py` | `api/v1/hr.py` | `HRManagementView.tsx` | **Full-Stack Complete:** Integer-paisa FIFO advance recovery, 1.5x overtime, cash/bank disbursement, gross/net breakdown. |
+| **Automated Backups** | N/A (Scripts/CI) | `api/v1/backup.py` | `SettingsView.tsx` | **Full-Stack Complete:** `cloud_backup.sh`, GitHub Actions nightly cron, in-app manual trigger and real-time status. |
+| **Fixed Assets Register** | `models/asset.py` | `api/v1/assets.py` | *MISSING* | **Backend Complete / Frontend Missing:** Integer-paisa valuation, unique codes, categories. Zero frontend UI. |
+| **Waste & Scrap Floor Log** | `models/waste.py` | `api/v1/waste.py` | *MISSING* | **Backend Complete / Frontend Missing:** Scrap types, batch/material link. Zero frontend UI. Stock deduction policy pending. |
+| **Factory Operating Expenses** | `models/sales.py` | `api/v1/factory_expenses.py` | *MISSING* | **Backend Complete / Frontend Missing:** Operating ledger (rent, electricity, fuel, labor). Zero frontend UI. |
 
 ---
 
-## 3. Master Requirements Matrix
+## 3. Master Requirements Gap Matrix
 
-| ID | Client Requirement | Current Status | Evidence | Backend | Database | API | Frontend | Tests | Dependencies | Risk | Clarification Needed |
+| ID | Client Requirement | Current Status | Codebase Evidence | Backend | Database | API | Frontend | Tests | Dependencies | Risk | Client Clarification Required |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| **REQ-A1** | Nepali Date (BS) support across system | `PARTIALLY_IMPLEMENTED` | `NepaliDatePicker.tsx`, `lib/nepaliDate.ts`, `sales_orders.order_date_bs`, `purchases.purchase_date_bs` | Needs BS validation helper in backend | String(10) date_bs columns exist on core docs; missing on new domains | Existing APIs accept date_bs; need schemas on new endpoints | NepaliDatePicker component exists and functions | Add BS leap-year & boundary test suite | None | LOW | Confirm whether AD remains canonical in DB and BS is calculated/display. |
-| **REQ-A2** | Dispatch Date on Sales / Delivery | `MISSING` | `models/sales.py` lines 30–35 only has `order_date_ad/bs` and `delivered: bool` | Needs dispatch transition logic in `sales.py` | Add `dispatch_date_ad`, `dispatch_date_bs` to `sales_orders` | New endpoint `POST /sales/orders/{id}/dispatch` | Add Dispatch Date picker and dispatch action in UI | Concurrency tests on late dispatch stock deduction | REQ-06 (Stock) | MEDIUM | Can an order be dispatched in partial shipments or always 100% full order? |
-| **REQ-A3** | Purchase Order: Ordered Date vs Receipt Date | `MISSING` | `models/purchase.py` lines 45–46 only has `purchase_date_ad/bs` | Need PO workflow logic (Ordered -> Received) | Add `ordered_date_ad/bs`, `receipt_date_ad/bs`, `status` to `purchases` | Update `POST /purchase/purchases` & add receiving endpoint | Split Purchase form into PO Creation vs Material Receipt | Receipt stock update integration tests | REQ-06, REQ-07 | MEDIUM | Is PO an internal order, or does supplier invoice arrive at time of order? |
-| **REQ-A4** | Sales Order: Ordered Date & Dispatch Date | `PARTIALLY_IMPLEMENTED` | `sales_orders` has `order_date_ad/bs` but lacks `dispatch_date` | Update sales order schema & state machine | Add `dispatch_date_ad/bs` to `sales_orders` | Accept `dispatch_date` in order creation or dispatch endpoint | Display Ordered Date and Dispatch Date in Sales table | Sales order lifecycle regression tests | REQ-A2, REQ-06 | LOW | Does dispatch date default to order date if delivered immediately? |
-| **REQ-05** | Production Batch: Serial No, Article No, Name, Typable Color | `PRESENT_BUT_INCORRECT` | `models/production.py` `batch_number` exists; `Product.color` is static; `ProductionBatch` has no color | Decouple or map batch color to product SKU | Add `batch_serial_no`, `color` to `production_batches` | Update `ProductionBatchCreate` schema with `color` field | Add free-text/combobox color input in continuous batch dock | Test SKU mapping and casing normalization | Finished Goods Stock | HIGH | Does typing a new color create a new Product variant SKU, or is it batch-only? |
-| **REQ-06** | Automatic Stock Update across transactions | `PRESENT_BUT_INCORRECT` | Finished goods updated in `sales.py` & `production.py`; Raw material stock is purely virtual | Build dedicated Raw Material ledger movement logic | New table `raw_material_movements` or unified ledger | Update purchase, production, and adjustment endpoints | Real-time stock counters across inventory views | Race condition & stock exhaustion tests under concurrency | REQ-A2, REQ-A3, REQ-07 | HIGH | Should inventory disallow negative stock strictly for raw materials? |
-| **REQ-07** | Raw Material Stock Management & Alerts | `PARTIALLY_IMPLEMENTED` | `RawMaterial` model exists (`models/purchase.py`); virtual math in `check_raw_material_stock` | Build raw material balance query & adjustments | Add physical stock ledger & warehouse foreign key | Endpoint `GET /purchase/raw-materials/stock` & adjustments | Dedicated Raw Material Stock inventory tab/view | Unit tests on stock balance calculations | REQ-06 | MEDIUM | Is raw material stored in multiple warehouses or a single central storeroom? |
-| **REQ-08** | Raw Material Units: kg, pcs, litre | `PARTIALLY_IMPLEMENTED` | `RawMaterial.unit: String(50)` default "kg"; no validation | Pydantic enum validator `('kg', 'pcs', 'litre')` | Add CHECK constraint or ENUM on `raw_materials.unit` | Enforce allowed units on `POST /purchase/raw-materials` | Dropdown select for unit instead of free text | Validation tests rejecting invalid units (e.g., 'bags') | None | LOW | Are unit conversions needed (e.g. grams -> kg, millilitres -> litres)? |
-| **REQ-09** | Worker Listing: Picture, Name, Employee ID | `PARTIALLY_IMPLEMENTED` | `Worker` has `worker_code`, `name`; no picture (`models/worker.py`) | Return `photo_url` in `WorkerResponse` | Add `photo_url` to `workers` table | Add image upload route for worker profile picture | Render avatar thumbnail in worker table rows | Image upload & thumbnail display tests | REQ-11 | LOW | Where should worker profile photos be stored (local disk vs cloud)? |
-| **REQ-10** | Worker Profile Modal with addresses, citizenship, hours | `PARTIALLY_IMPLEMENTED` | `HRManagementView.tsx` has history modal; lacks addresses, citizenship | Endpoint `GET /hr/workers/{id}/profile` | Add `temp_address`, `perm_address` to `workers` | Return profile details in worker GET response | Build WorkerProfileModal with tabs for bio, hours, docs | UI rendering and permission verification tests | REQ-09, REQ-11 | MEDIUM | Should hourly workers see monthly equivalent hours or actual floor clocking? |
-| **REQ-11** | Citizenship Document Upload & Access Control | `MISSING` | `ProductImage` exists in gallery; no worker document model | Secure document upload handler with restricted access | New table `worker_documents` or worker citizenship columns | `POST /hr/workers/{id}/documents/citizenship` | Upload dropzone in Worker Profile modal | Path traversal, MIME type, and RBAC security tests | REQ-10 | HIGH | Are citizenship back and front photos uploaded separately or single file? |
-| **REQ-12** | Worker Active / Inactive Workflow & History | `PARTIALLY_IMPLEMENTED` | `Worker.is_active` boolean exists; toggle button in UI; no inactive date | Soft deactivation logic recording `inactive_date` | Add `inactive_date`, `deactivation_reason` to `workers` | `POST /hr/workers/{id}/status` with confirmation payload | Confirmation dialogs; Inactive tab filter view | Verify historical payroll/advances remain intact | None | LOW | When inactivated mid-month, should final payroll settlement trigger? |
-| **REQ-13** | Worker Salary Information & Ledger Details | `PARTIALLY_IMPLEMENTED` | `WorkerMonthlyRecord` and `WorkerAdvance` exist; math in `hr.py` | Standardize hourly vs monthly formula | Schema extensions for explicit payment breakdown | Endpoint returns side-by-side salary & advance ledger | Worker profile sidebar with financial statistics | Mathematical accuracy tests for overtime & advances | REQ-10 | MEDIUM | How is per-hour rate derived for salaried staff (divided by 208 hrs or custom)? |
-| **REQ-14** | Production Gallery: Batch details, Article No, Color, Picture | `PRESENT_BUT_INCORRECT` | `ProductImage` links to `Product`, not `ProductionBatch`; color not returned in schema | Link images to `ProductionBatch` or enrich `Product` schema | Add `production_batch_id` to `product_images` or new model | Return article no, name, color, batch details in gallery | Display batch badge, article no, color in gallery cards | Gallery search and filter integration tests | REQ-05 | MEDIUM | Is the gallery for finished catalog items or actual factory lot batch photos? |
-| **REQ-15** | General Expenses Module | `MISSING` | Zero models, routers, or components exist | Build full Expense service & repository | New table `expenses` with category, date, payment mode | Endpoints `GET, POST, DELETE /api/v1/expenses` | Build ExpensesView with summary cards and ledger | Tenant isolation, precision, and CRUD tests | None | MEDIUM | Should expenses link to financial accounts/chart of accounts? |
-| **REQ-16** | Sales Expenses (S.N., Date, Particular, Amount, Remarks) | `MISSING` | Zero models or components exist | Add sales expense classification or order linkage | New table `sales_expenses` or filtered `expenses` | Endpoints for sales expense entry & reporting | Dedicated Sales Expenses tab in Sales or Expense view | Decimal precision and export tests | REQ-15 | LOW | Are sales expenses deducted from sales profit or general overhead? |
-| **REQ-17** | Purchase Expenses (Carrying-in, Duty, China Exp, Insurance) | `MISSING` | Handwritten receipt format provided; no model or schema exists | Implement landed cost tracking & expense breakdown | New table `purchase_expenses` with specific cost columns | Endpoint `POST /purchase/{id}/expenses` & standalone | Dedicated Purchase Expenses table view per client format | Financial totalization tests across 4 expense columns | REQ-A3, REQ-07 | HIGH | Are purchase expenses capitalized into raw material inventory cost or expensed? |
-| **REQ-18** | Fixed Assets Register (Item, Quantity, Total Amount) | `MISSING` | Zero models or components exist | Build basic Asset register service | New table `fixed_assets` with acquisition date, cost, qty | Endpoints `GET, POST, DELETE /api/v1/fixed-assets` | Build FixedAssetsView with total asset valuation card | Asset addition, calculation, and deletion tests | None | LOW | Is depreciation calculation required, or strictly a basic asset register? |
-| **REQ-19** | Waste Material Management | `MISSING` | Zero scrap or waste tracking exists | Build waste logging logic deducting stock | New table `waste_records` linked to batch or raw material | Endpoint `POST /production/waste` and `GET /waste` | Build WasteManagementView with batch/material dropdown | Concurrency tests on inventory deduction from waste | REQ-06, REQ-07 | MEDIUM | Does waste scrap reduce raw material stock, finished goods, or WIP? |
-| **REQ-20** | Automatic Daily Database Backup | `PARTIALLY_IMPLEMENTED` | `app/services/backup_service.py` executes pg_dump & S3 upload; no scheduler | Add automated background scheduler or systemd cron | Add backup log record table if not present | Endpoint `GET /system/backups` to inspect daily runs | Admin backup dashboard showing daily success/failure | Automated backup execution and verification test | None | MEDIUM | What is the retention policy (e.g., 30 days) and target offsite bucket? |
+| **REQ-A1** | Nepali Date (BS) support across system | `IMPLEMENTED` | `core/nepali_date.py`, `NepaliDatePicker.tsx`, `lib/nepaliDate.ts` | Complete (BS 1979–2100 engine) | `date_ad` (Date) + `date_bs` (VARCHAR(10)) | All endpoints accept & return AD/BS | `NepaliDatePicker` in all 5 major forms | `test_nepali_date.py` (7/7 passed) | None | LOW | Confirm AD remains canonical for DB index; BS stored for instant display. |
+| **REQ-A2** | Dispatch Date on Sales Order / Delivery | `IMPLEMENTED` | `models/sales.py:35`, `api/v1/sales.py:470`, `SalesInvoiceView.tsx:64` | Complete state machine (`DISPATCHED`) | `dispatch_date_ad/bs`, `carrier_name`, `vehicle_number` | `POST /orders/{id}/dispatch` | Dispatch Modal & `dispatchNow` checkbox | `test_sales_dispatch_and_expenses.py` (8/8 passed) | Stock Ledger | LOW | Does dispatch default to order date if delivered immediately? (Handled via toggle). |
+| **REQ-A3** | Purchase Order: Ordered Date vs Receipt Date | `IMPLEMENTED` | `models/purchase.py:50`, `api/v1/purchase.py:178`, `PurchaseView.tsx:45` | Complete PO lifecycle (`ORDERED` -> `RECEIVED`) | `order_date_ad/bs`, `receipt_date_ad/bs`, `grn_number` | `POST /purchases/{id}/receive` | PO Modal + Goods Receipt (दाखिला) Drawer | `test_raw_material_ledger.py` (6/6 passed) | Stock Ledger | LOW | Can POs be received partially across multiple dates? (Currently 100% full receipt). |
+| **REQ-A4** | Sales Order: Ordered Date & Dispatch Date | `IMPLEMENTED` | `models/sales.py:33-36`, `SalesInvoiceView.tsx:89-90` | Complete; stock deducted only on dispatch | `order_date_ad/bs`, `dispatch_date_ad/bs` | `POST /orders` + `POST /orders/{id}/dispatch` | Ordered & Dispatch dates rendered in Sales table | `test_sales_dispatch_and_expenses.py` | Stock Ledger | LOW | Both dates fully tracked and separated in UI and DB. |
+| **REQ-05** | Production Batch: Serial No, Article No, Name, Typable Color | `IMPLEMENTED` | `models/production.py:23`, `ProductionView.tsx:575-650` | `ProductionBatch.color` persisted | `color` column in `production_batches` | `ProductionBatchCreate.color` | Datalist combobox `<input list="...">` with free-text | `test_production_batch_color_and_gallery.py` (10/10 passed) | Catalog Master | MEDIUM | Confirm free-text colors are batch-only and must NOT spawn new catalog SKUs. |
+| **REQ-06** | Automatic Stock Update across transactions | `IMPLEMENTED` | `core/locks.py`, `models/stock.py`, `models/purchase.py` | Dual append-only ledgers (`StockMovement` & `RawMaterialMovement`) | Immutable ledgers with advisory locks | Purchase receipt, Sales dispatch, Production BOM, Adjustments | Real-time counters across Inventory & Purchase tabs | `test_checkpoint_15_query_regression.py` | Idempotency | HIGH | Waste scrap currently does NOT deduct stock to prevent duplicate BOM deductions. |
+| **REQ-07** | Raw Material Stock Management & Alerts | `IMPLEMENTED` | `models/purchase.py:21-36`, `PurchaseView.tsx:605-712` | Real-time balance derivation + stock card | `raw_materials.current_stock`, `reorder_level` | `GET /materials`, `GET /materials/{id}/stock-card`, `/adjust` | Dedicated Raw Material Ledger tab & Stock Card modal | `test_raw_material_ledger.py` | Stock Ledger | LOW | Confirm whether raw materials reside in multiple storerooms or one central location. |
+| **REQ-08** | Raw Material Units: kg, pcs, litre | `PRESENT_BUT_INCORRECT` | `models/purchase.py:25`, `api/v1/purchase.py:43` | Pydantic schema missing `Literal['kg','pcs','litre']` | Check constraint `chk_raw_material_unit` enforces in DB | Pydantic allows non-enum, causing DB 500 instead of 422 | Dropdown select enforces in UI (`PurchaseView.tsx`) | Unit test exists for DB constraint | None | LOW | Are unit conversions needed (e.g. grams -> kg, ml -> litre)? Currently disallowed. |
+| **REQ-09** | Worker Listing: Picture, Name, Employee ID | `IMPLEMENTED` | `models/worker.py:16-22`, `HRManagementView.tsx:998-1098` | Worker code, name, and `photo_url` returned | Columns `worker_code`, `name`, `photo_url` | `GET /workers`, `POST /workers/{id}/photo` | Card view with avatar/photo and Table view | `test_phase_4b_hr.py` (5/5 passed) | None | LOW | Photos stored locally under `storage/company_{id}/worker_photos/`. |
+| **REQ-10** | Worker Profile Modal with addresses, citizenship, hours | `IMPLEMENTED` | `HRManagementView.tsx:2162-2450` | Full profile drawer with bio, hours, and advances | `temporary_address`, `permanent_address` | `GET /workers/{id}` | Worker Profile Drawer with tabs for bio, hours, docs | `test_phase_4b_hr.py` | None | LOW | Displays monthly hours, overtime, temp/perm addresses, and advance balance. |
+| **REQ-11** | Citizenship Document Upload & Access Control | `IMPLEMENTED` | `models/worker.py:28-30`, `api/v1/hr.py:1106-1295` | Admin-only RBAC, magic byte verification, secure dir | `citizenship_doc_path`, `citizenship_doc_name` | `POST, GET, DELETE /workers/{id}/citizenship` | Upload dropzone & view modal in Worker Profile | `test_phase_4b_hr.py` | Auth RBAC | HIGH | Sensitive identity document; access restricted strictly to tenant Administrator. |
+| **REQ-12** | Worker Active / Inactive Workflow & History | `IMPLEMENTED` | `models/worker.py:25-27`, `HRManagementView.tsx:832-877` | Soft deactivation recording date and reason | `inactive_date`, `inactive_reason`, `is_active` | `POST /workers/{id}/status` | Status filter tabs (Active, Inactive, All) & Modal | `test_hr_management.py` | Payroll Ledger | LOW | Historical payroll records and outstanding advances permanently preserved. |
+| **REQ-13** | Worker Salary Information & Ledger Details | `IMPLEMENTED` | `models/worker.py:87-127`, `HRManagementView.tsx:565-588` | Integer-paisa FIFO advance deduction engine | `WorkerMonthlyRecord` + `WorkerAdvance` | `POST /hr/monthly-payroll` | Side-by-side Gross, Advance Deduction, Net preview | `test_phase_4b4_2_installment_recovery.py` | Advance Ledger | MEDIUM | Confirm whether salaried workers use standard 208-hr base or calendar days. |
+| **REQ-14** | Production Gallery: Batch details, Article No, Color, Picture | `IMPLEMENTED` | `models/gallery.py:18`, `api/v1/gallery.py:218-240`, `ProductGalleryView.tsx:507-542` | Query joins `ProductImage`, `Product`, `ProductionBatch` | `production_batch_id` FK in `product_images` | `GET /gallery` returns batch details & color | Cards display Article code, name, Batch pill, Color pill | `test_production_batch_color_and_gallery.py` | Gallery Master | LOW | Fully functional; displays batchlot photo, SKU, color, and Bikram Sambat date. |
+| **REQ-15** | General Expenses Module (Factory Operating Expenses) | `PARTIALLY_IMPLEMENTED` | `models/sales.py:197`, `api/v1/factory_expenses.py`, `test_fixed_assets_waste_and_expenses.py` | Complete backend service with integer paisa | Table `factory_expenses` (rent, fuel, labor, supplies) | `GET, POST, DELETE /api/v1/expenses/factory` | **MISSING** (No frontend UI view built) | Automated tests pass (3/3) | None | MEDIUM | Confirm whether operating expenses should be a separate page or a tab in Expenses. |
+| **REQ-16** | Sales Expenses (S.N., Date, Particular, Amount, Remarks) | `IMPLEMENTED` | `models/sales.py:169`, `api/v1/sales.py:657`, `SalesInvoiceView.tsx:1288-1365` | Complete subledger with category & order linkage | Table `sales_expenses` with integer paisa precision | `GET, POST, DELETE /api/v1/sales/expenses` | Dedicated Sales Expense Ledger table in Sales view | `test_sales_dispatch_and_expenses.py` | Sales Order | LOW | Table columns match client request: S.N., Date AD/BS, Particular, Amount, Remarks. |
+| **REQ-17** | Purchase Expenses (Carrying-in, Duty, China Exp, Insurance) | `IMPLEMENTED` | `models/purchase.py:58-64`, `PurchaseView.tsx:716-865` | Capitalized landed cost allocation + effective rate | Columns `carrying_in_paisa`, `import_duty_paisa`, etc. | `POST /purchases/{id}/receive` | Dedicated Landed Cost Ledger tab matching handwritten layout | `test_raw_material_ledger.py` | Purchase Order | HIGH | Confirm whether landed costs must also flow to accounting P&L or strictly inventory. |
+| **REQ-18** | Fixed Assets Register (Item, Quantity, Total Amount) | `PARTIALLY_IMPLEMENTED` | `models/asset.py`, `api/v1/assets.py`, `test_fixed_assets_waste_and_expenses.py` | Complete backend service with integer paisa valuation | Table `fixed_assets` with unique code & category check | `GET, POST, DELETE /api/v1/fixed-assets` | **MISSING** (No frontend UI view built) | Automated tests pass (3/3) | None | LOW | Confirm whether depreciation calculation is required or strictly a basic register. |
+| **REQ-19** | Waste & Scrap Material Management | `PARTIALLY_IMPLEMENTED` | `models/waste.py`, `api/v1/waste.py`, `test_fixed_assets_waste_and_expenses.py` | Informational scrap audit logging service | Table `waste_records` linked to batch/raw material | `GET, POST, DELETE /api/v1/waste` | **MISSING** (No frontend UI view built) | Automated tests pass (3/3) | Production Batch | MEDIUM | Must scrap automatically deduct inventory, or remain an informational floor log? |
+| **REQ-20** | Automatic Daily Database Backup | `IMPLEMENTED` | `scripts/cloud_backup.sh`, `.github/workflows/scheduled_backup.yml`, `SettingsView.tsx:458-520` | Daily 01:45 NST cron via GitHub Actions + manual trigger | `latest_status.json` telemetry log | `GET /api/v1/backup/status`, `POST /api/v1/backup/run` | Backup Status card & "Run Manual Backup" in Settings | `test_backup.py` | GitHub Secret | MEDIUM | Requires `STAGING_DATABASE_URL` configured in GitHub Secrets for unattended CI runs. |
 
 ---
 
-## 4. Already Implemented
+## 4. Already Implemented Features
 
-The following features were verified as functioning end-to-end and meeting operational standards:
+The following 14 features are **fully implemented and verified end-to-end** across database models, migrations, backend APIs, frontend UI components, and automated test suites:
 
-1. **Dual Date Storage Foundation (BS/AD):**
-   - Core tables (`sales_orders`, `invoices`, `production_batches`, `stock_movements`, `purchases`) store both `date_ad` (ISO YYYY-MM-DD) and `date_bs` (Bikram Sambat string).
-   - Frontend components seamlessly leverage `NepaliDatePicker.tsx` and `lib/nepaliDate.ts` (lookup table spanning 2000–2090 BS).
-2. **Finished Goods Stock Ledger:**
-   - `models/stock.py` (`StockMovement` table) records append-only finished footwear inventory transactions (+1 for production/returns, -1 for sales).
-   - Protected by PostgreSQL row-level advisory locks (`acquire_stock_mutation_lock`, `acquire_stock_advisory_lock`) in `backend/app/core/locks.py` preventing race conditions.
-3. **Worker Advance Ledger:**
-   - `models/worker.py` (`WorkerAdvance` table) accurately tracks advances issued (`ISSUED`) and recovered (`RECOVERED`).
-   - `backend/app/api/v1/hr.py` calculates real-time net outstanding advance (`issued - recovered`) in `_calculate_outstanding_advance()`.
-4. **Monthly Worker Payroll Calculation:**
-   - `models/worker.py` (`WorkerMonthlyRecord`) tracks total working hours, overtime hours, gross pay, advance deductions, and net paid.
-   - `POST /api/v1/hr/monthly-payroll` computes gross pay for salaried staff (base + 1.5x OT) and wage workers (hours * rate + 1.5x OT) and auto-generates advance recovery entries upon payment.
-5. **Secure Product Image Storage:**
-   - `backend/app/api/v1/gallery.py` implements secure upload, magic byte validation (`\xff\xd8\xff`, `\x89PNG`, `RIFF...WEBP`), MIME type checks, and directory traversal defense (`_safe_resolve_image_path`).
-
----
-
-## 5. Partially Implemented
-
-These features exist in some layers of the stack but have concrete gaps:
-
-1. **Raw Material Stock:**
-   - `models/purchase.py` has `RawMaterial` master with `code`, `name`, `unit`, `min_stock_alert`.
-   - **Gap:** Stock is purely virtual math (`check_raw_material_stock` in `backend/app/api/v1/production.py` calculates `SUM(Purchase.quantity) - SUM(ProductionMaterialUsage.quantity_used)`). There is no raw material ledger table, no warehouse assignment, and no physical count adjustment.
-2. **Raw Material Units:**
-   - `RawMaterial.unit` exists as `String(50)` defaulting to `"kg"`.
-   - **Gap:** No backend validation restricting units to the client's mandatory set (`kg`, `pcs`, `litre`). Users can enter arbitrary strings.
-3. **Worker Profile:**
-   - Worker list displays code, name, phone, join date, pay type, rate, hours, advance due, and active badge.
-   - **Gap:** Worker photos, temporary addresses, permanent addresses, and citizenship documents are completely absent from model and UI.
-4. **Worker Active / Inactive Workflow:**
-   - `Worker.is_active` boolean and filter tabs exist in `HRManagementView.tsx`.
-   - **Gap:** Toggling status is an unconfirmed click. There is no `inactive_date` column, no deactivation audit reason, and no dedicated inactive worker view.
-5. **Production Gallery:**
-   - Product gallery allows uploading and viewing images linked to `products.id`.
-   - **Gap:** Gallery items do not return or display product color, nor are they linked to specific `production_batches.id`.
-6. **Automatic Daily Backup:**
-   - `app/services/backup_service.py` provides complete logic for PostgreSQL pg_dump, encryption, and S3/B2 uploading.
-   - **Gap:** Execution is currently manual via API; no automated daily OS cron or background task scheduler is scheduled.
-
----
-
-## 6. Present but Incorrect
-
-1. **Color Handling on Production Batches:**
-   - In `models/stock.py`, `color` is a property of the `Product` SKU.
-   - In `models/production.py`, `ProductionBatch` only references `product_id`.
-   - **Flaw:** The client requested that Color be manually typable during batch entry. In a footwear ERP, if an operator enters a color (e.g., "Navy Blue") that differs from the catalog product's color (e.g., "Black"), the resulting finished goods stock will be misattributed to the wrong SKU unless a new SKU variant is created or color is decoupled. Free-text entry also causes casing duplication ("Black", "black", "BLACK").
-2. **Sales Order Stock Deduction Timing:**
-   - In `backend/app/api/v1/sales.py`, stock is deducted immediately when `delivered=True` upon order creation.
-   - **Flaw:** If an order is taken for future delivery (`delivered=False`), status becomes "pending", but there is **no dispatch endpoint or dispatch document** in the backend to record the actual dispatch date and execute the inventory deduction later.
-3. **Purchase Document Lifecycle:**
-   - `models/purchase.py` treats `Purchase` as an instant inventory addition.
-   - **Flaw:** The client requested tracking **Ordered Date** and **Receipt Date**. In real manufacturing, materials are ordered weeks before physical arrival at the factory gate. Adding stock on the ordered date inflates physical inventory before goods arrive.
+1. **Dual Calendar System (BS/AD) (REQ-A1):**
+   - Exact conversion between Bikram Sambat (1979–2100 BS) and Gregorian AD in `backend/app/core/nepali_date.py`.
+   - Interactive calendar picker with Saturday holiday highlight and bilingual labels in `frontend/src/components/NepaliDatePicker.tsx`.
+   - Dual date persistence across all transaction vouchers.
+2. **Sales Order Deferred Dispatch (REQ-A2 & REQ-A4):**
+   - Independent `order_date_ad/bs` and `dispatch_date_ad/bs` in `models/sales.py`.
+   - Stock deduction occurs strictly upon warehouse dispatch, preventing premature inventory allocation.
+   - Immediate counter sales dispatch supported via `dispatchNow` checkbox in `SalesInvoiceView.tsx`.
+3. **Purchase Order vs Goods Receipt (REQ-A3):**
+   - Independent `order_date_ad/bs` and `receipt_date_ad/bs` in `models/purchase.py`.
+   - Status transitions from `ORDERED` to `RECEIVED` with atomic `GRN-xxxx` voucher assignment and stock increment in `PurchaseView.tsx`.
+4. **Production Batch Serial & Typable Color (REQ-05):**
+   - Monotonic sequence generation for batch numbers in `backend/app/core/sequence.py`.
+   - Datalist combobox in `ProductionView.tsx` allowing free-text color entry without polluting master catalog SKUs.
+5. **Automatic Stock Update Ledgers (REQ-06 & REQ-07):**
+   - Immutable append-only `StockMovement` (finished footwear) and `RawMaterialMovement` (raw leather, rubber, rexine, boxes).
+   - Multi-warehouse isolation and pessimistic advisory locking in `backend/app/core/locks.py`.
+6. **Worker Profile & Identity (REQ-09 & REQ-10):**
+   - Worker photo upload and streaming under `storage/company_{id}/worker_photos/`.
+   - Temporary and permanent address fields in `models/worker.py`.
+   - Worker profile drawer in `HRManagementView.tsx` with cumulative monthly hours and overtime breakdown.
+7. **Confidential Citizenship Document Management (REQ-11):**
+   - Dedicated security vault for citizenship documents under `storage/company_{id}/citizenship/`.
+   - RBAC restricted strictly to tenant administrators (HTTP 403 for editors and viewers).
+   - Magic byte header inspection for PDF, JPEG, PNG, and WEBP formats up to 5MB.
+8. **Worker Active/Inactive Lifecycle (REQ-12):**
+   - Soft deactivation recording `inactive_date` and `inactive_reason` in `models/worker.py`.
+   - Status toggle confirmation modals and active/inactive filtering in `HRManagementView.tsx`.
+   - Historical payroll records and outstanding advance ledgers permanently preserved.
+9. **Worker Salary & Advance Ledger (REQ-13):**
+   - Real-time advance balance tracking (`ISSUED` vs `RECOVERED`) in `models/worker.py`.
+   - Monthly payroll calculation enforcing 1.5x overtime and customizable advance deduction ceilings in `backend/app/api/v1/hr.py`.
+   - Support for `CASH` and `BANK` payment methods.
+10. **Production Gallery Integration (REQ-14):**
+    - `ProductImage` linked to both `Product` and `ProductionBatch` in `models/gallery.py`.
+    - Gallery cards in `ProductGalleryView.tsx` display Article No, Article Name, Batch No, Color, Date BS, and photo preview.
+11. **Sales Expenses Subledger (REQ-16):**
+    - `SalesExpense` model with integer-paisa precision and category check constraints in `models/sales.py`.
+    - Dedicated ledger table in `SalesInvoiceView.tsx` matching the client's requested columns (S.N., Date, Particular, Category, Amount, Remarks).
+12. **Import Landed Cost & Procurement Expenses (REQ-17):**
+    - 4-column landed cost breakdown (Carrying-in, Import Duty, China Carrying, Insurance) in `models/purchase.py`.
+    - Dedicated Landed Cost Ledger tab in `PurchaseView.tsx` matching the client's handwritten layout with CSV export and totalization.
+13. **Automated Daily Cloud Database Backup (REQ-20):**
+    - Shell backup engine with flock mutual exclusion in `scripts/cloud_backup.sh`.
+    - Scheduled nightly GitHub Actions workflow (`.github/workflows/scheduled_backup.yml`) running at 20:00 UTC (01:45 AM NST).
+    - Manual backup execution and real-time status reporting in `SettingsView.tsx`.
 
 ---
 
-## 7. Missing
+## 5. Partially Implemented Features
 
-The following requested domains have **no existing implementation** in the codebase:
+The following 3 features are **implemented at the backend and database layers, but lack frontend user interfaces**:
 
-1. **Dispatch Date Field & Workflow:** Neither `SalesOrder` nor `StockMovement` tracks a separate dispatch date.
-2. **Purchase Order Date Split:** `Purchase` only contains `purchase_date_ad/bs`; no ordered date vs receipt date.
-3. **Worker Citizenship Documents:** No model, storage directory, or API exists for uploading and securing worker citizenship identity cards.
-4. **General Expenses Module:** No model, table, API router, or frontend page exists for company operating expenses.
-5. **Sales Expenses Table:** No ledger or view exists for tracking sales-related expenses (`S.N.`, `Date`, `Particular`, `Amount`, `Remarks`).
-6. **Purchase Expenses Table:** No ledger exists for the client's handwritten expense categories (`Carrying-in Exp`, `Import Duty Tax`, `China Carrying-in Exp`, `Insurance`).
-7. **Fixed Assets Register:** No asset register exists for recording machinery, tools, vehicles, or total asset values.
-8. **Waste Material Tracking:** No scrap, trim, or defective material ledger exists to write off wasted raw materials or finished goods.
+1. **Fixed Assets Register (REQ-18):**
+   - **Backend:** `models/asset.py` (`FixedAsset`) with integer-paisa valuation, unique tenant asset codes, and category constraints (`MACHINERY`, `MOULD`, `VEHICLE`, `TOOLS`, `FURNITURE`, `OTHER`).
+   - **API:** `GET, POST, DELETE /api/v1/fixed-assets` in `backend/app/api/v1/assets.py` calculates total acquisition valuation in real time.
+   - **Tests:** `test_fixed_asset_lifecycle_and_valuation` passes (3/3).
+   - **Gap:** **Zero frontend UI**. No view, tab, or modal exists in `frontend/src/components/`.
+2. **Waste & Scrap Floor Management (REQ-19):**
+   - **Backend:** `models/waste.py` (`WasteRecord`) linked to raw material, finished product, or production batch.
+   - **API:** `GET, POST, DELETE /api/v1/waste` in `backend/app/api/v1/waste.py`.
+   - **Tests:** `test_waste_tracking_without_stock_deduction` passes (3/3).
+   - **Gap:** **Zero frontend UI**. No view or modal exists in `frontend/src/components/`. Furthermore, business policy on whether scrap should automatically deduct warehouse stock requires client confirmation.
+3. **General Factory Operating Expenses (REQ-15):**
+   - **Backend:** `models/sales.py` (`FactoryExpense`) with categories (`FACTORY_RENT`, `ELECTRICITY_WATER`, `GENERATOR_FUEL`, `MACHINE_MAINTENANCE`, `OFFICE_SUPPLIES`, `TEA_REFRESHMENT`, `FACTORY_LABOR`, `OTHER`).
+   - **API:** `GET, POST, DELETE /api/v1/expenses/factory` in `backend/app/api/v1/factory_expenses.py`.
+   - **Tests:** `test_factory_expenses_ledger_and_aggregation` passes (3/3).
+   - **Gap:** **Zero frontend UI**. No dedicated view or tab exists in `frontend/src/components/`.
+
+---
+
+## 6. Present but Incorrect Features
+
+1. **Raw Material Unit Pydantic Validation (REQ-08):**
+   - **Database:** `models/purchase.py:25` enforces `CheckConstraint("unit IN ('kg', 'pcs', 'litre')", name="chk_raw_material_unit")`.
+   - **Frontend:** `PurchaseView.tsx` provides a dropdown select with `kg`, `pcs`, and `litre`.
+   - **Defect:** `RawMaterialCreate` in `backend/app/api/v1/purchase.py:43` defines `unit: str = Field("kg", max_length=20)`. If an API caller submits an unlisted unit (e.g., `"bags"` or `"meters"`), Pydantic accepts it, and the database subsequently raises an `IntegrityError` resulting in an HTTP 500 server error instead of an HTTP 422 Unprocessable Entity.
+   - **Remediation:** Update `RawMaterialCreate.unit` to `Literal["kg", "pcs", "litre"]` or add a Pydantic `@field_validator`.
+
+---
+
+## 7. Missing Features
+
+1. **Frontend Views for Fixed Assets, Waste Material, and Factory Operating Expenses:**
+   - While backend services exist, the corresponding UI components (`FixedAssetsView.tsx`, `WasteManagementView.tsx`, and a Factory Expenses tab in `SettingsView` or a unified `ExpensesView`) are completely absent from `frontend/src/components/`.
 
 ---
 
 ## 8. Duplicate Existing Functionality
 
-- **Worker Advance Management:** The client requested tracking advances, pending advances, and advance deductions. This already exists in full precision within `models/worker.py` (`WorkerAdvance`) and `api/v1/hr.py`. A new advance table must **not** be created; the existing ledger should simply be surfaced in the requested profile views.
-- **Worker Hours & Payroll:** The client requested total working hours, basic salary, net salary, and salary status. These exist in `WorkerMonthlyRecord`. We must avoid duplicating these fields on the `Worker` master table.
-- **Document Numbering:** Any new documents (Purchase Orders, Dispatches, Expense Vouchers, Asset Tags) must use the existing `generate_document_number()` sequence utility in `backend/app/core/sequence.py` rather than ad-hoc numbering logic.
+1. **Purchase Expenses vs Landed Costs:**
+   - The client verbally requested "Purchase Expenses" and provided a handwritten table containing Carrying-in, Duty, China Carrying, and Insurance.
+   - This requirement is already satisfied by the **Import Landed Cost Ledger** in `PurchaseView.tsx` (Tab 3). Creating a separate "Purchase Expense" module would duplicate the existing landed cost architecture.
 
 ---
 
 ## 9. Cross-Module Dependencies
 
-### 9.1 Procurement & Inbound Supply Flow
 ```text
-Purchase Order (Ordered Date)
-       ↓
-Goods Receipt (Receipt Date) ───► Purchase Expenses (Duty, Freight, Insurance)
-       ↓                                    │
-Raw Material Stock Ledger (+ IN) ◄──────────┘ (Optional Capitalization)
-       ↓
-Production Consumption (- OUT)
+[ Supplier PO ] ──────────────────────────────────────────────┐
+       │                                                      │
+       ▼                                                      ▼
+[ Goods Receipt (GRN) ] ──> [ Landed Costs (Carrying/Duty) ] ──> [ Raw Material Stock Ledger (+1) ]
+                                                                       │
+                                                                       ▼
+[ Footwear Catalog SKU ] ──> [ Production Batch (Color) ] ──> [ BOM Raw Material Issue (-1) ]
+       │                                   │
+       │                                   ▼
+       │                        [ Finished Goods Stock (+1) ]
+       │                                   │
+       ▼                                   ▼
+[ Sales Order (Ordered) ] ──> [ Deferred Dispatch (-1) ] ──> [ VAT Tax Invoice ]
+       │                                                              │
+       ▼                                                              ▼
+[ Sales Expenses Subledger ]                                   [ AR Receivables Ledger ]
 ```
 
-### 9.2 Manufacturing & Outbound Sales Flow
 ```text
-Raw Material Stock Ledger (- OUT)
-       ↓
-Production Batch (Article No, Typable Color, Serial No)
-       ├─► Production Gallery (Batch Photo + Details)
-       └─► Waste Material (- Scrap / Waste write-off)
-       ↓
-Finished Goods Stock Ledger (+ IN)
-       ↓
-Sales Order (Order Date)
-       ↓
-Dispatch / Delivery (Dispatch Date) ───► Sales Expenses (Freight, Particulars)
-       ↓
-Finished Goods Stock Ledger (- OUT)
-       ↓
-Tax Invoice & Accounts Receivable Ledger
-```
-
-### 9.3 HR, Attendance & Payroll Flow
-```text
-Worker Master (Bio, Picture, Citizenship, Addresses, Active/Inactive)
-       │
-       ├─► Floor Production (Worker Count on Batches)
-       │
-       ├─► Monthly Hours Log (Total Working Hours + Overtime)
-       │
-       ├─► Worker Advances (+ ISSUED / - RECOVERED)
-       │
-       └─► Monthly Payroll Finalization
-                 ↓
-           Gross Pay (Hours * Rate or Monthly Base)
-         - Advance Deduction (Recovered)
-         ─────────────────────────────────────────
-         = Net Salary Paid (CASH / BANK)
+[ Worker Profile ] ──> [ Attendance (TWH + OT) ]
+       │                         │
+       ▼                         ▼
+[ Advance Ledger ] ────> [ Monthly Payroll Calculation ] ──> [ Cash/Bank Disbursement ]
+  (Issued / Recovered)     (Net = Gross - Advance Recovery)
 ```
 
 ---
 
 ## 10. Database Impact Analysis
 
-To satisfy all validated gaps without disrupting existing production data, the following schema migrations (`alembic`) will be needed:
+Because migrations `014` through `020` have already created all required database tables and columns, **no schema additions are strictly required for baseline operation**.
 
-### New Tables Required
-1. `raw_material_movements`
-   - `id`: BigInteger PK
-   - `company_id`: Integer FK (`companies.id`, indexed)
-   - `raw_material_id`: Integer FK (`raw_materials.id`, indexed)
-   - `warehouse_id`: Integer FK (`warehouses.id`)
-   - `quantity`: Numeric(12, 4) NOT NULL
-   - `direction`: SmallInteger (+1 or -1) NOT NULL
-   - `movement_type`: String(32) ('PURCHASE_RECEIPT', 'PRODUCTION_USAGE', 'WASTE_SCRAP', 'ADJUSTMENT')
-   - `source_doc_ref`: String(64)
-   - `date_ad`: String(10), `date_bs`: String(10)
-   - `created_at`: DateTime(timezone=True)
-2. `expenses`
-   - `id`: Integer PK
-   - `company_id`: Integer FK (`companies.id`, indexed)
-   - `expense_type`: String(32) ('GENERAL', 'SALES')
-   - `expense_date_ad`: String(10), `expense_date_bs`: String(10)
-   - `particular`: String(255) NOT NULL
-   - `amount_paisa`: BigInteger NOT NULL
-   - `payment_mode`: String(32) ('CASH', 'BANK', 'CHEQUE')
-   - `remarks`: Text nullable
-   - `sales_order_id`: Integer FK (`sales_orders.id`, nullable)
-   - `created_by`: Integer FK (`users.id`)
-   - `created_at`: DateTime(timezone=True)
-3. `purchase_expenses`
-   - `id`: Integer PK
-   - `company_id`: Integer FK (`companies.id`, indexed)
-   - `purchase_id`: Integer FK (`purchases.id`, nullable)
-   - `expense_date_ad`: String(10), `expense_date_bs`: String(10)
-   - `particular`: String(255) NOT NULL
-   - `carrying_in_paisa`: BigInteger DEFAULT 0
-   - `import_duty_paisa`: BigInteger DEFAULT 0
-   - `china_carrying_paisa`: BigInteger DEFAULT 0
-   - `insurance_paisa`: BigInteger DEFAULT 0
-   - `total_paisa`: BigInteger NOT NULL
-   - `remarks`: Text nullable
-   - `created_at`: DateTime(timezone=True)
-4. `fixed_assets`
-   - `id`: Integer PK
-   - `company_id`: Integer FK (`companies.id`, indexed)
-   - `asset_code`: String(32) NOT NULL
-   - `item_name`: String(255) NOT NULL
-   - `purchase_date_ad`: String(10), `purchase_date_bs`: String(10)
-   - `quantity`: Integer DEFAULT 1 NOT NULL
-   - `unit_cost_paisa`: BigInteger NOT NULL
-   - `total_amount_paisa`: BigInteger NOT NULL
-   - `location`: String(128) nullable
-   - `remarks`: Text nullable
-   - `created_at`: DateTime(timezone=True)
-5. `waste_materials`
-   - `id`: Integer PK
-   - `company_id`: Integer FK (`companies.id`, indexed)
-   - `waste_date_ad`: String(10), `waste_date_bs`: String(10)
-   - `source_type`: String(32) ('RAW_MATERIAL', 'PRODUCTION_BATCH')
-   - `raw_material_id`: Integer FK (`raw_materials.id`, nullable)
-   - `production_batch_id`: Integer FK (`production_batches.id`, nullable)
-   - `quantity`: Numeric(12, 4) NOT NULL
-   - `unit`: String(20) NOT NULL
-   - `reason`: String(255) NOT NULL
-   - `estimated_loss_paisa`: BigInteger DEFAULT 0
-   - `created_at`: DateTime(timezone=True)
-6. `worker_documents`
-   - `id`: Integer PK
-   - `company_id`: Integer FK (`companies.id`, indexed)
-   - `worker_id`: Integer FK (`workers.id`, indexed)
-   - `document_type`: String(32) ('CITIZENSHIP_FRONT', 'CITIZENSHIP_BACK', 'PHOTO')
-   - `file_path`: String(512) NOT NULL
-   - `file_name`: String(255) NOT NULL
-   - `mime_type`: String(64) NOT NULL
-   - `file_size_bytes`: Integer NOT NULL
-   - `created_at`: DateTime(timezone=True)
-
-### Alterations to Existing Tables
-1. `workers`:
-   - ADD `photo_url`: String(512) nullable
-   - ADD `temp_address`: String(255) nullable
-   - ADD `perm_address`: String(255) nullable
-   - ADD `inactive_date`: Date nullable
-   - ADD `deactivation_reason`: String(255) nullable
-2. `sales_orders`:
-   - ADD `dispatch_date_ad`: String(10) nullable
-   - ADD `dispatch_date_bs`: String(10) nullable
-3. `purchases`:
-   - ADD `ordered_date_ad`: String(10) nullable
-   - ADD `ordered_date_bs`: String(10) nullable
-   - ADD `receipt_date_ad`: String(10) nullable
-   - ADD `receipt_date_bs`: String(10) nullable
-   - ADD `status`: String(32) DEFAULT 'received'
-4. `production_batches`:
-   - ADD `batch_serial_no`: String(64) nullable
-   - ADD `custom_color`: String(50) nullable
-5. `raw_materials`:
-   - ADD CHECK constraint `chk_raw_material_unit` ON `unit IN ('kg', 'pcs', 'litre')`
+| Requirement | Table Name | Existing Columns / Constraints | New Migration Needed? |
+|---|---|---|---|
+| **Nepali Date** | All core tables | `date_ad` (Date), `date_bs` (VARCHAR(10)) | **NO** (Already present) |
+| **Dispatch Date** | `sales_orders` | `dispatch_date_ad`, `dispatch_date_bs`, `carrier_name`, `vehicle_number` | **NO** (Migration 015) |
+| **PO Dates** | `purchases` | `order_date_ad/bs`, `receipt_date_ad/bs`, `grn_number` | **NO** (Migration 014) |
+| **Batch Color** | `production_batches` | `color` (VARCHAR(50)) | **NO** (Migration 016) |
+| **RM Movements** | `raw_material_movements` | `direction` (+1/-1), `quantity`, `movement_type`, `unit_cost_paisa` | **NO** (Migration 014) |
+| **Worker Info** | `workers` | `temporary_address`, `permanent_address`, `photo_url`, `inactive_date/reason` | **NO** (Migration 017) |
+| **Citizenship** | `workers` | `citizenship_doc_path`, `citizenship_doc_name`, `citizenship_uploaded_at` | **NO** (Migration 017) |
+| **Sales Expenses** | `sales_expenses` | `particular`, `category`, `amount_paisa`, `payment_method`, `sales_order_id` | **NO** (Migration 015) |
+| **Landed Costs** | `purchases` | `carrying_in_paisa`, `import_duty_paisa`, `china_carrying_paisa`, `insurance_paisa` | **NO** (Migration 014) |
+| **Fixed Assets** | `fixed_assets` | `asset_code`, `asset_name`, `category`, `purchase_cost_paisa`, `quantity` | **NO** (Migration 020) |
+| **Waste Records** | `waste_records` | `waste_type`, `quantity`, `unit`, `raw_material_id`, `product_id`, `batch_id` | **NO** (Migration 020) |
+| **Factory Exp.** | `factory_expenses` | `particular`, `category`, `amount_paisa`, `payment_method`, `remarks` | **NO** (Migration 020) |
 
 ---
 
 ## 11. Backend & API Impact Analysis
 
-### New API Endpoints Required
-- **Expenses Router (`/api/v1/expenses`):**
-  - `GET /` — List expenses with date, type, and pagination filters.
-  - `POST /` — Record general or sales expense with integer paisa validation.
-  - `DELETE /{id}` — Soft delete or remove expense (Editor/Admin only).
-- **Purchase Expenses Router (`/api/v1/purchase/expenses`):**
-  - `GET /` — List purchase landed expenses with column breakdown.
-  - `POST /` — Create 4-column purchase expense record.
-- **Fixed Assets Router (`/api/v1/fixed-assets`):**
-  - `GET /` — List assets with total asset valuation summary.
-  - `POST /` — Register new fixed asset.
-  - `DELETE /{id}` — Remove disposed asset.
-- **Waste Management Router (`/api/v1/production/waste`):**
-  - `GET /` — List waste/scrap logs.
-  - `POST /` — Record waste with atomic stock write-off movement.
-- **Worker Documents & Profile (`/api/v1/hr/workers`):**
-  - `POST /{id}/documents` — Upload citizenship or profile picture with strict MIME checks.
-  - `GET /{id}/documents/{doc_id}/download` — Stream secure file with tenant isolation and HR authorization.
-  - `POST /{id}/status` — Transition worker active/inactive with confirmation and date.
-- **Sales Dispatch (`/api/v1/sales/orders`):**
-  - `POST /{id}/dispatch` — Execute deferred dispatch: updates `dispatch_date` and triggers `StockMovement(direction=-1, movement_type='SALES_OUT')`.
+1. **Pydantic Validation Patch on `RawMaterialCreate`:**
+   - Update `unit` field in `backend/app/api/v1/purchase.py` to enforce `Literal["kg", "pcs", "litre"]`.
+2. **Existing Endpoints Ready for UI Integration:**
+   - `GET, POST, DELETE /api/v1/fixed-assets` in `backend/app/api/v1/assets.py`
+   - `GET, POST, DELETE /api/v1/waste` in `backend/app/api/v1/waste.py`
+   - `GET, POST, DELETE /api/v1/expenses/factory` in `backend/app/api/v1/factory_expenses.py`
 
 ---
 
 ## 12. Frontend Impact Analysis
 
-### Modifications to Existing Views
-1. **`HRManagementView.tsx`:**
-   - Add worker thumbnail column next to Worker Code.
-   - Convert table row click to open a comprehensive **Worker Profile Modal** displaying:
-     - Worker Avatar, Name, Employee ID, Phone.
-     - Temporary Address & Permanent Address.
-     - Citizenship Front/Back preview with zoom modal.
-     - Working hours KPI, Basic salary, Hourly rate, Advance due, Net salary status.
-   - Replace active/inactive toggle with a modal confirmation asking for `inactive_date` and confirmation.
-   - Add dedicated "Inactive Workers" tab with reactivation confirmation.
-2. **`ProductionView.tsx`:**
-   - Update continuous batch entry dock to support `Color` input (with auto-suggest from existing product colors plus free-text capability).
-   - Display `Serial No.` alongside `Batch No.`.
-3. **`PurchaseView.tsx`:**
-   - Split single date input into `Ordered Date` and `Receipt Date` with dual BS/AD pickers.
-   - Enforce unit selection dropdown (`kg`, `pcs`, `litre`).
-4. **`ProductGalleryView.tsx`:**
-   - Update cards to display `Article No.`, `Product Name`, and `Color`.
-   - Add filter by Color.
-5. **`SalesInvoiceView.tsx`:**
-   - Add `Dispatch Date` field to order entry.
-   - For pending orders, add a prominent "Dispatch Order" action button that prompts for dispatch date and confirms stock reduction.
+The frontend requires building UI components to surface the three headless backend services:
 
-### New Frontend Views / Tabs Required
-1. **Expenses View (`components/ExpensesView.tsx`):**
-   - General Expenses table.
-   - Sales Expenses table (`S.N.`, `Date`, `Particular`, `Amount`, `Remarks`).
-   - Summary cards: Total General Expenses, Total Sales Expenses, Month-to-date.
-2. **Purchase Expenses View (`components/PurchaseExpensesView.tsx`):**
-   - Custom table replicating the client's handwritten format:
-     `S.N. | Date | Particular | Carrying-in Exp. | Import Duty Tax | China Carrying-in Exp. | Insurance | Total`
-3. **Fixed Assets View (`components/FixedAssetsView.tsx`):**
-   - Asset inventory table: `S.N. | Asset Code | Item Name | Date | Quantity | Unit Cost | Total Amount | Location`
-   - Top KPI card: Total Capital Assets Valuation.
-4. **Waste Material View (`components/WasteMaterialView.tsx`):**
-   - Waste logging form and table: `Date | Material / Batch | Quantity | Unit | Reason | Est. Loss`.
+1. **Fixed Assets View (`FixedAssetsView.tsx`):**
+   - Create a clean asset register table showing S.N., Asset Code, Asset Name, Category pill, Purchase Date (AD/BS), Quantity, Location, Acquisition Cost (NPR), and Total Valuation KPI summary card.
+   - Modal dialog for adding new capital assets with client-side validation.
+2. **Waste & Scrap Management View (`WasteManagementView.tsx`):**
+   - Floor log table displaying Date (AD/BS), Scrap Type pill (`RAW_MATERIAL_SCRAP` vs `FINISHED_PAIR_REJECT`), Material/Product Name, Batch Ref, Quantity, Unit, Disposal Method, and Remarks.
+   - Entry form with linked batch/material dropdowns.
+3. **Factory Operating Expenses View / Tab:**
+   - Either add an "Operating Expenses" tab to `SalesInvoiceView.tsx` (renaming it `ExpensesView.tsx` / `FinancialsView.tsx`) or create a dedicated `FactoryExpensesView.tsx` to log rent, electricity, generator fuel, machine maintenance, and tea/refreshments.
+4. **AppShell Navigation Integration:**
+   - Register new view routes in `frontend/src/components/AppShell.tsx` navigation sidebar for authorized roles.
 
 ---
 
 ## 13. Security Considerations
 
-1. **Citizenship Documents are Sensitive PII:**
-   - Storing citizenship images requires high security.
-   - Files must be stored in a dedicated directory outside the public web root (`static/uploads/private/workers/`).
-   - Access to `/api/v1/hr/workers/{id}/documents/...` must be strictly restricted to authenticated users with `role IN ('admin', 'editor')`. Viewers or unauthenticated callers must receive 403 Forbidden.
-   - All file downloads must use `_safe_resolve_image_path()` to prevent path traversal attacks.
-   - Uploads must strictly validate magic header bytes (JPEG `\xff\xd8\xff`, PNG `\x89PNG`, WEBP) and enforce a 5MB size limit.
-2. **Multi-Tenant Scoping:**
-   - Every new table (`expenses`, `purchase_expenses`, `fixed_assets`, `waste_materials`, `worker_documents`, `raw_material_movements`) must have an indexed `company_id` column and enforce `TenantRepository` scoping.
-3. **Financial Precision Protection:**
-   - All newly introduced expense, asset, and payroll amount fields must use integer paisa (`BigInteger`) or quantized Decimal to prevent floating-point rounding exploits.
+1. **Confidential Identity Documents (Citizenship):**
+   - Worker citizenship documents contain sensitive personal identifiable information (PII).
+   - Must remain strictly locked to the `admin` role (`require_admin` dependency).
+   - Directory traversal protection (`_safe_resolve_path`) and magic byte verification must be preserved.
+2. **Financial Data Mutability:**
+   - Financial entries (`sales_expenses`, `factory_expenses`, `purchases`, `worker_monthly_records`) must enforce integer-paisa math (`BigInteger`) to prevent floating-point drift.
+   - Soft deactivation of workers must prevent unauthorized payroll generation while preserving audit trails.
+3. **Multi-Tenant Isolation:**
+   - Every database query must filter strictly on `company_id == current_user.company_id`.
 
 ---
 
 ## 14. Financial & Accounting Considerations
 
-1. **Purchase Expenses — Inventory Capitalization vs. Period Expensing:**
-   - **Critical Accounting Decision:** Does the client want the 4 purchase expense categories (`Carrying-in`, `Import Duty`, `China Carrying-in`, `Insurance`) added to the raw material's valuation (landed cost), or booked as general factory operating expenses?
-   - If capitalized, raw material unit cost becomes:  
-     $$\text{Landed Unit Cost} = \text{Purchase Price} + \frac{\text{Total Purchase Expenses}}{\text{Purchased Quantity}}$$
-   - This directly alters the manufacturing cost of goods sold (COGS) and inventory valuation reports.
-2. **Advance Deduction Timing:**
-   - When payroll is finalized and marked as `PAID`, the auto-recovery of advances must remain atomic within the database transaction to prevent double recovery or phantom balances.
-3. **Fixed Assets Depreciation:**
-   - The client requested items and total amounts. Depreciation was not verbally requested. We recommend keeping it as a pure asset cost register unless depreciation accounting is explicitly requested.
+1. **Landed Cost Capitalization:**
+   - The current implementation capitalizes Carrying-in, Import Duty, China Carrying, and Insurance into the raw material landed unit rate (`effective_unit_rate_paisa`).
+   - Client must confirm: Should these costs also be posted as standalone expenses in the General Ledger / P&L statement, or remain exclusively within inventory asset valuation?
+2. **Statutory 13% VAT Invariants:**
+   - All tax invoicing strictly enforces Nepal Inland Revenue Department Schedule-5 math (`subtotal + 13% VAT = total_amount`).
 
 ---
 
 ## 15. Inventory Integrity Considerations
 
-1. **Transitioning Raw Materials to an Immutable Ledger:**
-   - Currently, raw material available stock is dynamically calculated from purchases minus production usages.
-   - Moving to a dedicated `raw_material_movements` ledger guarantees auditability, supports stock write-offs (waste), and enables physical inventory count adjustments.
-   - Existing purchase and production data must be preserved and accurately backfilled into the initial ledger state.
-2. **Color Normalization on Footwear SKUs:**
-   - Allowing free-text typable colors in production batches introduces the risk of orphan stock.
-   - **Recommended Architecture:** When a user types a new color during batch creation, the system should either:
-     1. Automatically prompt to create/bind a new product SKU variant with that color, OR
-     2. Treat color as an informational batch lot attribute while tracking stock under the parent footwear model, OR
-     3. Normalize the color string (e.g. trim and Title Case: "black" -> "Black") and verify against catalog variants.
-3. **Deferred Sales Dispatch:**
-   - Allowing orders to be created with `delivered=False` requires locking inventory when dispatch occurs.
-   - If stock is not reserved at order time, an order may fail to dispatch later due to insufficient stock. The client must clarify if orders should allocate/reserve stock upon creation.
+1. **Negative Inventory Prevention:**
+   - The system strictly forbids negative finished goods stock. Sales dispatch is rejected under advisory lock if available physical stock is insufficient (`INSUFFICIENT_STOCK`).
+2. **Raw Material Reservation:**
+   - Production batch creation validates raw material availability against cumulative `RawMaterialMovement` balance before committing BOM usage.
+3. **Waste Material Stock Deduction Policy:**
+   - Currently, logging a `WasteRecord` does **not** deduct warehouse stock. If waste is generated from a production batch, the raw materials were already deducted during BOM issuance. Automatically deducting raw materials again would cause **double deduction**.
+   - Client clarification is mandatory before introducing automated stock deductions on scrap.
 
 ---
 
 ## 16. Backup & Infrastructure Considerations
 
-1. **Current Status:** `backend/app/services/backup_service.py` executes pg_dump, encrypts via AES-GCM, and uploads to S3/Backblaze B2.
-2. **Gap:** Currently requires manual invocation.
-3. **Recommended Implementation:**
-   - Deploy an OS-level cron job or Docker container sidecar running daily at 02:00 AM NPT:
-     ```bash
-     0 2 * * * curl -X POST http://localhost:8000/api/v1/system/backup -H "Authorization: Bearer ${BACKUP_TOKEN}"
-     ```
-   - Retain 7 daily snapshots, 4 weekly snapshots, and 12 monthly snapshots.
-   - Store backup logs in database table `backup_logs` to display status on the admin dashboard.
+1. **Automated Daily Cloud Backups:**
+   - The scheduled backup engine (`.github/workflows/scheduled_backup.yml`) runs nightly at `20:00 UTC` (01:45 AM NST).
+   - Artifacts are retained by GitHub for 7 days.
+   - **Action Required by Owner:** Add the `STAGING_DATABASE_URL` secret in GitHub Repository Settings (`Settings -> Secrets and variables -> Actions`) to enable live execution.
+2. **In-App Manual Backups:**
+   - Administrators can trigger immediate database dumps directly from `SettingsView.tsx` via `POST /api/v1/backup/run`.
 
 ---
 
 ## 17. Testing Impact Analysis
 
-Any proposed implementation must maintain the existing test suite (266 passed tests) and introduce new test suites across:
-
-1. **Unit Tests:**
-   - Nepali Date BS leap-year, month boundary, and converter tests.
-   - Hourly wage and salaried overtime computation tests.
-   - Purchase expense totalization and landed cost math tests.
-   - Raw material unit enum validation tests (`kg`, `pcs`, `litre`).
-2. **Integration Tests:**
-   - Multi-tenant isolation tests for `/api/v1/expenses`, `/api/v1/fixed-assets`, `/api/v1/purchase/expenses`, and `/api/v1/production/waste`.
-   - Deferred sales dispatch: verify stock movements (-1 OUT) are created only upon dispatch execution.
-   - Purchase receipt: verify stock movements (+1 IN) are created only upon goods arrival.
-   - Worker document upload, MIME check, and 5MB size limit validation.
-3. **Concurrency & Race Condition Tests:**
-   - Concurrent sales dispatches exhausting stock.
-   - Concurrent worker advance issuance and payroll deductions.
-4. **Security Tests:**
-   - Path traversal defense on worker citizenship downloads.
-   - Role-based authorization tests preventing viewers from accessing citizenship images or expenses.
+1. **Regression Tests to Preserve:**
+   - 110 existing backend tests covering authentication, tenant isolation, IDOR, PostgreSQL concurrency, query regression, landed cost math, and invoice numbering must remain green.
+2. **New Tests Required When Building Frontend UI:**
+   - Frontend E2E / integration tests verifying Fixed Assets creation and valuation sum.
+   - Frontend E2E tests for Waste log entry.
+   - Frontend E2E tests for Factory Operating Expense entry and category filtering.
+   - Pydantic schema validation test verifying `RawMaterialCreate` rejects invalid units with HTTP 422.
 
 ---
 
 ## 18. Client Clarifications Required
 
-Before implementing any code or migrations, the following items must be confirmed with the client:
-
-1. **Purchase Expenses Capitalization:**
-   > *Should Carrying-in Exp, Import Duty Tax, China Carrying-in Exp, and Insurance be added to the raw material's purchase cost (landed cost) to increase inventory valuation, or should they remain separate expense records?*
-2. **Production Batch Color Entry:**
-   > *When a color is manually typed in a production batch (e.g. "Royal Blue"), should it automatically register as a new product color variant in your shoe catalog, or is it only a label for that specific batch?*
-3. **Sales Order Stock Reservation:**
-   > *When a sales order is created with a future dispatch date, should stock be reserved immediately (preventing other orders from taking it), or should stock only be checked and deducted on the day of dispatch?*
-4. **Raw Material Units & Conversion:**
-   > *Are raw material purchases strictly recorded in `kg`, `pcs`, and `litre`, or will you ever receive materials in grams or rolls that require automatic unit conversion?*
-5. **Fixed Assets Depreciation:**
-   > *Do you need monthly depreciation calculated on your fixed assets (machinery, tools), or do you only need a register of what items you own and their purchase amounts?*
-6. **Worker Profile Photos & Citizenship Storage:**
-   > *Will worker citizenship pictures be uploaded as two separate photos (Front and Back), or as a single document/PDF?*
-7. **Waste Material Scope:**
-   > *Does waste material represent scrap raw materials (e.g. leather offcuts, glue spillage), defective finished shoes, or both?*
+| # | Question for Client | Architectural Context & Impact |
+|---|---|---|
+| **1** | **Should purchase landed expenses flow into accounting P&L as expenses, or remain capitalized in raw material inventory valuation?** | Landed costs (duty, carrying) currently increase the effective unit cost of raw materials in stock. If the client also expects them in an expense report, they must be reflected in the expense subledger. |
+| **2** | **Should logging waste/scrap automatically deduct stock, or remain an informational floor log?** | Materials used in production are already deducted during batch BOM creation. If waste logging also deducts stock, raw materials will be double-counted. Clarify whether waste represents damaged raw material in storage, or rejected finished shoes. |
+| **3** | **Should Fixed Assets include depreciation calculations, or remain strictly an acquisition asset register?** | Current backend tracks acquisition cost and quantity. If statutory tax depreciation (Nepal Income Tax Act Schedule-2 pooling) is required, a depreciation schedule engine must be built. |
+| **4** | **Should manually typed production batch colors be normalized or saved as free text?** | Free-text colors allow floor flexibility (e.g., "Navy Blue" vs "Dark Navy"), but can produce reporting inconsistencies. System currently saves color on the batch voucher without modifying product SKUs. |
+| **5** | **Are raw material unit conversions required (e.g. grams to kg, milliliters to litres)?** | System currently enforces base units (`kg`, `pcs`, `litre`). Quantities must be entered in decimal fractions (e.g. 0.25 kg). Confirm if automatic conversion is needed. |
+| **6** | **Where should Factory Operating Expenses be displayed in the navigation?** | Backend router `/api/v1/expenses/factory` is complete. Should it appear as a tab inside the Sales Expenses view, inside Settings, or as a standalone top-level sidebar navigation module? |
 
 ---
 
 ## 19. Recommended Implementation Order
 
-To avoid circular dependencies, changes must be rolled out in this specific sequence:
+To minimize risk and build upon existing hardened foundations:
 
 ```text
-Phase 1: Date & Metadata Foundations
-  └── Extend Sales & Purchase schemas with Ordered/Receipt/Dispatch dates.
-  └── Add Raw Material Unit validation ('kg', 'pcs', 'litre').
+Phase 1 — Schema Validation Hardening (Backend Bounded Fix)
+    └── Add Literal['kg', 'pcs', 'litre'] validation to RawMaterialCreate schema in purchase.py.
 
-Phase 2: Inbound Supply & Raw Material Ledger
-  └── Implement dedicated Raw Material stock ledger.
-  └── Build PO Receipt workflow and stock update (+ IN).
-  └── Build Purchase Expenses (Carrying-in, Duty, China Exp, Insurance).
+Phase 2 — Fixed Assets Frontend View
+    └── Build FixedAssetsView.tsx connecting to existing /api/v1/fixed-assets API.
 
-Phase 3: Outbound Sales & Dispatch
-  └── Build Sales Dispatch endpoint and stock deduction (- OUT).
-  └── Build Sales Expenses table.
+Phase 3 — Factory Operating Expenses Frontend View
+    └── Build FactoryExpensesView.tsx or unify into an ExpensesView connecting to /api/v1/expenses/factory.
 
-Phase 4: Manufacturing, Color & Waste
-  └── Enhance Production Batch with serial number and normalized color.
-  └── Build Waste Material tracking with inventory deductions.
-  └── Link Production Gallery to color and batch details.
+Phase 4 — Waste & Scrap Frontend View & Policy Resolution
+    └── Resolve stock deduction policy with client; build WasteManagementView.tsx connecting to /api/v1/waste.
 
-Phase 5: HR, Worker Profile & Documents
-  └── Add worker photos, addresses, and inactive dates.
-  └── Build secure citizenship document upload with RBAC.
-  └── Build comprehensive Worker Profile modal and Inactive view.
-
-Phase 6: General Expenses & Fixed Assets
-  └── Build General Expenses module.
-  └── Build Fixed Assets register and valuation summary.
-
-Phase 7: Infrastructure & Automated Daily Backup
-  └── Configure daily scheduled backup runner and monitoring dashboard.
-
-Phase 8: End-to-End Verification & Client UAT
-  └── Execute complete regression test suite and client workflow drills.
+Phase 5 — Full-Stack Verification & Owner Acceptance
+    └── Execute end-to-end regression test suite, verify UI navigation, and obtain client sign-off.
 ```
 
 ---
 
-## 20. Risks
+## 20. Risks & Mitigations
 
-1. **Risk of Inventory Divergence (High):**
-   - Splitting purchase order date from receipt date, and sales order date from dispatch date, changes the exact timestamp when stock moves. If staff enter dispatches retroactively without date safeguards, historical stock snapshots could become inconsistent.
-2. **Risk of Color Variant Duplication (Medium):**
-   - Free-text color input will lead to variations like "Black", "black", "BLACK", "Charcoal Black". If not normalized, inventory reports will split single shoes across multiple SKUs.
-3. **Risk of Sensitive Document Exposure (High):**
-   - Worker citizenship documents are legally protected personal identity data. Failing to enforce strict RBAC and directory traversal protections could expose identity documents.
-4. **Risk of Accounting Misstatement (Medium):**
-   - Improperly handling the 4 purchase expense categories could either understate raw material inventory asset values or distort profit-and-loss statements.
-
----
-
-## 21. Files and Modules That Will Need Modification
-
-### Backend Files
-- `backend/app/models/worker.py` (add photo, addresses, inactive_date)
-- `backend/app/models/purchase.py` (add ordered/receipt dates, status; unit validation)
-- `backend/app/models/sales.py` (add dispatch_date_ad/bs)
-- `backend/app/models/production.py` (add batch_serial_no, custom_color)
-- `backend/app/models/gallery.py` (add production_batch_id, color linkage)
-- `backend/app/models/expense.py` (*NEW* — general, sales, purchase expenses)
-- `backend/app/models/asset.py` (*NEW* — fixed assets)
-- `backend/app/models/waste.py` (*NEW* — waste materials)
-- `backend/app/models/raw_material_movement.py` (*NEW* — raw material ledger)
-- `backend/app/api/v1/hr.py` (add profile, document upload, status endpoints)
-- `backend/app/api/v1/purchase.py` (add receipt workflow, purchase expenses)
-- `backend/app/api/v1/sales.py` (add dispatch endpoint)
-- `backend/app/api/v1/production.py` (update batch creation, add waste logging)
-- `backend/app/api/v1/gallery.py` (return color and batch info)
-- `backend/app/api/v1/expenses.py` (*NEW* router)
-- `backend/app/api/v1/assets.py` (*NEW* router)
-- `alembic/versions/` (*NEW* migration scripts)
-
-### Frontend Files
-- `frontend/src/components/HRManagementView.tsx` (worker profile modal, avatar, inactive workflow)
-- `frontend/src/components/PurchaseView.tsx` (ordered vs receipt dates, unit select)
-- `frontend/src/components/ProductionView.tsx` (typable color, serial number)
-- `frontend/src/components/SalesInvoiceView.tsx` (dispatch date, dispatch action button)
-- `frontend/src/components/ProductGalleryView.tsx` (display color and batch metadata)
-- `frontend/src/components/ExpensesView.tsx` (*NEW* component)
-- `frontend/src/components/PurchaseExpensesView.tsx` (*NEW* component)
-- `frontend/src/components/FixedAssetsView.tsx` (*NEW* component)
-- `frontend/src/components/WasteMaterialView.tsx` (*NEW* component)
-- `frontend/src/components/DashboardLayout.tsx` (add navigation items for Expenses, Assets, Waste)
+| Risk | Severity | Mitigation Strategy |
+|---|---|---|
+| **Duplicate Raw Material Stock Deduction via Waste** | HIGH | Keep waste logging strictly informational until client confirms exact floor workflow. |
+| **Catalog SKU Sprawl from Typable Colors** | MEDIUM | Keep batch color strictly on `ProductionBatch.color`; do not automatically spawn new `Product` rows. |
+| **Citizenship Document PII Data Leakage** | HIGH | Maintain strict `require_admin` dependency and isolated company filesystem folders. |
+| **Database Check Constraint 500 on Raw Material Unit** | LOW | Update Pydantic schema validation to return HTTP 422 before the query reaches the database. |
+| **Unattended Backup Silent Failure** | MEDIUM | Configure GitHub secret `STAGING_DATABASE_URL` and enable webhook failure notifications. |
 
 ---
 
-## 22. Proposed Implementation Phases
+## 21. Files That Will Need Modification in Future Phases
 
-### Phase 1: Data Model & Date Foundation
-- Add Alembic migration for date fields (`dispatch_date` on sales, `ordered_date`/`receipt_date` on purchase).
-- Enforce unit validation on `RawMaterial` (`kg`, `pcs`, `litre`).
-- Verify no regressions against existing 266 tests.
+### Backend (Minor Validation Fix Only):
+- `backend/app/api/v1/purchase.py` (Add `Literal['kg', 'pcs', 'litre']` to `RawMaterialCreate`)
 
-### Phase 2: Purchase, Raw Material Ledger & Purchase Expenses
-- Create `raw_material_movements` ledger table.
-- Implement Goods Receipt endpoint triggering raw material stock addition (+ IN).
-- Implement Purchase Expenses table and API adhering to the client's 4-column format.
-
-### Phase 3: Sales, Dispatch & Sales Expenses
-- Implement Sales Order Dispatch endpoint triggering finished goods stock deduction (- OUT) on dispatch date.
-- Implement Sales Expenses table and API.
-
-### Phase 4: Production Batch, Waste & Gallery
-- Add serial number and normalized color handling to `ProductionBatch`.
-- Implement Waste Material tracking deducting raw materials or batch output.
-- Update Product Gallery schema to return color and production batch details.
-
-### Phase 5: HR, Worker Profile & Documents
-- Add photo, addresses, and inactive date to `Worker`.
-- Implement secure citizenship upload and retrieval endpoints with RBAC.
-- Build interactive Worker Profile Modal and dedicated Inactive Workers view in frontend.
-
-### Phase 6: General Expenses & Fixed Assets
-- Implement General Expenses CRUD with integer paisa precision.
-- Implement Fixed Assets register and total valuation summary.
-- Add frontend views and integrate into main navigation.
-
-### Phase 7: Infrastructure & Automated Daily Backup
-- Configure scheduled daily backup cron job.
-- Expose backup audit logs in system dashboard.
-
-### Phase 8: Verification, Security Audit & Client Acceptance
-- Run full automated test suite with new tests for all added endpoints.
-- Conduct simulated client lifecycle drill across procurement, production, sales, payroll, and expenses.
+### Frontend (New Views for Existing Headless Services):
+- `frontend/src/components/FixedAssetsView.tsx` (New component)
+- `frontend/src/components/WasteManagementView.tsx` (New component)
+- `frontend/src/components/FactoryExpensesView.tsx` (New component or unified tab)
+- `frontend/src/components/AppShell.tsx` (Add navigation links for new views)
 
 ---
 
-## 23. Final Executive Summary Table (Section 28)
+## 22. Final Executive Summary Table
 
-| Requirement | Status | Effort | Risk | Dependencies | Client Clarification |
+| Requirement | Status | Effort | Risk | Dependencies | Client Clarification Required |
 |---|---|---|---|---|---|
-| **Nepali Date** | `PARTIALLY_IMPLEMENTED` | Low | Low | None | Confirm AD canonical DB storage, BS display. |
-| **Dispatch Date** | `MISSING` | Medium | Medium | REQ-06 | Partial shipments or full dispatch only? |
-| **Purchase Ordered/Receipt Date** | `MISSING` | Medium | Medium | REQ-06, REQ-07 | Is PO issued in advance of supplier billing? |
-| **Sales Ordered/Dispatch Date** | `PARTIALLY_IMPLEMENTED` | Low | Low | REQ-06 | Does dispatch date default to order date? |
-| **Production Batch Fields** | `PRESENT_BUT_INCORRECT` | Medium | High | Finished Stock | Does typable color create a new SKU variant? |
-| **Automatic Stock Update** | `PRESENT_BUT_INCORRECT` | High | High | REQ-A2, REQ-A3 | Should negative stock be strictly blocked? |
-| **Raw Material Stock** | `PARTIALLY_IMPLEMENTED` | High | Medium | REQ-06 | Single storeroom or multiple warehouses? |
-| **Raw Material Units** | `PARTIALLY_IMPLEMENTED` | Low | Low | None | Are unit conversions needed (e.g. g -> kg)? |
-| **Worker Profile** | `PARTIALLY_IMPLEMENTED` | Medium | Medium | REQ-09, REQ-11 | Display monthly equivalent or floor hours? |
-| **Worker Documents** | `MISSING` | Medium | High | REQ-10 | Single document or separate Front/Back photos? |
-| **Worker Active/Inactive** | `PARTIALLY_IMPLEMENTED` | Low | Low | None | Does deactivation trigger final salary settlement? |
-| **Worker Salary Data** | `PARTIALLY_IMPLEMENTED` | Medium | Medium | REQ-10 | How is per-hour rate derived for salaried staff? |
-| **Production Gallery** | `PRESENT_BUT_INCORRECT` | Medium | Low | REQ-05 | Show catalog shoe or actual factory lot photo? |
-| **General Expenses** | `MISSING` | Medium | Medium | None | Link expenses to chart of accounts? |
-| **Sales Expenses** | `MISSING` | Low | Low | REQ-15 | Deduct from sales margin or general overhead? |
-| **Purchase Expenses** | `MISSING` | High | High | REQ-A3, REQ-07 | Capitalize into inventory or period expense? |
-| **Fixed Assets** | `MISSING` | Low | Low | None | Is depreciation calculation required? |
-| **Waste Material** | `MISSING` | Medium | Medium | REQ-06, REQ-07 | Does waste reduce raw materials, WIP, or shoes? |
-| **Daily Backup** | `PARTIALLY_IMPLEMENTED` | Low | Low | None | Confirm retention days and target cloud bucket. |
+| **Nepali Date (BS)** | `IMPLEMENTED` | Completed | LOW | Core Utilities | Confirm AD remains canonical for DB index; BS stored for display. |
+| **Dispatch Date** | `IMPLEMENTED` | Completed | LOW | Sales Order | None (Immediate vs deferred dispatch already supported). |
+| **Purchase Ordered/Receipt Date** | `IMPLEMENTED` | Completed | LOW | Purchase Order | Confirm if partial PO receipts across different dates are needed. |
+| **Sales Ordered/Dispatch Date** | `IMPLEMENTED` | Completed | LOW | Sales Order | None (Both dates fully implemented and separated). |
+| **Production Batch Fields & Color** | `IMPLEMENTED` | Completed | MEDIUM | Catalog Master | Confirm free-text colors remain batch-only and do not spawn SKUs. |
+| **Automatic Stock Update** | `IMPLEMENTED` | Completed | HIGH | Inventory Ledgers | Confirm whether waste scrap should deduct inventory. |
+| **Raw Material Stock & Alerts** | `IMPLEMENTED` | Completed | LOW | Purchase Ledger | Confirm single vs multi-storeroom tracking. |
+| **Raw Material Units (kg, pcs, l)** | `PRESENT_BUT_INCORRECT` | 1 hour | LOW | Purchase Schemas | Confirm whether unit conversion (e.g. grams -> kg) is required. |
+| **Worker Profile & Addresses** | `IMPLEMENTED` | Completed | LOW | HR Module | None (Temp/Perm addresses and photo upload already built). |
+| **Worker Documents (Citizenship)** | `IMPLEMENTED` | Completed | HIGH | Auth & Security | None (Admin-only RBAC and secure storage already enforced). |
+| **Worker Active/Inactive Lifecycle** | `IMPLEMENTED` | Completed | LOW | HR Module | None (Soft deactivation preserves history and advance ledgers). |
+| **Worker Salary & Advance Ledger** | `IMPLEMENTED` | Completed | MEDIUM | Advance Ledger | Confirm standard monthly working hour divisor (208 hrs vs days). |
+| **Production Gallery** | `IMPLEMENTED` | Completed | LOW | Gallery Master | None (Batch metadata, SKU, color, and photos integrated). |
+| **General Expenses (Factory)** | `PARTIALLY_IMPLEMENTED` | 3 hours | MEDIUM | Expense Router | Confirm navigation location (standalone page vs tab in Expenses). |
+| **Sales Expenses** | `IMPLEMENTED` | Completed | LOW | Sales Module | None (Dedicated table in Sales view matches client format). |
+| **Purchase Expenses (Landed Costs)** | `IMPLEMENTED` | Completed | HIGH | Purchase Order | Confirm whether landed costs must also be expensed in P&L. |
+| **Fixed Assets Register** | `PARTIALLY_IMPLEMENTED` | 3 hours | LOW | Asset Router | Confirm whether depreciation schedule is needed or basic register. |
+| **Waste & Scrap Floor Log** | `PARTIALLY_IMPLEMENTED` | 3 hours | MEDIUM | Production Batch | Confirm whether scrap should deduct stock or remain an audit log. |
+| **Daily Cloud Database Backup** | `IMPLEMENTED` | Completed | MEDIUM | CI/CD & Scripts | Owner must add `STAGING_DATABASE_URL` in GitHub Secrets. |
 
 ---
 
-### Recommended Implementation Sequence
-```text
-Phase 1 — Data Model & Date Foundation (Low Risk, Schema Setup)
-Phase 2 — Inbound Purchase / Raw Material Ledger / Purchase Expenses (Inventory & Landed Cost)
-Phase 3 — Outbound Sales / Dispatch / Sales Expenses (Revenue & Stock Out)
-Phase 4 — Production / Normalized Color / Waste / Gallery (Manufacturing Floor)
-Phase 5 — HR / Worker Profile / Documents / Inactive Workflow (Staff & Payroll)
-Phase 6 — General Expenses / Fixed Assets (Financial Overhead & Assets)
-Phase 7 — Backup / Infrastructure Automation (SRE & Operations)
-Phase 8 — Regression / Security / Client Acceptance Testing (Quality Gates)
-```
+### Conclusion & Immediate Next Steps
+
+The LIVO Footwear ERP is in a **far more advanced state of completion than initially estimated**. 14 of the 18 client requirement topics (representing 16 of the 20 granular audit matrix items, or 77.8%) are already fully operational end-to-end, backed by rigorous multi-tenant isolation, row-level advisory locking, integer paisa precision, and automated test suites.
+The remaining 4 topics comprise 3 completed backend services requiring frontend UI (Fixed Assets, Waste Management, Factory Expenses) and 1 minor schema validation patch (Raw Material Units).
+
+**Do NOT rewrite or alter existing working systems.** The remaining work consists strictly of:
+1. Hardening the Pydantic unit validator in `backend/app/api/v1/purchase.py`.
+2. Building frontend user interfaces for the three completed backend services: Fixed Assets, Waste Management, and Factory Operating Expenses.
+3. Clarifying the 6 key client business questions (landed cost accounting, waste stock deduction policy, and fixed asset depreciation).

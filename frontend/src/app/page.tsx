@@ -65,6 +65,16 @@ const OpsCockpitView = dynamic(
   { loading: () => <SkeletonLoader title="Loading Ops Cockpit..." type="dashboard" />, ssr: false }
 );
 
+const AdminControlView = dynamic(
+  () => import("@/components/AdminControlView").then((mod) => mod.AdminControlView),
+  { loading: () => <SkeletonLoader title="Loading Admin Control Center..." type="table" />, ssr: false }
+);
+
+const ExpensesAssetsView = dynamic(
+  () => import("@/components/ExpensesAssetsView").then((mod) => mod.ExpensesAssetsView),
+  { loading: () => <SkeletonLoader title="Loading Factory Expenses & Assets..." type="table" />, ssr: false }
+);
+
 export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -189,6 +199,18 @@ export default function Home() {
       {activeTab === "analytics" && (
         <ErrorBoundary screenName="Analytics & Leaderboards">
           <LeaderboardsView userRole={user.role} />
+        </ErrorBoundary>
+      )}
+
+      {activeTab === "expenses_assets" && (
+        <ErrorBoundary screenName="Expenses & Assets">
+          <ExpensesAssetsView userRole={user.role} />
+        </ErrorBoundary>
+      )}
+
+      {activeTab === "admin_control" && user?.role === "admin" && (
+        <ErrorBoundary screenName="Admin Control Center">
+          <AdminControlView />
         </ErrorBoundary>
       )}
 

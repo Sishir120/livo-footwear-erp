@@ -36,6 +36,23 @@ class InvoiceCreate(BaseModel):
     vat_rate: Optional[Decimal] = Field(Decimal('13.0'), ge=Decimal('0.0'), le=Decimal('100.0'))
     vat_amount: Optional[Decimal] = None
     is_tax_exempt: Optional[bool] = False
+    pricing_mode: Optional[str] = Field("VAT_EXCLUSIVE", pattern="^(VAT_EXCLUSIVE|VAT_INCLUSIVE)$")
+    discount_amount: Optional[Decimal] = Field(Decimal('0.0'), ge=Decimal('0.0'))
+    other_charges: Optional[Decimal] = Field(Decimal('0.0'), ge=Decimal('0.0'))
+
+
+class InvoiceUpdate(BaseModel):
+    discount_amount: Optional[Decimal] = Field(None, ge=Decimal('0.0'))
+    other_charges: Optional[Decimal] = Field(None, ge=Decimal('0.0'))
+    is_tax_exempt: Optional[bool] = None
+    pricing_mode: Optional[str] = Field(None, pattern="^(VAT_EXCLUSIVE|VAT_INCLUSIVE)$")
+
+
+class CreditNoteCreate(BaseModel):
+    amount_paisa: int = Field(..., gt=0)
+    reason: str = Field(..., min_length=3, max_length=255)
+    return_date_ad: Optional[str] = None
+    return_date_bs: Optional[str] = None
 
 @router.get("")
 def list_invoices(
@@ -83,6 +100,58 @@ def allocate_next_invoice_sequence(db: Session, company_id: int) -> int:
     return seq_row.current_sequence
 
 
+def compute_invoice_amounts(
+    order_items: list,
+    order_total: Decimal,
+    pricing_mode: str = "VAT_EXCLUSIVE",
+    discount_amount: Decimal = Decimal("0.0"),
+    other_charges: Decimal = Decimal("0.0"),
+    is_tax_exempt: bool = False,
+    vat_enabled: bool = True
+) -> tuple[int, int, int, Decimal, bool]:
+    """
+    Authoritative Server-Side Financial VAT Calculation Engine:
+    Supports both VAT_EXCLUSIVE (default standard wholesale) and VAT_INCLUSIVE pricing.
+    Strictly integer-paisa math to prevent floating point and rounding drift.
+    """
+    if order_items:
+        raw_items_paisa = sum(
+            int(round(float(item.quantity) * float(item.unit_price) * 100))
+            for item in order_items
+        )
+    else:
+        raw_items_paisa = int(round(float(order_total) * 100))
+
+    disc_paisa = int(round(float(discount_amount or 0.0) * 100))
+    charges_paisa = int(round(float(other_charges or 0.0) * 100))
+    net_before_tax_paisa = max(0, raw_items_paisa - disc_paisa)
+
+    is_exempt = bool(is_tax_exempt) or (not order_items and vat_enabled is False)
+    if is_exempt:
+        vat_rate = Decimal("0.0")
+        eff_vat_enabled = False
+        taxable_paisa = net_before_tax_paisa
+        vat_paisa = 0
+        total_paisa = taxable_paisa + charges_paisa
+    elif pricing_mode == "VAT_INCLUSIVE":
+        # Extract 13% VAT component from inclusive price
+        # Taxable = Net / 1.13; VAT = Net - Taxable (guarantees Taxable + VAT == Net)
+        vat_rate = Decimal("13.0")
+        eff_vat_enabled = True
+        taxable_paisa = int(round(Decimal(net_before_tax_paisa) / Decimal("1.13")))
+        vat_paisa = net_before_tax_paisa - taxable_paisa
+        total_paisa = net_before_tax_paisa + charges_paisa
+    else:
+        # Standard VAT_EXCLUSIVE: Line subtotal -> Discount -> Taxable -> +13% VAT -> Grand Total
+        vat_rate = Decimal("13.0")
+        eff_vat_enabled = True
+        taxable_paisa = net_before_tax_paisa
+        vat_paisa = int(round(Decimal(taxable_paisa) * Decimal("0.13")))
+        total_paisa = taxable_paisa + vat_paisa + charges_paisa
+
+    return taxable_paisa, vat_paisa, total_paisa, vat_rate, eff_vat_enabled
+
+
 @router.post("")
 def generate_invoice(data: InvoiceCreate, current_user: User = Depends(require_editor), db: Session = Depends(get_db)):
     invoice_repo = TenantRepository(Invoice, db, current_user.company_id)
@@ -92,42 +161,28 @@ def generate_invoice(data: InvoiceCreate, current_user: User = Depends(require_e
     if not order:
         raise HTTPException(status_code=404, detail="Sales order not found")
 
-    # Fetch order items to calculate exact integer-paisa taxable amount
     order_items = db.query(SalesItem).filter(
         SalesItem.sales_order_id == order.id,
         SalesItem.company_id == current_user.company_id
     ).all()
 
-    if order_items:
-        taxable_amount_paisa = sum(
-            int(round(float(item.quantity) * float(item.unit_price) * 100))
-            for item in order_items
-        )
-    else:
-        taxable_amount_paisa = int(round(float(order.total_amount) * 100))
+    taxable_paisa, vat_paisa, total_paisa, vat_rate, eff_vat_enabled = compute_invoice_amounts(
+        order_items=order_items,
+        order_total=order.total_amount,
+        pricing_mode=data.pricing_mode or "VAT_EXCLUSIVE",
+        discount_amount=data.discount_amount or Decimal("0.0"),
+        other_charges=data.other_charges or Decimal("0.0"),
+        is_tax_exempt=bool(data.is_tax_exempt),
+        vat_enabled=bool(data.vat_enabled)
+    )
 
-    # Nepal IRD Schedule-5 Statutory Invariant:
-    # All manufactured footwear products are taxable at statutory 13% VAT.
-    # Zero VAT is only permitted if explicitly registered as statutory tax-exempt under Nepal VAT Act Schedule-1.
-    is_exempt = bool(data.is_tax_exempt) or (not order_items and data.vat_enabled is False)
-    if not is_exempt:
-        vat_rate = Decimal("13.0")
-        vat_enabled = True
-        vat_amount_paisa = int(round(Decimal(taxable_amount_paisa) * Decimal("0.13")))
-        total_amount_paisa = taxable_amount_paisa + vat_amount_paisa
-    else:
-        vat_rate = Decimal("0.0")
-        vat_enabled = False
-        vat_amount_paisa = 0
-        total_amount_paisa = taxable_amount_paisa
-
-    subtotal = quantize_npr(Decimal(taxable_amount_paisa) / Decimal(100))
-    vat_amount = quantize_npr(Decimal(vat_amount_paisa) / Decimal(100))
-    total_amount = quantize_npr(Decimal(total_amount_paisa) / Decimal(100))
+    subtotal = quantize_npr(Decimal(taxable_paisa) / Decimal(100))
+    vat_amount = quantize_npr(Decimal(vat_paisa) / Decimal(100))
+    total_amount = quantize_npr(Decimal(total_paisa) / Decimal(100))
 
     # Defensive Security & Statutory Invariant: Prevent duplicate tax liabilities
     # Under Nepal IRD Schedule-5 VAT rules, a sales order cannot have duplicate active VAT invoices.
-    if vat_enabled and not (data.vat_enabled is False and not order_items):
+    if eff_vat_enabled:
         existing_vat_inv = db.query(Invoice).filter(
             Invoice.sales_order_id == order.id,
             Invoice.company_id == current_user.company_id,
@@ -157,7 +212,7 @@ def generate_invoice(data: InvoiceCreate, current_user: User = Depends(require_e
                 date_ad=order.order_date_ad,
                 date_bs=order.order_date_bs,
                 subtotal=subtotal,
-                vat_enabled=vat_enabled,
+                vat_enabled=eff_vat_enabled,
                 vat_rate=vat_rate,
                 vat_amount=vat_amount,
                 total_amount=total_amount,
@@ -165,9 +220,9 @@ def generate_invoice(data: InvoiceCreate, current_user: User = Depends(require_e
                 receivable_amount=receivable_dec,
                 is_void=False
             )
-            invoice.taxable_amount_paisa = taxable_amount_paisa
-            invoice.vat_amount_paisa = vat_amount_paisa
-            invoice.total_amount_paisa = total_amount_paisa
+            invoice.taxable_amount_paisa = taxable_paisa
+            invoice.vat_amount_paisa = vat_paisa
+            invoice.total_amount_paisa = total_paisa
 
             # Statutory AR Subledger posting: INVOICE_POSTED (+1 debit)
             due_dt = None
@@ -185,7 +240,7 @@ def generate_invoice(data: InvoiceCreate, current_user: User = Depends(require_e
                 client_id=order.client_id,
                 entry_type="INVOICE_POSTED",
                 direction=1,
-                amount_paisa=total_amount_paisa,
+                amount_paisa=total_paisa,
                 source_doc_ref=invoice_num,
                 invoice_id=invoice.id,
                 actor_id=current_user.id,
@@ -204,6 +259,137 @@ def generate_invoice(data: InvoiceCreate, current_user: User = Depends(require_e
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Concurrent invoice creation collision. Please try again."
                 )
+
+
+@router.patch("/{invoice_id}")
+def update_invoice(invoice_id: int, data: InvoiceUpdate, current_user: User = Depends(require_editor), db: Session = Depends(get_db)):
+    """
+    Authoritative server-side invoice edit endpoint.
+    Recalculates taxable amount and 13% VAT, adjusting the AR subledger accordingly.
+    Disallows edits on voided invoices.
+    """
+    invoice_repo = TenantRepository(Invoice, db, current_user.company_id)
+    invoice = invoice_repo.get_by_id(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if invoice.is_void:
+        raise HTTPException(status_code=400, detail="Cannot edit a voided invoice.")
+
+    order = db.query(SalesOrder).filter(
+        SalesOrder.id == invoice.sales_order_id,
+        SalesOrder.company_id == current_user.company_id
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Associated sales order not found")
+
+    order_items = db.query(SalesItem).filter(
+        SalesItem.sales_order_id == order.id,
+        SalesItem.company_id == current_user.company_id
+    ).all()
+
+    old_total_paisa = int(round(float(invoice.total_amount) * 100))
+
+    taxable_paisa, vat_paisa, total_paisa, vat_rate, eff_vat_enabled = compute_invoice_amounts(
+        order_items=order_items,
+        order_total=order.total_amount,
+        pricing_mode=data.pricing_mode or "VAT_EXCLUSIVE",
+        discount_amount=data.discount_amount or Decimal("0.0"),
+        other_charges=data.other_charges or Decimal("0.0"),
+        is_tax_exempt=data.is_tax_exempt if data.is_tax_exempt is not None else (not invoice.vat_enabled),
+        vat_enabled=True
+    )
+
+    invoice.subtotal = quantize_npr(Decimal(taxable_paisa) / Decimal(100))
+    invoice.vat_amount = quantize_npr(Decimal(vat_paisa) / Decimal(100))
+    invoice.total_amount = quantize_npr(Decimal(total_paisa) / Decimal(100))
+    invoice.vat_rate = vat_rate
+    invoice.vat_enabled = eff_vat_enabled
+    invoice.receivable_amount = quantize_npr(invoice.total_amount - invoice.received_amount)
+
+    invoice.taxable_amount_paisa = taxable_paisa
+    invoice.vat_amount_paisa = vat_paisa
+    invoice.total_amount_paisa = total_paisa
+
+    # Post an adjustment entry to AR subledger if the grand total changed
+    diff_paisa = total_paisa - old_total_paisa
+    if diff_paisa != 0:
+        rec_repo = TenantRepository(ReceivableEntry, db, current_user.company_id)
+        rec_repo.create(
+            client_id=order.client_id,
+            entry_type="DISPUTE_ADJUSTED",
+            direction=1 if diff_paisa > 0 else -1,
+            amount_paisa=abs(diff_paisa),
+            source_doc_ref=f"ADJ-{invoice.invoice_number}",
+            invoice_id=invoice.id,
+            actor_id=current_user.id,
+            occurred_at=datetime.now(timezone.utc),
+            due_date=None,
+            is_disputed=False,
+            notes=f"Tax adjustment for invoice {invoice.invoice_number} (recalculated VAT)"
+        )
+
+    db.commit()
+    db.refresh(invoice)
+    return invoice
+
+
+@router.post("/{invoice_id}/credit-note")
+def issue_credit_note(invoice_id: int, data: CreditNoteCreate, current_user: User = Depends(require_editor), db: Session = Depends(get_db)):
+    """
+    Issues a Nepal VAT statutory Credit Note (अनुसूची-१०) for sales returns / price adjustments.
+    Applies 13% VAT reduction and posts CREDIT_NOTE (-1) to the customer AR subledger.
+    """
+    invoice_repo = TenantRepository(Invoice, db, current_user.company_id)
+    invoice = invoice_repo.get_by_id(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if invoice.is_void:
+        raise HTTPException(status_code=400, detail="Cannot issue a credit note on a voided invoice.")
+
+    order = db.query(SalesOrder).filter(
+        SalesOrder.id == invoice.sales_order_id,
+        SalesOrder.company_id == current_user.company_id
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Sales order not found")
+
+    # In Nepal VAT rules, if original invoice was 13% VAT, credit note reduces VAT proportionally
+    credit_amount_paisa = data.amount_paisa
+    if invoice.vat_enabled and invoice.vat_rate > 0:
+        taxable_credit_paisa = int(round(Decimal(credit_amount_paisa) / Decimal("1.13")))
+        vat_credit_paisa = credit_amount_paisa - taxable_credit_paisa
+    else:
+        taxable_credit_paisa = credit_amount_paisa
+        vat_credit_paisa = 0
+
+    cn_ref = f"CN-{invoice.invoice_number}-{datetime.now(timezone.utc).strftime('%m%d%H%M')}"
+
+    rec_repo = TenantRepository(ReceivableEntry, db, current_user.company_id)
+    rec_repo.create(
+        client_id=order.client_id,
+        entry_type="CREDIT_NOTE",
+        direction=-1,
+        amount_paisa=credit_amount_paisa,
+        source_doc_ref=cn_ref,
+        invoice_id=invoice.id,
+        actor_id=current_user.id,
+        occurred_at=datetime.now(timezone.utc),
+        due_date=None,
+        is_disputed=False,
+        notes=f"Credit Note: {data.reason} (VAT reduction: Rs. {vat_credit_paisa/100:.2f})"
+    )
+
+    db.commit()
+    return {
+        "message": "Credit note issued successfully",
+        "credit_note_ref": cn_ref,
+        "invoice_id": invoice.id,
+        "invoice_number": invoice.invoice_number,
+        "total_credit_paisa": credit_amount_paisa,
+        "taxable_credit_paisa": taxable_credit_paisa,
+        "vat_credit_paisa": vat_credit_paisa,
+        "reason": data.reason
+    }
 
 
 @router.post("/{invoice_id}/cancel")
@@ -237,7 +423,7 @@ def cancel_invoice(invoice_id: int, current_user: User = Depends(require_editor)
             client_id=order.client_id,
             entry_type="VOID_REVERSAL",
             direction=-1,
-            amount_paisa=int(round(invoice.total_amount * 100)),
+            amount_paisa=int(round(float(invoice.total_amount) * 100)),
             source_doc_ref=f"VOID-{invoice.invoice_number}",
             invoice_id=invoice.id,
             actor_id=current_user.id,
@@ -351,13 +537,19 @@ def get_printable_invoice(invoice_id: int, current_user: User = Depends(get_curr
         </tr>
         """
 
+    safe_subtotal = float(invoice.subtotal or 0.0)
+    safe_vat = float(invoice.vat_amount or 0.0)
+    safe_total = float(invoice.total_amount or 0.0)
+    safe_received = float(invoice.received_amount or 0.0)
+    safe_receivable = float(invoice.receivable_amount or 0.0)
+
     vat_row_html = f"""
     <tr>
         <td style="padding: 6px 0; color: #1e3a8a; font-weight: 600;">
-            <span class="lbl-np">१३% मूल्य अभिवृद्धि कर:</span>
+            <span class="lbl-np">१३% मूल्य अभिवृद्धि कर (13% VAT):</span>
             <span class="lbl-en" style="display: none;">13% Value Added Tax:</span>
         </td>
-        <td style="text-align: right; font-weight: 600; color: #1e3a8a;">Rs. {invoice.vat_amount:,.2f}</td>
+        <td style="text-align: right; font-weight: 600; color: #1e3a8a;">Rs. {safe_vat:,.2f}</td>
     </tr>
     """
 
@@ -465,7 +657,7 @@ def get_printable_invoice(invoice_id: int, current_user: User = Depends(get_curr
                         <span class="lbl-np">जम्मा रकम (Sub-Total / Taxable Amount):</span>
                         <span class="lbl-en" style="display: none;">Sub-Total (Taxable Amount):</span>
                     </td>
-                    <td style="text-align: right; font-weight: 600;">Rs. {invoice.subtotal:,.2f}</td>
+                    <td style="text-align: right; font-weight: 600;">Rs. {safe_subtotal:,.2f}</td>
                 </tr>
                 {vat_row_html}
                 <tr style="border-top: 2px solid #333; font-weight: bold; font-size: 16px;">
@@ -473,15 +665,15 @@ def get_printable_invoice(invoice_id: int, current_user: User = Depends(get_curr
                         <span class="lbl-np">कुल जम्मा (Grand Total):</span>
                         <span class="lbl-en" style="display: none;">Grand Total:</span>
                     </td>
-                    <td style="text-align: right; padding-top: 8px; color: #1e40af;">Rs. {invoice.total_amount:,.2f}</td>
+                    <td style="text-align: right; padding-top: 8px; color: #1e40af;">Rs. {safe_total:,.2f}</td>
                 </tr>
                 <tr>
                     <td style="color: #166534; font-weight: 600;">Received Amount:</td>
-                    <td style="text-align: right; color: #166534; font-weight: 600;">Rs. {invoice.received_amount:,.2f}</td>
+                    <td style="text-align: right; color: #166534; font-weight: 600;">Rs. {safe_received:,.2f}</td>
                 </tr>
                 <tr>
                     <td style="color: #991b1b; font-weight: 600;">Receivable Balance:</td>
-                    <td style="text-align: right; color: #991b1b; font-weight: 600;">Rs. {invoice.receivable_amount:,.2f}</td>
+                    <td style="text-align: right; color: #991b1b; font-weight: 600;">Rs. {safe_receivable:,.2f}</td>
                 </tr>
             </table>
         </div>

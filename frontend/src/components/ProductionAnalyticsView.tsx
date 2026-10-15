@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { TABULAR_NUMS_STYLE } from "@/lib/currency";
 import { useLocale } from "@/context/LocaleContext";
+import { NepaliDatePicker } from "./NepaliDatePicker";
 
 interface ProductionAnalyticsViewProps {
   userRole?: string;
@@ -589,14 +590,12 @@ export function ProductionAnalyticsView({ userRole }: ProductionAnalyticsViewPro
 
               <div style={{ marginBottom: "12px" }}>
                 <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#334155", marginBottom: "4px" }}>
-                  Date (AD) *
+                  Shift Date (शिफ्ट मिति) *
                 </label>
-                <input
-                  type="date"
-                  required
-                  value={logDateAd}
-                  onChange={(e) => setLogDateAd(e.target.value)}
-                  style={{ width: "100%", padding: "7px 10px", fontSize: "12.5px", border: "1px solid #CBD5E1", borderRadius: "4px", outline: "none" }}
+                <NepaliDatePicker
+                  valueAd={logDateAd}
+                  compact
+                  onChange={({ ad }) => setLogDateAd(ad)}
                 />
               </div>
 

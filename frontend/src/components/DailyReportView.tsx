@@ -32,6 +32,8 @@ import {
 } from "recharts";
 import { exportToCSV } from "../utils/csvExport";
 import { useLocale } from "../context/LocaleContext";
+import { adToBs } from "../lib/nepaliDate";
+import { NepaliDatePicker } from "./NepaliDatePicker";
 
 const CHART_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4"];
 
@@ -193,18 +195,23 @@ export function DailyReportView() {
             <Calendar size={18} color="#3b82f6" />
           </div>
           <div>
-            <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#475569", fontWeight: "700" }}>Daily Operational Report</div>
-            <div style={{ fontWeight: "700", fontSize: "15px", color: "#0F172A" }}>Date Scope (AD): {selectedDate}</div>
+            <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#475569", fontWeight: "700" }}>Daily Operational Report (दैनिक कार्य सञ्चालन विवरण)</div>
+            <div style={{ fontWeight: "700", fontSize: "15px", color: "#0F172A" }}>
+              Date: {selectedDate} {(() => {
+                try {
+                  const bs = adToBs(selectedDate);
+                  return `(${bs.formatted} BS)`;
+                } catch { return ""; }
+              })()}
+            </div>
           </div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <input
-            type="date"
-            className="input-field"
-            style={{ width: "170px", padding: "6px 12px", fontSize: "13px" }}
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+          <NepaliDatePicker
+            valueAd={selectedDate}
+            compact
+            onChange={({ ad }) => setSelectedDate(ad)}
           />
           <button
             onClick={() => fetchReport(selectedDate)}

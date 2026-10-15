@@ -597,9 +597,10 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
     ];
     const rows = filteredInvoices.map((inv) => {
       const client = getClientByOrderId(inv.sales_order_id);
-      const subtotal = inv.subtotal ?? (inv.total_amount ? (inv.total_amount / 1.13) : 0);
-      const vat = (inv.vat_amount && inv.vat_amount > 0) ? inv.vat_amount : Math.round(subtotal * 0.13 * 100) / 100;
-      const totalAmount = inv.total_amount || (subtotal + vat);
+      const isExempt = inv.vat_enabled === false || inv.is_tax_exempt;
+      const subtotal = inv.subtotal != null ? Number(inv.subtotal) : (inv.total_amount ? (inv.total_amount / 1.13) : 0);
+      const vat = isExempt ? 0 : (inv.vat_amount != null ? Number(inv.vat_amount) : Math.round(subtotal * 0.13 * 100) / 100);
+      const totalAmount = inv.total_amount != null ? Number(inv.total_amount) : (subtotal + vat);
       return [
         inv.invoice_number,
         client?.name || "-",
@@ -955,9 +956,10 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
                 <tbody>
                   {paginatedInvoices.map((inv) => {
                     const client = getClientByOrderId(inv.sales_order_id);
-                    const subtotal = inv.subtotal ?? (inv.total_amount ? Math.round((inv.total_amount / 1.13) * 100) / 100 : 0);
-                    const vatAmount = (inv.vat_amount && inv.vat_amount > 0) ? inv.vat_amount : Math.round(subtotal * 0.13 * 100) / 100;
-                    const grandTotal = inv.total_amount || (subtotal + vatAmount);
+                    const isExempt = inv.vat_enabled === false || inv.is_tax_exempt;
+                    const subtotal = inv.subtotal != null ? Number(inv.subtotal) : (inv.total_amount ? Math.round((inv.total_amount / 1.13) * 100) / 100 : 0);
+                    const vatAmount = isExempt ? 0 : (inv.vat_amount != null ? Number(inv.vat_amount) : Math.round(subtotal * 0.13 * 100) / 100);
+                    const grandTotal = inv.total_amount != null ? Number(inv.total_amount) : (subtotal + vatAmount);
 
                     return (
                       <tr key={inv.id} style={{ opacity: inv.is_void ? 0.65 : 1 }}>
@@ -1526,13 +1528,10 @@ export function SalesInvoiceView({ userRole }: { userRole?: string }) {
 
               {/* Schedule-5 Invariants & Calculations */}
               {(() => {
-                const previewTaxable = previewInvoice.subtotal ?? (previewInvoice.total_amount ? Math.round((previewInvoice.total_amount / 1.13) * 100) / 100 : 0);
-                const previewVat = (previewInvoice.vat_amount && previewInvoice.vat_amount > 0)
-                  ? previewInvoice.vat_amount
-                  : (previewInvoice.vatAmount && previewInvoice.vatAmount > 0)
-                  ? previewInvoice.vatAmount
-                  : Math.round(previewTaxable * 0.13 * 100) / 100;
-                const previewGrandTotal = previewInvoice.total_amount || (previewTaxable + previewVat);
+                const isExempt = previewInvoice.vat_enabled === false || previewInvoice.is_tax_exempt;
+                const previewTaxable = previewInvoice.subtotal != null ? Number(previewInvoice.subtotal) : (previewInvoice.total_amount ? Math.round((previewInvoice.total_amount / 1.13) * 100) / 100 : 0);
+                const previewVat = isExempt ? 0 : (previewInvoice.vat_amount != null ? Number(previewInvoice.vat_amount) : Math.round(previewTaxable * 0.13 * 100) / 100);
+                const previewGrandTotal = previewInvoice.total_amount != null ? Number(previewInvoice.total_amount) : (previewTaxable + previewVat);
                 const wordsNp = amountToNepaliWords(previewGrandTotal);
                 const wordsEn = amountToEnglishWords(previewGrandTotal);
 

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import get_db, get_current_user, require_editor
 from app.core.sequence import generate_document_number
+from app.core.nepali_date import ad_to_bs_str
 from app.core.currency import quantize_npr
 from app.core.locks import (
     get_stock_mutex,
@@ -572,12 +573,14 @@ def dispatch_sales_order(
         target_wh_id = target_wh.id if target_wh else 1
 
         d_ad_str = (payload.dispatch_date_ad if payload and payload.dispatch_date_ad else None) or datetime.now().strftime("%Y-%m-%d")
-        d_bs_str = (payload.dispatch_date_bs if payload and payload.dispatch_date_bs else None) or (order.order_date_bs or "")
 
         try:
             d_ad_date = datetime.strptime(d_ad_str, "%Y-%m-%d").date()
         except ValueError:
             d_ad_date = date.today()
+            d_ad_str = d_ad_date.strftime("%Y-%m-%d")
+
+        d_bs_str = (payload.dispatch_date_bs if payload and payload.dispatch_date_bs else None) or ad_to_bs_str(d_ad_date)
 
         movement_repo = TenantRepository(StockMovement, db, current_user.company_id)
         for item in items:

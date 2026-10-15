@@ -48,6 +48,7 @@ yarn-error.log*
 .agent/
 .vscode/
 .idea/
+.kilo/
 .DS_Store
 Thumbs.db
 

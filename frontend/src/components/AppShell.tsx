@@ -19,11 +19,15 @@ import {
   ShieldAlert,
   Users,
   Image as ImageIcon,
-  Trophy
+  Trophy,
+  Receipt,
+  ShieldCheck,
+  BookOpen
 } from "lucide-react";
 
 import { LegalModal } from "./LegalModal";
 import { NetworkStatusBadge } from "./NetworkStatusBadge";
+import { OperationsManualModal } from "./OperationsManualModal";
 import { useLocale } from "../context/LocaleContext";
 import { subscribeQueueChange, replayQueue, setActiveCompanyId, QueueTelemetry } from "../lib/offlineQueue";
 
@@ -41,6 +45,7 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
   const [appVersion, setAppVersion] = useState<string>("1.0.0");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [legalModal, setLegalModal] = useState<"privacy" | "terms" | null>(null);
+  const [manualOpen, setManualOpen] = useState(false);
 
   // Offline outbox queue state
   const [isOnline, setIsOnline] = useState(true);
@@ -125,9 +130,15 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
     { id: "production", label: t("production_batches"), icon: Factory },
     { id: "purchase", label: t("purchase_raw_materials"), icon: FileText },
     { id: "hr", label: t("hr_management"), icon: Users },
+    { id: "expenses_assets", label: locale === "en" ? "Expenses & Assets" : "खर्च तथा सम्पत्ति", icon: Receipt },
     { id: "gallery", label: t("gallery"), icon: ImageIcon },
     { id: "analytics", label: t("analytics_ranks"), icon: Trophy },
-    ...(user?.role === "admin" ? [{ id: "ops_cockpit", label: t("ops_cockpit"), icon: ShieldAlert }] : []),
+    ...(user?.role === "admin"
+      ? [
+          { id: "admin_control", label: locale === "en" ? "Admin Control" : "प्रशासक कक्ष", icon: ShieldCheck },
+          { id: "ops_cockpit", label: t("ops_cockpit"), icon: ShieldAlert },
+        ]
+      : []),
     { id: "settings", label: t("settings_backups"), icon: SettingsIcon },
   ];
 
@@ -292,6 +303,29 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
               </button>
             </div>
 
+            {/* Operations Manual & SOP Modal Button */}
+            <button
+              type="button"
+              onClick={() => setManualOpen(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "4px 9px",
+                fontSize: "11px",
+                fontWeight: "600",
+                borderRadius: "4px",
+                border: "1px solid var(--border-color)",
+                backgroundColor: "#F8FAFC",
+                color: "#1E3A8A",
+                cursor: "pointer"
+              }}
+              title={locale === "en" ? "Operations Manual & SOP" : "सञ्चालन निर्देशिका तथा नियमहरू"}
+            >
+              <BookOpen size={13} color="#1E3A8A" />
+              <span>{locale === "en" ? "Manual" : "म्यानुअल"}</span>
+            </button>
+
             <button onClick={onLogout} className="btn-secondary" style={{ padding: "5px 10px", fontSize: "12px" }} aria-label={t("logout")}>
               <LogOut size={13} /> {t("logout")}
             </button>
@@ -329,6 +363,9 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
           {children}
         </main>
       </div>
+
+      {/* Searchable Operations Manual Modal */}
+      {manualOpen && <OperationsManualModal isOpen={manualOpen} onClose={() => setManualOpen(false)} />}
     </div>
   );
 }

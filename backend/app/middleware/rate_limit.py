@@ -1,13 +1,84 @@
 import time
+import ipaddress
+import logging
 from collections import defaultdict
+from typing import List, Optional
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import Request, HTTPException, status
 from fastapi.responses import JSONResponse
+from app.config import settings
+
+logger = logging.getLogger("livo_erp.rate_limit")
+
+def is_ip_in_trusted_list(ip_str: str, trusted_list: List[str]) -> bool:
+    """Checks if an IP string is present in or covered by trusted proxies/CIDRs."""
+    if not ip_str:
+        return False
+    try:
+        ip = ipaddress.ip_address(ip_str)
+        for trusted in trusted_list:
+            trusted = trusted.strip()
+            if not trusted:
+                continue
+            if "/" in trusted:
+                if ip in ipaddress.ip_network(trusted, strict=False):
+                    return True
+            else:
+                if ip == ipaddress.ip_address(trusted):
+                    return True
+    except ValueError:
+        return False
+    return False
+
+def extract_client_ip(request: Request, trusted_proxies: Optional[List[str]] = None) -> str:
+    """
+    Extracts the client IP using X-Forwarded-For right-to-left traversal and trusted proxy verification (SEC-03 / OWASP reverse-proxy guidelines).
+    - If the direct peer connection (request.client.host) is NOT in trusted_proxies,
+      forwarded headers are considered untrusted/spoofed and strictly ignored.
+    - If the direct peer IS a trusted proxy, X-Forwarded-For is traversed from right-to-left
+      to locate the first untrusted upstream IP.
+    """
+    peer_ip = request.client.host if request.client and request.client.host else "127.0.0.1"
+    
+    if trusted_proxies is None:
+        trusted_proxies = settings.TRUSTED_PROXIES
+
+    if not is_ip_in_trusted_list(peer_ip, trusted_proxies):
+        # Peer is NOT a trusted proxy: ignore all forwarded headers to prevent spoofing
+        return peer_ip
+
+    # Peer is a trusted proxy: inspect forwarded headers
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        for candidate in reversed(parts):
+            try:
+                ip_obj = ipaddress.ip_address(candidate)
+                if not is_ip_in_trusted_list(str(ip_obj), trusted_proxies):
+                    return str(ip_obj)
+            except ValueError:
+                # Malformed IP in header: skip safely
+                continue
+
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        real_ip = real_ip.strip()
+        try:
+            ip_obj = ipaddress.ip_address(real_ip)
+            if not is_ip_in_trusted_list(str(ip_obj), trusted_proxies):
+                return str(ip_obj)
+        except ValueError:
+            pass
+
+    return peer_ip
 
 class BasicRateLimitMiddleware(BaseHTTPMiddleware):
     """
-    Simple in-memory sliding window rate limiter for public auth endpoints.
-    Sized appropriately for a 3-user internal tool per RULES.md §4.
+    In-memory sliding window rate limiter for public auth endpoints (SEC-03 hardened).
+    
+    NOTE: In-memory sliding window operates per Python process/instance.
+    For multi-instance / horizontally scaled production deployments, a distributed
+    store (e.g. Redis / PostgreSQL advisory count) is a release prerequisite.
     """
     _instances = []
 
@@ -26,13 +97,7 @@ class BasicRateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Rate limit only authentication/login endpoints
         if request.url.path.endswith("/auth/login"):
-            forwarded = request.headers.get("X-Forwarded-For")
-            if forwarded:
-                client_ip = forwarded.split(",")[0].strip()
-            elif request.headers.get("X-Real-IP"):
-                client_ip = request.headers.get("X-Real-IP").strip()
-            else:
-                client_ip = request.client.host if request.client else "127.0.0.1"
+            client_ip = extract_client_ip(request)
             now = time.time()
             
             # Clean up old timestamps

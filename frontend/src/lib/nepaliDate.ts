@@ -305,3 +305,6 @@ export function getTodayAd(): string {
   const nptDate = new Date(nptMs);
   return formatAd(nptDate);
 }
+
+export const todayBs = getTodayBs;
+

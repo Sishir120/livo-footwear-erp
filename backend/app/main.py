@@ -11,30 +11,70 @@ from app.middleware.rate_limit import BasicRateLimitMiddleware
 from app.api.v1.router import api_router
 
 import os
+import re
+import logging
+import threading
+from sqlalchemy import text
 from alembic.config import Config
 from alembic import command
+from app.core.demo_seeding import seed_demo_users_if_enabled
+
+logger = logging.getLogger("livo_erp.lifecycle")
+
+_migration_lock = threading.Lock()
+MIGRATION_COORDINATION_LOCK_ID = 8877665544332211
+
+def _sanitize_db_error(msg: str) -> str:
+    """Masks database passwords in connection strings from logs and exception messages."""
+    return re.sub(r"://([^:]+):([^@]+)@", r"://\1:***@", str(msg))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Execute database migrations via Alembic (RULES.md / Item 5 requirement: no more create_all)
-    try:
-        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        alembic_ini = os.path.join(backend_dir, "alembic.ini")
-        if os.path.exists(alembic_ini):
-            alembic_cfg = Config(alembic_ini)
-            alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
-            from sqlalchemy import inspect
-            inspector = inspect(engine)
-            existing_tables = inspector.get_table_names()
-            if "companies" in existing_tables and "alembic_version" not in existing_tables:
-                command.stamp(alembic_cfg, "002_invoice_uq")
-            command.upgrade(alembic_cfg, "head")
-        else:
-            Base.metadata.create_all(bind=engine)
-    except Exception as e:
-        print(f"Lifespan DB setup notice: {e}")
+    # Execute database migrations via Alembic if AUTO_MIGRATE is enabled (SEC-02: fail safely on error)
+    if settings.AUTO_MIGRATE:
+        with _migration_lock:
+            backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            alembic_ini = os.path.join(backend_dir, "alembic.ini")
+            if os.path.exists(alembic_ini):
+                alembic_cfg = Config(alembic_ini)
+                alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+                
+                # Coordinate concurrent multi-instance deployments via PostgreSQL advisory lock
+                pg_conn = None
+                is_pg = False
+                try:
+                    if engine.dialect.name == "postgresql":
+                        is_pg = True
+                        pg_conn = engine.connect()
+                        pg_conn.execute(text(f"SELECT pg_advisory_lock({MIGRATION_COORDINATION_LOCK_ID})"))
+                        logger.info("Acquired PostgreSQL migration advisory lock.")
+                except Exception as lock_err:
+                    logger.warning("Could not acquire PostgreSQL migration advisory lock: %s", _sanitize_db_error(lock_err))
 
-    # Seed initial company and users if empty
+                try:
+                    logger.info("Applying database migrations up to head...")
+                    command.upgrade(alembic_cfg, "head")
+                    logger.info("Database migrations applied successfully.")
+                except Exception as e:
+                    sanitized = _sanitize_db_error(e)
+                    logger.critical("FATAL: Database migration failed during application startup: %s", sanitized, exc_info=True)
+                    # CRITICAL (SEC-02): Abort startup immediately. Never serve live traffic on a failed schema!
+                    raise RuntimeError(f"Database migration failure: {sanitized}") from None
+                finally:
+                    if is_pg and pg_conn:
+                        try:
+                            pg_conn.execute(text(f"SELECT pg_advisory_unlock({MIGRATION_COORDINATION_LOCK_ID})"))
+                            pg_conn.close()
+                            logger.info("Released PostgreSQL migration advisory lock.")
+                        except Exception:
+                            pass
+            else:
+                logger.warning("alembic.ini not found. Falling back to metadata.create_all.")
+                Base.metadata.create_all(bind=engine)
+    else:
+        logger.info("AUTO_MIGRATE=false. Skipping startup migrations (managed via deployment release gate).")
+
+    # Seed initial tenant company and warehouse structure if missing
     try:
         db = SessionLocal()
         try:
@@ -51,62 +91,6 @@ async def lifespan(app: FastAPI):
                 db.commit()
                 db.refresh(company)
 
-            # Seed admin_demo user (Executive Admin / Operator)
-            admin_demo = db.query(User).filter(User.username == "admin_demo").first()
-            if not admin_demo:
-                admin_demo = User(
-                    company_id=company.id,
-                    name="LIVO System Administrator",
-                    username="admin_demo",
-                    email="admin@livogroup.com",
-                    password_hash=get_password_hash("LivoAdmin2026!"),
-                    role="admin",
-                    active=True
-                )
-                db.add(admin_demo)
-
-            # Seed viewer_demo user (Compliance Auditor)
-            viewer_demo = db.query(User).filter(User.username == "viewer_demo").first()
-            if not viewer_demo:
-                viewer_demo = User(
-                    company_id=company.id,
-                    name="LIVO Compliance Auditor",
-                    username="viewer_demo",
-                    email="auditor@livogroup.com",
-                    password_hash=get_password_hash("LivoViewer2026!"),
-                    role="viewer",
-                    active=True
-                )
-                db.add(viewer_demo)
-
-            # Seed editor user
-            editor = db.query(User).filter(User.username == "editor_admin").first()
-            if not editor:
-                editor = User(
-                    company_id=company.id,
-                    name="Main Factory Editor",
-                    username="editor_admin",
-                    email="editor@livogroup.com",
-                    password_hash=get_password_hash("LivoEditor2026!"),
-                    role="editor",
-                    active=True
-                )
-                db.add(editor)
-
-            # Seed viewer user
-            viewer = db.query(User).filter(User.username == "viewer_user").first()
-            if not viewer:
-                viewer = User(
-                    company_id=company.id,
-                    name="Management Viewer",
-                    username="viewer_user",
-                    email="viewer@livogroup.com",
-                    password_hash=get_password_hash("LivoViewer2026!"),
-                    role="viewer",
-                    active=True
-                )
-                db.add(viewer)
-
             # Seed default main finished goods warehouse
             warehouse = db.query(Warehouse).filter(Warehouse.company_id == company.id, Warehouse.code == "WH-MAIN").first()
             if not warehouse:
@@ -118,21 +102,23 @@ async def lifespan(app: FastAPI):
                     is_active=True
                 )
                 db.add(warehouse)
+                db.commit()
 
-            db.commit()
+            # SEC-01: Demo accounts are strictly opt-in and forbidden in production
+            seed_demo_users_if_enabled(db, company)
+
         except Exception as e:
             db.rollback()
-            print(f"Seeding rollback notice: {e}")
+            logger.error(f"Tenant initialization notice: {e}")
         finally:
             db.close()
     except Exception as e:
-        print(f"Lifespan seeding notice: {e}")
+        logger.error(f"Lifespan tenant setup notice: {e}")
 
     yield
 
     # Graceful Shutdown Handler
     try:
-        from app.core.logging import logger
         logger.info("Executing graceful application shutdown: disposing DB engine and flushing logs.")
         engine.dispose()
         for handler in logger.handlers:

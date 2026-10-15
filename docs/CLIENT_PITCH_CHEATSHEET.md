@@ -7,16 +7,16 @@
 
 ## 1. Quick Access Cloud Coordinates & Credentials
 
-| Role | Username | Password | Direct Application URL |
+| Role | Username | Authentication | Direct Application URL |
 | :--- | :--- | :--- | :--- |
-| **Executive Admin / Editor** | `admin_demo` | `LivoAdmin2026!` | [https://livo-footwear-erp.vercel.app](https://livo-footwear-erp.vercel.app) |
-| **Auditor / Floor Viewer** | `viewer_demo` | `LivoViewer2026!` | [https://livo-footwear-erp.vercel.app](https://livo-footwear-erp.vercel.app) |
+| **Executive Admin / Editor** | `admin_demo` (or custom admin) | Environment Staging Secret | [https://livo-footwear-erp.vercel.app](https://livo-footwear-erp.vercel.app) |
+| **Auditor / Floor Viewer** | `viewer_demo` (or custom auditor) | Environment Staging Secret | [https://livo-footwear-erp.vercel.app](https://livo-footwear-erp.vercel.app) |
 | **Backend REST API** | — | Bearer JWT | [https://livo-footwear-erp-backend.onrender.com](https://livo-footwear-erp-backend.onrender.com) |
 | **Health Probe Endpoint** | — | Open | `/api/v1/health` |
 | **Interactive Lifecyle Diagram** | — | Local / Standalone | `docs/diagrams/workflow_complete_erp_lifecycle.html` |
 | **Triage Flowchart Diagram** | — | Local / Standalone | `docs/diagrams/workflow_critical_debugging_triage.html` |
 
-> **Pro-Tip:** The login card features 1-click **"Demo Admin"** and **"Demo Viewer"** quick-fill pill buttons. Use them to avoid typos during screen-sharing.
+> **Security Note:** In compliance with SEC-01, demo accounts are provisioned exclusively via explicit opt-in (`ENABLE_DEMO_SEEDING=true`), and the login form requires typing or password manager auto-fill.
 
 ---
 

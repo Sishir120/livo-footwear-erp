@@ -708,9 +708,12 @@ export function StockCardModal({ product, userRole, onClose, onStockChanged }: S
                       >
                         {/* Date / Time */}
                         <td style={{ fontSize: "11px", whiteSpace: "nowrap" }}>
-                          <div>{m.date_ad}</div>
+                          <div style={{ fontWeight: "600", color: "#0F172A" }}>{m.date_bs ? `${m.date_bs} BS` : m.date_ad}</div>
+                          {m.date_bs && (
+                            <div style={{ fontSize: "10px", color: "#64748B" }}>{m.date_ad} AD</div>
+                          )}
                           {m.created_at && (
-                            <div style={{ fontSize: "10px", color: "#64748B" }}>
+                            <div style={{ fontSize: "10px", color: "#94A3B8" }}>
                               {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                             </div>
                           )}

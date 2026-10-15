@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from pydantic import BaseModel, Field
 from app.core.sequence import generate_document_number
+from app.core.nepali_date import ad_to_bs_str
 from app.api.deps import get_db, get_current_user, require_editor
 from app.models.user import User
 from app.models.stock import Product, Warehouse, StockMovement
@@ -180,7 +181,7 @@ def create_stock_movement(
                 actor_id=current_user.id,
                 notes=payload.notes,
                 date_ad=datetime.now().strftime("%Y-%m-%d"),
-                date_bs=""
+                date_bs=ad_to_bs_str(datetime.now().date())
             )
             db.commit()
             db.refresh(movement)
@@ -207,7 +208,7 @@ def create_stock_movement(
         actor_id=current_user.id,
         notes=payload.notes,
         date_ad=datetime.now().strftime("%Y-%m-%d"),
-        date_bs=""
+        date_bs=ad_to_bs_str(datetime.now().date())
     )
     db.commit()
     db.refresh(movement)
@@ -716,7 +717,7 @@ def create_stock_adjustment(
             actor_id=current_user.id,
             approved_by_id=current_user.id if current_user.role == "admin" else None,
             date_ad=datetime.now().strftime("%Y-%m-%d"),
-            date_bs="",
+            date_bs=ad_to_bs_str(datetime.now().date()),
             notes=payload.reason_text or f"Stock adjustment: {payload.reason_code or 'MANUAL'}"
         )
         db.commit()

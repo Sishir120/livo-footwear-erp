@@ -27,7 +27,7 @@ from app.db.session import Base, engine, SessionLocal
 from app.models.company import Company
 from app.models.user import User
 from app.models.sales import Client, SalesOrder, SalesItem
-from app.models.stock import Product, StockMovement
+from app.models.stock import Product, StockMovement, Warehouse
 from app.models.stock_snapshot import StockSnapshot
 from app.models.invoice import Invoice
 from app.models.receivable import ReceivableEntry
@@ -309,7 +309,38 @@ class TestPrintableInvoiceQueryCount:
         comp, user, token = _make_tenant(db, "INV")
         prods = _bulk_create_products(db, comp.id, 12)
 
-        cli = _make_client(db, comp.id, 0)
+        cli = _make_client(db, comp.id, 99)
+        cli.credit_limit = Decimal("1000000.00")
+
+        # Seed initial finished goods inventory for each product to satisfy Available-to-Promise (ATP)
+        wh = db.query(Warehouse).filter_by(company_id=comp.id).first()
+        if not wh:
+            wh = Warehouse(
+                company_id=comp.id,
+                name=f"Main WH {comp.code}",
+                code=f"WH_{comp.code}",
+                location="Factory Premises",
+                is_active=True
+            )
+            db.add(wh)
+            db.commit()
+            db.refresh(wh)
+
+        for p in prods:
+            db.add(StockMovement(
+                company_id=comp.id,
+                product_id=p.id,
+                warehouse_id=wh.id,
+                size=p.size,
+                quantity=Decimal("100.0"),
+                direction=1,
+                ref_type="production",
+                movement_type="PRODUCTION_IN",
+                actor_id=user.id,
+                date_ad="2026-10-01",
+                date_bs="2083-06-15",
+            ))
+
         db.commit()
         db.refresh(cli)
         db.close()

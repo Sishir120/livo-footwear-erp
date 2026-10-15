@@ -1,6 +1,6 @@
 from decimal import Decimal
 import math
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -40,7 +40,7 @@ class SupplierCreate(BaseModel):
 class RawMaterialCreate(BaseModel):
     code: str = Field(..., min_length=1, max_length=50)
     name: str = Field(..., min_length=1, max_length=150)
-    unit: str = Field("kg", max_length=20)
+    unit: Literal["kg", "pcs", "litre"] = "kg"
     reorder_level: float = Field(0.0, ge=0.0)
     min_stock_alert: Decimal = Field(Decimal('0.0'), ge=Decimal('0.0'))
 

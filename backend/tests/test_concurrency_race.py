@@ -107,8 +107,8 @@ def test_concurrent_stock_dispatch_race(setup_race_env):
 
     # Fire 10 concurrent requests of 5 pairs each
     results = []
-    with TestClient(app, cookies={COOKIE_NAME: token}) as client:
-        def send_dispatch_request(worker_idx: int):
+    def send_dispatch_request(worker_idx: int):
+        with TestClient(app, cookies={COOKIE_NAME: token}) as client:
             res = client.post(
                 "/api/v1/stock/movements",
                 json={
@@ -122,10 +122,10 @@ def test_concurrent_stock_dispatch_race(setup_race_env):
             )
             return res.status_code, res.text
 
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(send_dispatch_request, i) for i in range(10)]
-            for f in as_completed(futures):
-                results.append(f.result())
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(send_dispatch_request, i) for i in range(10)]
+        for f in as_completed(futures):
+            results.append(f.result())
 
     status_codes = [status for status, _ in results]
     success_count = sum(1 for sc in status_codes if sc in (200, 201))
@@ -211,8 +211,8 @@ def test_concurrent_sales_orders_dispatch_race(setup_race_env):
     db.close()
 
     results = []
-    with TestClient(app, cookies={COOKIE_NAME: token}) as client:
-        def send_order_request(worker_idx: int):
+    def send_order_request(worker_idx: int):
+        with TestClient(app, cookies={COOKIE_NAME: token}) as client:
             res = client.post(
                 "/api/v1/sales/orders",
                 json={
@@ -225,10 +225,10 @@ def test_concurrent_sales_orders_dispatch_race(setup_race_env):
             )
             return res.status_code, res.text
 
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(send_order_request, i) for i in range(10)]
-            for f in as_completed(futures):
-                results.append(f.result())
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(send_order_request, i) for i in range(10)]
+        for f in as_completed(futures):
+            results.append(f.result())
 
     status_codes = [status for status, _ in results]
     success_count = sum(1 for sc in status_codes if sc in (200, 201))

@@ -6,6 +6,12 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     PROJECT_NAME: str = "LIVO GROUP OF INDUSTRIES Footwear ERP"
     VERSION: str = "1.0.0"
+    BUILD_COMMIT: str = (
+        os.getenv("BUILD_COMMIT")
+        or os.getenv("RENDER_GIT_COMMIT")
+        or os.getenv("GIT_COMMIT")
+        or "dev"
+    )[:8]
     API_V1_STR: str = "/api/v1"
 
     # Security — SECRET_KEY MUST be provided via environment variable.
@@ -40,6 +46,31 @@ class Settings(BaseSettings):
         elif isinstance(v, list):
             return v
         return []
+
+    # Environment mode (development, staging, production)
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development").lower()
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT in ("production", "prod")
+
+    # Explicit opt-in for demo user seeding (strictly disabled by default, strictly forbidden in production)
+    ENABLE_DEMO_SEEDING: bool = os.getenv("ENABLE_DEMO_SEEDING", "false").lower() == "true"
+
+    # Database auto-migration on application startup (defaults True, can be disabled for release-phase migrations)
+    AUTO_MIGRATE: bool = os.getenv("AUTO_MIGRATE", "true").lower() == "true"
+
+    # Trusted reverse proxy IPs / CIDRs for secure client IP extraction (X-Forwarded-For traversal)
+    TRUSTED_PROXIES: Union[List[str], str] = os.getenv("TRUSTED_PROXIES", "127.0.0.1,::1")
+
+    @field_validator("TRUSTED_PROXIES", mode="before")
+    @classmethod
+    def assemble_trusted_proxies(cls, v: Union[str, List[str]]) -> List[str]:
+        if isinstance(v, str):
+            return [i.strip() for i in v.split(",") if i.strip()]
+        elif isinstance(v, list):
+            return v
+        return ["127.0.0.1", "::1"]
 
     # Database
     DATABASE_URL: str = os.getenv(

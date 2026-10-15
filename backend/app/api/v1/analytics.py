@@ -20,26 +20,21 @@ from app.schemas.analytics import (
     ProductionRatioResponse,
     DailyLogCreate,
 )
+from app.core.nepali_date import ad_to_bs_str, parse_ad_date
 
 router = APIRouter(prefix="/analytics", tags=["Analytics & Leaderboards"])
 
 
-def _approx_ad_to_bs(ad_date_str: str) -> str:
+def _safe_ad_to_bs(ad_date_str: str) -> str:
     """
-    Fallback converter from AD (YYYY-MM-DD) to approximate BS date.
-    Nepali BS year is approximately AD + 56 years, 8 months.
+    Deterministic converter from AD (YYYY-MM-DD) to exact BS date string
+    using canonical app.core.nepali_date engine.
     """
     try:
-        parts = ad_date_str.split("-")
-        y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
-        bs_year = y + 56
-        bs_month = m + 8
-        if bs_month > 12:
-            bs_year += 1
-            bs_month -= 12
-        return f"{bs_year:04d}-{bs_month:02d}-{d:02d}"
+        ad_dt = parse_ad_date(ad_date_str)
+        return ad_to_bs_str(ad_dt)
     except Exception:
-        return "2083-06-15"
+        return "2083-01-01"
 
 
 @router.get("/top-products", response_model=List[TopProductItem])
@@ -321,7 +316,7 @@ def record_daily_factory_log(
     Log or update daily worker count and shift hours for a specific date.
     Enforces editor permissions.
     """
-    bs_date = payload.date_bs or _approx_ad_to_bs(payload.date_ad)
+    bs_date = payload.date_bs or _safe_ad_to_bs(payload.date_ad)
 
     # Check if entry exists for this company and date
     existing = db.query(DailyFactoryLog).filter(

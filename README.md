@@ -22,14 +22,22 @@
 | **Interactive API Documentation** | OpenAPI 3.0 / Swagger UI | [**Swagger UI (/docs)**](https://livo-footwear-erp-backend.onrender.com/docs) |
 | **Cloud Health Probe** | Real-time Database & Container Probe | [`/api/v1/health`](https://livo-footwear-erp-backend.onrender.com/api/v1/health) |
 
-### Demonstration Credentials (1-Click Login Enabled)
+### User Provisioning & Authentication (SEC-01 Hardened)
 
-The production web interface includes dedicated persona quick-fill buttons for operational and auditing workflows:
+In compliance with production security standards, hardcoded default credentials and automatic account seeding are disabled. 
 
-| Role | Username | Password | Operational Scope |
+To provision an initial administrator account for your environment:
+```bash
+# Secure CLI Provisioning (Interactive or Environment-Driven)
+python backend/scripts/create_admin.py --username admin --email admin@livogroup.com
+```
+
+For isolated non-production staging demonstrations only, demo accounts can be enabled via an explicit opt-in environment flag (`ENABLE_DEMO_SEEDING=true` in `backend/.env`). Demo seeding is strictly blocked when `ENVIRONMENT=production`.
+
+| Role | Username | Authentication Method | Operational Scope |
 | :--- | :--- | :--- | :--- |
-| **Executive Admin / Operator** | `admin_demo` | `LivoAdmin2026!` | Full write permissions: Inwarding, Batch Assembly, Sales Dispatch, Tax Invoicing, Backups |
-| **Statutory Auditor (Read-Only)** | `viewer_demo` | `LivoViewer2026!` | Read-only verification: Mutation endpoints and buttons are blocked and hidden |
+| **Executive Admin / Operator** | Configured via CLI / Staging | Secure Argon2/Bcrypt hash | Full write permissions: Inwarding, Batch Assembly, Sales Dispatch, Tax Invoicing, Backups |
+| **Statutory Auditor (Read-Only)** | Configured via Admin | Secure Argon2/Bcrypt hash | Read-only verification: Mutation endpoints and buttons are blocked and hidden |
 
 ---
 
