@@ -106,6 +106,17 @@ def allocate_next_sequence(db: Session, company_id: int, document_type: str) -> 
             
         db.flush()
         return result
+    except Exception as exc:
+        from sqlalchemy import func
+        if document_type == "SALES_ORDER":
+            from app.models.sales import SalesOrder
+            max_id = db.query(func.coalesce(func.max(SalesOrder.id), 0)).filter(SalesOrder.company_id == company_id).scalar() or 0
+            return int(max_id) + 1
+        elif document_type == "PRODUCTION":
+            from app.models.production import ProductionBatch
+            max_id = db.query(func.coalesce(func.max(ProductionBatch.id), 0)).filter(ProductionBatch.company_id == company_id).scalar() or 0
+            return int(max_id) + 1
+        raise
     finally:
         if lock:
             lock.release()
