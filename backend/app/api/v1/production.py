@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from pydantic import BaseModel, Field
 from app.core.sequence import generate_document_number, allocate_next_sequence
-from app.api.deps import get_db, get_current_user, require_editor
+from app.api.deps import get_db, get_current_user, require_editor, require_admin
 from app.models.user import User
 from app.models.stock import Product, StockMovement, Warehouse
 from app.models.production import ProductionBatch, ProductionMaterialUsage
@@ -143,7 +143,7 @@ def create_bom_item(
 @router.delete("/bom/{bom_id}")
 def delete_bom_item(
     bom_id: int,
-    current_user: User = Depends(require_editor),
+    current_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
     bom = db.query(BillOfMaterials).filter(

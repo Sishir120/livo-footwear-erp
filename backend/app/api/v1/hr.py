@@ -79,8 +79,39 @@ def _sanitize_filename(name: str) -> str:
 def _worker_to_response(
     worker: Worker,
     outstanding_advance: int = 0,
-    current_month: Optional[CurrentMonthHours] = None
+    current_month: Optional[CurrentMonthHours] = None,
+    redact_compensation: bool = False
 ) -> WorkerResponse:
+    if redact_compensation:
+        cm = None
+        if current_month:
+            cm = CurrentMonthHours(
+                month_year=current_month.month_year,
+                total_working_hours=current_month.total_working_hours,
+                overtime_hours=current_month.overtime_hours,
+                status=current_month.status
+            )
+        return WorkerResponse(
+            id=worker.id,
+            company_id=worker.company_id,
+            worker_code=worker.worker_code,
+            name=worker.name,
+            join_date=worker.join_date,
+            pay_type=worker.pay_type,
+            phone=worker.phone,
+            photo_url=worker.photo_url,
+            temporary_address=worker.temporary_address,
+            permanent_address=worker.permanent_address,
+            is_active=worker.is_active,
+            inactive_date=worker.inactive_date,
+            inactive_reason=worker.inactive_reason,
+            has_citizenship_doc=bool(worker.citizenship_doc_path),
+            citizenship_doc_name=worker.citizenship_doc_name,
+            standard_monthly_hours_override=worker.standard_monthly_hours_override,
+            created_at=worker.created_at,
+            current_month=cm
+        )
+
     return WorkerResponse(
         id=worker.id,
         company_id=worker.company_id,
@@ -214,7 +245,7 @@ def _calculate_outstanding_advance(db: Session, company_id: int, worker_id: int)
     return recon["total_outstanding_paisa"]
 
 
-@router.get("/workers", response_model=List[WorkerResponse])
+@router.get("/workers", response_model=List[WorkerResponse], response_model_exclude_unset=True)
 def get_workers(
     status_filter: str = Query("all", alias="status", description="'active', 'inactive', or 'all'"),
     pay_type: Optional[str] = Query(None, description="'SALARY' or 'WAGE'"),
@@ -299,8 +330,8 @@ def get_workers(
             net_paid_paisa=m_rec.net_paid_paisa if m_rec else 0,
             status=m_rec.status if m_rec else "NONE"
         )
-
-        results.append(_worker_to_response(w, outstanding, current_m))
+        redact = current_user.role not in ("admin", "manager", "editor")
+        results.append(_worker_to_response(w, outstanding, current_m, redact_compensation=redact))
 
     return results
 
@@ -624,7 +655,7 @@ def record_advance(
 @router.get("/workers/{worker_id}/history", response_model=WorkerHistoryResponse)
 def get_worker_history(
     worker_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
     db: Session = Depends(get_db)
 ):
     """

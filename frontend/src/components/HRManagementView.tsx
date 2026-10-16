@@ -60,7 +60,7 @@ interface Worker {
   name: string;
   join_date: string;
   pay_type: "SALARY" | "WAGE";
-  basic_rate_paisa: number;
+  basic_rate_paisa?: number;
   phone: string | null;
   photo_url?: string | null;
   temporary_address?: string | null;
@@ -71,7 +71,7 @@ interface Worker {
   has_citizenship_doc?: boolean;
   citizenship_doc_name?: string | null;
   created_at: string;
-  outstanding_advance_paisa: number;
+  outstanding_advance_paisa?: number;
   current_month?: CurrentMonthHours | null;
 }
 
@@ -545,7 +545,7 @@ export function HRManagementView({ userRole }: HRManagementViewProps) {
     setPayrollWorkerId(worker.id);
     setPayrollHours(String(worker.current_month?.total_working_hours || (worker.pay_type === "SALARY" ? 208 : 0)));
     setPayrollOtHours(String(worker.current_month?.overtime_hours || 0));
-    setPayrollAdvanceDeductionNpr(fromPaisa(worker.outstanding_advance_paisa, false));
+    setPayrollAdvanceDeductionNpr(fromPaisa(worker.outstanding_advance_paisa || 0, false));
     setPayrollFormError(null);
     setShowPayrollModal(true);
   };
@@ -567,21 +567,22 @@ export function HRManagementView({ userRole }: HRManagementViewProps) {
     const twh = parseFloat(payrollHours) || 0;
     const ot = parseFloat(payrollOtHours) || 0;
     if (selectedPayrollWorker.pay_type === "SALARY") {
-      const basic = selectedPayrollWorker.basic_rate_paisa;
+      const basic = selectedPayrollWorker.basic_rate_paisa || 0;
       const hourlyOTRate = (basic / 208) * 1.5;
       return Math.round(basic + (ot * hourlyOTRate));
     } else {
-      const hourly = selectedPayrollWorker.basic_rate_paisa;
+      const hourly = selectedPayrollWorker.basic_rate_paisa || 0;
       return Math.round((twh * hourly) + (ot * hourly * 1.5));
     }
   })();
 
   const previewAdvanceDeductionPaisa = (() => {
     if (!selectedPayrollWorker) return 0;
+    const workerAdv = selectedPayrollWorker.outstanding_advance_paisa || 0;
     if (payrollAdvanceDeductionNpr === "") {
-      return Math.min(previewGrossPaisa, selectedPayrollWorker.outstanding_advance_paisa);
+      return Math.min(previewGrossPaisa, workerAdv);
     }
-    return Math.min(toPaisa(payrollAdvanceDeductionNpr), selectedPayrollWorker.outstanding_advance_paisa);
+    return Math.min(toPaisa(payrollAdvanceDeductionNpr), workerAdv);
   })();
 
   const previewNetPaidPaisa = Math.max(0, previewGrossPaisa - previewAdvanceDeductionPaisa);
@@ -589,8 +590,8 @@ export function HRManagementView({ userRole }: HRManagementViewProps) {
   // Aggregated KPI Stats
   const activeCount = workers.filter((w) => w.is_active).length;
   const totalAdvancesPaisa = workers.reduce((sum, w) => sum + (w.outstanding_advance_paisa || 0), 0);
-  const totalHoursThisMonth = workers.reduce((sum, w) => sum + (w.current_month?.total_working_hours || 0), 0);
-  const totalOtHoursThisMonth = workers.reduce((sum, w) => sum + (w.current_month?.overtime_hours || 0), 0);
+  const totalHoursThisMonth = workers.reduce((sum, w) => sum + (Number(w.current_month?.total_working_hours) || 0), 0);
+  const totalOtHoursThisMonth = workers.reduce((sum, w) => sum + (Number(w.current_month?.overtime_hours) || 0), 0);
   const salariedCount = workers.filter((w) => w.pay_type === "SALARY").length;
   const wageCount = workers.filter((w) => w.pay_type === "WAGE").length;
 
@@ -624,10 +625,10 @@ export function HRManagementView({ userRole }: HRManagementViewProps) {
       `"${w.name}"`,
       w.join_date,
       w.pay_type,
-      fromPaisa(w.basic_rate_paisa, false),
+      w.basic_rate_paisa !== undefined ? fromPaisa(w.basic_rate_paisa, false) : "[RESTRICTED]",
       w.current_month?.total_working_hours || 0,
       w.current_month?.overtime_hours || 0,
-      fromPaisa(w.outstanding_advance_paisa, false),
+      w.outstanding_advance_paisa !== undefined ? fromPaisa(w.outstanding_advance_paisa, false) : "[RESTRICTED]",
       w.is_active ? "ACTIVE" : "INACTIVE",
       `"${w.phone || ""}"`
     ]);
@@ -792,8 +793,8 @@ export function HRManagementView({ userRole }: HRManagementViewProps) {
           <div style={{ fontSize: "11px", fontWeight: "600", color: "#B45309", textTransform: "uppercase", letterSpacing: "0.05em" }}>
             {t("outstanding_advance")}
           </div>
-          <div style={{ fontSize: "22px", fontWeight: "700", color: totalAdvancesPaisa > 0 ? "#DC2626" : "#059669", marginTop: "4px", ...TABULAR_NUMS_STYLE }}>
-            NPR {fromPaisa(totalAdvancesPaisa)}
+          <div style={{ fontSize: "22px", fontWeight: "700", color: isViewer ? "#64748B" : (totalAdvancesPaisa > 0 ? "#DC2626" : "#059669"), marginTop: "4px", ...TABULAR_NUMS_STYLE }}>
+            {isViewer ? "[Restricted]" : `NPR ${fromPaisa(totalAdvancesPaisa)}`}
           </div>
           <div style={{ fontSize: "11px", color: "#64748B", marginTop: "3px" }}>
             {isNepali ? "तलब भुक्तानीमा स्वतः कट्टा हुने" : "Auto-deducted during payroll"}
@@ -996,7 +997,7 @@ export function HRManagementView({ userRole }: HRManagementViewProps) {
         /* ==================================================================== */
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "16px" }}>
           {filteredWorkers.map((worker) => {
-            const hasAdvance = worker.outstanding_advance_paisa > 0;
+            const hasAdvance = (worker.outstanding_advance_paisa || 0) > 0;
             const initials = getInitials(worker.name);
             const avatarBg = getAvatarColor(worker.name);
 
@@ -1116,20 +1117,26 @@ export function HRManagementView({ userRole }: HRManagementViewProps) {
                   <div>
                     <div style={{ fontSize: "10.5px", color: "#64748B", fontWeight: "500" }}>{t("pay_type")} & Rate</div>
                     <div style={{ fontWeight: "700", color: "#0F172A", ...TABULAR_NUMS_STYLE }}>
-                      NPR {fromPaisa(worker.basic_rate_paisa)}
-                      <span style={{ fontSize: "10px", color: "#64748B", fontWeight: "400", marginLeft: "2px" }}>
-                        {worker.pay_type === "SALARY" ? "/mo" : "/hr"}
-                      </span>
+                      {worker.basic_rate_paisa !== undefined && worker.basic_rate_paisa !== null ? (
+                        <>
+                          NPR {fromPaisa(worker.basic_rate_paisa)}
+                          <span style={{ fontSize: "10px", color: "#64748B", fontWeight: "400", marginLeft: "2px" }}>
+                            {worker.pay_type === "SALARY" ? "/mo" : "/hr"}
+                          </span>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: "11px", color: "#94A3B8", fontStyle: "italic" }}>[Restricted]</span>
+                      )}
                     </div>
                   </div>
 
                   <div>
                     <div style={{ fontSize: "10.5px", color: "#64748B", fontWeight: "500" }}>Current Month Hours</div>
                     <div style={{ fontWeight: "600", color: "#334155", ...TABULAR_NUMS_STYLE }}>
-                      {worker.current_month?.total_working_hours.toFixed(1) || "0.0"} hrs
-                      {worker.current_month && worker.current_month.overtime_hours > 0 && (
+                      {Number(worker.current_month?.total_working_hours || 0).toFixed(1)} hrs
+                      {worker.current_month && Number(worker.current_month.overtime_hours || 0) > 0 && (
                         <span style={{ color: "#7C3AED", fontWeight: "700", marginLeft: "4px" }}>
-                          (+{worker.current_month.overtime_hours.toFixed(1)} OT)
+                          (+{Number(worker.current_month.overtime_hours || 0).toFixed(1)} OT)
                         </span>
                       )}
                     </div>
@@ -1153,12 +1160,16 @@ export function HRManagementView({ userRole }: HRManagementViewProps) {
                 {/* Advance Due & Citizenship Document Status */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", fontSize: "11px" }}>
                   <div>
-                    {hasAdvance ? (
-                      <span style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FCA5A5", padding: "2px 6px", borderRadius: "4px", fontWeight: "700", ...TABULAR_NUMS_STYLE }}>
-                        Adv Due: NPR {fromPaisa(worker.outstanding_advance_paisa)}
-                      </span>
+                    {worker.outstanding_advance_paisa !== undefined && worker.outstanding_advance_paisa !== null ? (
+                      hasAdvance ? (
+                        <span style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FCA5A5", padding: "2px 6px", borderRadius: "4px", fontWeight: "700", ...TABULAR_NUMS_STYLE }}>
+                          Adv Due: NPR {fromPaisa(worker.outstanding_advance_paisa)}
+                        </span>
+                      ) : (
+                        <span style={{ color: "#059669", fontWeight: "500" }}>Adv Due: NPR 0.00</span>
+                      )
                     ) : (
-                      <span style={{ color: "#059669", fontWeight: "500" }}>Adv Due: NPR 0.00</span>
+                      <span style={{ color: "#94A3B8", fontStyle: "italic" }}>Adv: [Restricted]</span>
                     )}
                   </div>
 
@@ -1329,7 +1340,7 @@ export function HRManagementView({ userRole }: HRManagementViewProps) {
             </thead>
             <tbody>
               {filteredWorkers.map((worker) => {
-                const hasAdvance = worker.outstanding_advance_paisa > 0;
+                const hasAdvance = (worker.outstanding_advance_paisa || 0) > 0;
                 const initials = getInitials(worker.name);
                 const avatarBg = getAvatarColor(worker.name);
 
@@ -1415,22 +1426,28 @@ export function HRManagementView({ userRole }: HRManagementViewProps) {
 
                     {/* Basic Rate */}
                     <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: "600", color: "#0F172A", ...TABULAR_NUMS_STYLE }}>
-                      NPR {fromPaisa(worker.basic_rate_paisa)}
-                      <span style={{ fontSize: "10.5px", color: "#64748B", fontWeight: "400", marginLeft: "4px" }}>
-                        {worker.pay_type === "SALARY" ? "/mo" : "/hr"}
-                      </span>
+                      {worker.basic_rate_paisa !== undefined && worker.basic_rate_paisa !== null ? (
+                        <>
+                          NPR {fromPaisa(worker.basic_rate_paisa)}
+                          <span style={{ fontSize: "10.5px", color: "#64748B", fontWeight: "400", marginLeft: "4px" }}>
+                            {worker.pay_type === "SALARY" ? "/mo" : "/hr"}
+                          </span>
+                        </>
+                      ) : (
+                        <span style={{ color: "#94A3B8", fontStyle: "italic", fontSize: "12px" }}>[Restricted]</span>
+                      )}
                     </td>
 
                     {/* Current Month TWH */}
                     <td style={{ padding: "10px 14px", textAlign: "right", color: "#334155", ...TABULAR_NUMS_STYLE }}>
-                      {worker.current_month ? worker.current_month.total_working_hours.toFixed(1) : "0.0"} hrs
+                      {worker.current_month ? Number(worker.current_month.total_working_hours || 0).toFixed(1) : "0.0"} hrs
                     </td>
 
                     {/* Current Month OT */}
                     <td style={{ padding: "10px 14px", textAlign: "right", ...TABULAR_NUMS_STYLE }}>
-                      {worker.current_month && worker.current_month.overtime_hours > 0 ? (
+                      {worker.current_month && Number(worker.current_month.overtime_hours || 0) > 0 ? (
                         <span style={{ fontWeight: "700", color: "#7C3AED" }}>
-                          +{worker.current_month.overtime_hours.toFixed(1)} hrs
+                          +{Number(worker.current_month.overtime_hours || 0).toFixed(1)} hrs
                         </span>
                       ) : (
                         <span style={{ color: "#94A3B8" }}>0.0 hrs</span>
@@ -1439,22 +1456,26 @@ export function HRManagementView({ userRole }: HRManagementViewProps) {
 
                     {/* Outstanding Advance */}
                     <td style={{ padding: "10px 14px", textAlign: "right", ...TABULAR_NUMS_STYLE }}>
-                      {hasAdvance ? (
-                        <span
-                          style={{
-                            fontWeight: "700",
-                            color: "#DC2626",
-                            background: "#FEF2F2",
-                            border: "1px solid #FCA5A5",
-                            padding: "2px 6px",
-                            borderRadius: "4px",
-                            fontSize: "11.5px"
-                          }}
-                        >
-                          NPR {fromPaisa(worker.outstanding_advance_paisa)}
-                        </span>
+                      {worker.outstanding_advance_paisa !== undefined && worker.outstanding_advance_paisa !== null ? (
+                        hasAdvance ? (
+                          <span
+                            style={{
+                              fontWeight: "700",
+                              color: "#DC2626",
+                              background: "#FEF2F2",
+                              border: "1px solid #FCA5A5",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              fontSize: "11.5px"
+                            }}
+                          >
+                            NPR {fromPaisa(worker.outstanding_advance_paisa)}
+                          </span>
+                        ) : (
+                          <span style={{ color: "#059669", fontWeight: "500" }}>NPR 0.00</span>
+                        )
                       ) : (
-                        <span style={{ color: "#059669", fontWeight: "500" }}>NPR 0.00</span>
+                        <span style={{ color: "#94A3B8", fontStyle: "italic", fontSize: "12px" }}>[Restricted]</span>
                       )}
                     </td>
 
@@ -1840,7 +1861,7 @@ export function HRManagementView({ userRole }: HRManagementViewProps) {
                   <option value="">-- Choose Worker --</option>
                   {workers.map((w) => (
                     <option key={w.id} value={w.id}>
-                      {w.worker_code} - {w.name} (Due: NPR {fromPaisa(w.outstanding_advance_paisa)})
+                      {w.worker_code} - {w.name} (Due: NPR {fromPaisa(w.outstanding_advance_paisa || 0)})
                     </option>
                   ))}
                 </select>
@@ -2003,7 +2024,7 @@ export function HRManagementView({ userRole }: HRManagementViewProps) {
                       if (w) {
                         setPayrollHours(String(w.current_month?.total_working_hours || (w.pay_type === "SALARY" ? 208 : 0)));
                         setPayrollOtHours(String(w.current_month?.overtime_hours || 0));
-                        setPayrollAdvanceDeductionNpr(fromPaisa(w.outstanding_advance_paisa, false));
+                        setPayrollAdvanceDeductionNpr(fromPaisa(w.outstanding_advance_paisa || 0, false));
                       }
                     }}
                     style={{ width: "100%", padding: "7px 10px", fontSize: "12.5px", border: "1px solid #CBD5E1", borderRadius: "4px", background: "#FFFFFF", outline: "none" }}
@@ -2196,7 +2217,7 @@ export function HRManagementView({ userRole }: HRManagementViewProps) {
                   </span>
                 </div>
                 <div style={{ fontSize: "12px", color: "#64748B", marginTop: "3px" }}>
-                  {t("join_date")}: {selectedWorkerForHistory.join_date} • {selectedWorkerForHistory.pay_type === "SALARY" ? t("salary_type") : t("wage_type")} (NPR {fromPaisa(selectedWorkerForHistory.basic_rate_paisa)})
+                  {t("join_date")}: {selectedWorkerForHistory.join_date} • {selectedWorkerForHistory.pay_type === "SALARY" ? t("salary_type") : t("wage_type")} ({selectedWorkerForHistory.basic_rate_paisa !== undefined ? `NPR ${fromPaisa(selectedWorkerForHistory.basic_rate_paisa)}` : "[Restricted]"})
                 </div>
               </div>
               <button
@@ -2461,8 +2482,8 @@ export function HRManagementView({ userRole }: HRManagementViewProps) {
                             {historyMonthly.map((m) => (
                               <tr key={m.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
                                 <td style={{ padding: "8px 10px", fontWeight: "600", ...TABULAR_NUMS_STYLE }}>{m.month_year}</td>
-                                <td style={{ padding: "8px 10px", textAlign: "right", ...TABULAR_NUMS_STYLE }}>{m.total_working_hours.toFixed(1)}</td>
-                                <td style={{ padding: "8px 10px", textAlign: "right", ...TABULAR_NUMS_STYLE }}>{m.overtime_hours.toFixed(1)}</td>
+                                <td style={{ padding: "8px 10px", textAlign: "right", ...TABULAR_NUMS_STYLE }}>{Number(m.total_working_hours || 0).toFixed(1)}</td>
+                                <td style={{ padding: "8px 10px", textAlign: "right", ...TABULAR_NUMS_STYLE }}>{Number(m.overtime_hours || 0).toFixed(1)}</td>
                                 <td style={{ padding: "8px 10px", textAlign: "right", ...TABULAR_NUMS_STYLE }}>NPR {fromPaisa(m.gross_pay_paisa)}</td>
                                 <td style={{ padding: "8px 10px", textAlign: "right", color: "#DC2626", ...TABULAR_NUMS_STYLE }}>
                                   - NPR {fromPaisa(m.advance_deduction_paisa)}
@@ -2638,8 +2659,8 @@ export function HRManagementView({ userRole }: HRManagementViewProps) {
                       <li>{isNepali ? "नयाँ तलब गणनामा समावेश गरिने छैन।" : "Worker will be blocked from new monthly payroll runs."}</li>
                       <li>
                         {isNepali
-                          ? `बाँकी पेश्की (रु. ${fromPaisa(statusWorker.outstanding_advance_paisa)}) तथा सम्पूर्ण पुरानो इतिहास सुरक्षित रहनेछ।`
-                          : `Outstanding advance (NPR ${fromPaisa(statusWorker.outstanding_advance_paisa)}) and full audit history remain intact.`}
+                          ? `बाँकी पेश्की (रु. ${fromPaisa(statusWorker.outstanding_advance_paisa || 0)}) तथा सम्पूर्ण पुरानो इतिहास सुरक्षित रहनेछ।`
+                          : `Outstanding advance (NPR ${fromPaisa(statusWorker.outstanding_advance_paisa || 0)}) and full audit history remain intact.`}
                       </li>
                     </ul>
                   </div>

@@ -54,11 +54,11 @@ class CitizenshipDocResponse(BaseModel):
 
 class CurrentMonthHours(BaseModel):
     month_year: str
-    total_working_hours: Decimal = 0.0
-    overtime_hours: Decimal = 0.0
-    gross_pay_paisa: int = 0
-    advance_deduction_paisa: int = 0
-    net_paid_paisa: int = 0
+    total_working_hours: Decimal = Decimal("0.0")
+    overtime_hours: Decimal = Decimal("0.0")
+    gross_pay_paisa: Optional[int] = None
+    advance_deduction_paisa: Optional[int] = None
+    net_paid_paisa: Optional[int] = None
     status: str = "NONE"  # NONE, PENDING, PAID
 
 
@@ -71,7 +71,7 @@ class WorkerResponse(BaseModel):
     name: str
     join_date: dt.date
     pay_type: str
-    basic_rate_paisa: int
+    basic_rate_paisa: Optional[int] = None
     phone: Optional[str] = None
     photo_url: Optional[str] = None
     temporary_address: Optional[str] = None
@@ -84,7 +84,7 @@ class WorkerResponse(BaseModel):
     standard_monthly_hours_override: Optional[Decimal] = None
     overtime_rate_paisa_override: Optional[int] = None
     created_at: dt.datetime
-    outstanding_advance_paisa: int = 0
+    outstanding_advance_paisa: Optional[int] = None
     current_month: Optional[CurrentMonthHours] = None
 
 

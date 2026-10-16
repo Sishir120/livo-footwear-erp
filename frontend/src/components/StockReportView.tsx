@@ -14,7 +14,8 @@ import {
   RefreshCw,
   Info,
   Sliders,
-  FileText
+  FileText,
+  ArrowRightLeft
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -33,6 +34,7 @@ import { exportToCSV } from "../utils/csvExport";
 import { useLocale } from "../context/LocaleContext";
 import { StockCardModal } from "./StockCardModal";
 import { StockAdjustmentModal } from "./StockAdjustmentModal";
+import { StockTransferModal } from "./StockTransferModal";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Boot: "#3b82f6",
@@ -71,6 +73,7 @@ export function StockReportView({ userRole }: StockReportViewProps) {
 
   const [isAdjustmentOpen, setIsAdjustmentOpen] = useState(false);
   const [adjustmentTargetProduct, setAdjustmentTargetProduct] = useState<any>(null);
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
 
   useEffect(() => {
     fetchStockReport();
@@ -448,6 +451,27 @@ export function StockReportView({ userRole }: StockReportViewProps) {
               <Sliders size={13} /> + {locale === "en" ? "Stock Adjustment" : "स्टक मिलान (Stock Adjustment)"}
             </button>
           )}
+
+          {/* Inter-Warehouse Stock Transfers Trigger */}
+          <button
+            type="button"
+            onClick={() => setIsTransferOpen(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "12px",
+              padding: "5px 12px",
+              background: "#0F766E",
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: "3px",
+              fontWeight: "700",
+              cursor: "pointer"
+            }}
+          >
+            <ArrowRightLeft size={13} /> {locale === "en" ? "Stock Transfers" : "स्टक स्थानान्तरण (Transfers)"}
+          </button>
         </div>
       </div>
 
@@ -777,6 +801,18 @@ export function StockReportView({ userRole }: StockReportViewProps) {
             setIsAdjustmentOpen(false);
             setAdjustmentTargetProduct(null);
           }}
+          onSuccess={() => {
+            fetchStockReport();
+          }}
+        />
+      )}
+
+      {/* INTER-WAREHOUSE STOCK TRANSFER MODAL */}
+      {isTransferOpen && (
+        <StockTransferModal
+          isOpen={isTransferOpen}
+          userRole={userRole}
+          onClose={() => setIsTransferOpen(false)}
           onSuccess={() => {
             fetchStockReport();
           }}

@@ -520,8 +520,11 @@ def test_fresh_database_migration(tmp_path):
             "012_add_c15_indexes", "013_merge_heads", "014_raw_material_ledger_and_landed_cost",
             "015_sales_dispatch_and_expenses", "016_production_batch_color_and_gallery_link",
             "017_hr_worker_citizenship", "018_hr_compensation_and_installment_engine",
-            "019_advance_installment_recovery_engine", "020_fixed_assets_waste_and_expenses"
+            "019_advance_installment_recovery_engine", "020_fixed_assets_waste_and_expenses",
+            "021_add_document_sequences", "022_add_stock_transfers", "023_add_branches_and_warehouse_link",
+            "024_add_rate_limit_entries"
         )
+
 
 
 def test_audit_log_durability(db_session):
@@ -719,8 +722,11 @@ def test_migration_schema_integrity():
         "012_add_c15_indexes", "013_merge_heads", "014_raw_material_ledger_and_landed_cost",
         "015_sales_dispatch_and_expenses", "016_production_batch_color_and_gallery_link",
         "017_hr_worker_citizenship", "018_hr_compensation_and_installment_engine",
-        "019_advance_installment_recovery_engine", "020_fixed_assets_waste_and_expenses"
+        "019_advance_installment_recovery_engine", "020_fixed_assets_waste_and_expenses",
+        "021_add_document_sequences", "022_add_stock_transfers", "023_add_branches_and_warehouse_link",
+        "024_add_rate_limit_entries"
     )
+
 
 
 def test_existing_database_upgrade(tmp_path):
@@ -774,8 +780,11 @@ def test_existing_database_upgrade(tmp_path):
             "012_add_c15_indexes", "013_merge_heads", "014_raw_material_ledger_and_landed_cost",
             "015_sales_dispatch_and_expenses", "016_production_batch_color_and_gallery_link",
             "017_hr_worker_citizenship", "018_hr_compensation_and_installment_engine",
-            "019_advance_installment_recovery_engine", "020_fixed_assets_waste_and_expenses"
+            "019_advance_installment_recovery_engine", "020_fixed_assets_waste_and_expenses",
+            "021_add_document_sequences", "022_add_stock_transfers", "023_add_branches_and_warehouse_link",
+            "024_add_rate_limit_entries"
         )
+
 
 
 def test_concurrent_transactions_and_isolation(test_db_engine):

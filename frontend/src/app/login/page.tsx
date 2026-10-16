@@ -5,15 +5,50 @@ import { Building2, Lock, ShieldAlert, Info, Eye, EyeOff } from "lucide-react";
 import { LegalModal } from "@/components/LegalModal";
 import { useLocale } from "@/context/LocaleContext";
 
+function sanitizeReturnUrl(raw: string | null): string {
+  if (!raw) return "/";
+  try {
+    const decoded = decodeURIComponent(raw).trim();
+    // Must be a relative path starting with single '/' and not '//' or '/\'
+    if (!decoded.startsWith("/") || decoded.startsWith("//") || decoded.startsWith("/\\")) {
+      return "/";
+    }
+    // Block protocol schemes (e.g. javascript:, data:, http:)
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(decoded)) {
+      return "/";
+    }
+    // Avoid redirect loops back to login
+    if (decoded.startsWith("/login")) {
+      return "/";
+    }
+    return decoded;
+  } catch {
+    return "/";
+  }
+}
+
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [loginSubmitting, setLoginSubmitting] = useState(false);
+  const [sessionExpiredNotice, setSessionExpiredNotice] = useState(false);
   const [legalModal, setLegalModal] = useState<"privacy" | "terms" | null>(null);
 
   const { locale, setLocale, t } = useLocale();
+
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("session_expired") === "1") {
+        setSessionExpiredNotice(true);
+        document.cookie = "livo_access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0";
+        document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0";
+      }
+    }
+  }, []);
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,8 +63,10 @@ export default function LoginPage() {
       });
 
       if (res.ok) {
-        // Successful authentication -> navigate to root workspace
-        window.location.href = "/";
+        // Successful authentication -> navigate to safe return_url or root workspace
+        const params = new URLSearchParams(window.location.search);
+        const destination = sanitizeReturnUrl(params.get("return_url"));
+        window.location.href = destination;
       } else if (res.status === 504 || res.status === 502) {
         setLoginError("Demo server is currently waking up from sleep (Render free tier requires ~45–50s on cold start). Please wait 20 seconds and click Sign In again.");
       } else {
@@ -107,7 +144,32 @@ export default function LoginPage() {
           <p style={{ fontSize: "12px", color: "#475569", marginTop: "4px" }}>{t("login_subtitle")}</p>
         </div>
 
+        {sessionExpiredNotice && !loginError && (
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              background: "#EFF6FF",
+              border: "1px solid #BFDBFE",
+              padding: "10px 14px",
+              borderRadius: "4px",
+              color: "#1E3A8A",
+              fontSize: "12.5px",
+              marginBottom: "18px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px"
+            }}
+          >
+            <Info size={16} />
+            {locale === "en"
+              ? "Your session has expired. Please sign in again to continue."
+              : "तपाईंको सत्र समाप्त भएको छ। जारी राख्न कृपया पुन: साइन इन गर्नुहोस्।"}
+          </div>
+        )}
+
         {loginError && (
+
           <div
             role="alert"
             aria-live="polite"

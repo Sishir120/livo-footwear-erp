@@ -39,6 +39,7 @@ class InvoiceCreate(BaseModel):
     pricing_mode: Optional[str] = Field("VAT_EXCLUSIVE", pattern="^(VAT_EXCLUSIVE|VAT_INCLUSIVE)$")
     discount_amount: Optional[Decimal] = Field(Decimal('0.0'), ge=Decimal('0.0'))
     other_charges: Optional[Decimal] = Field(Decimal('0.0'), ge=Decimal('0.0'))
+    is_draft: Optional[bool] = False
 
 
 class InvoiceUpdate(BaseModel):
@@ -46,6 +47,7 @@ class InvoiceUpdate(BaseModel):
     other_charges: Optional[Decimal] = Field(None, ge=Decimal('0.0'))
     is_tax_exempt: Optional[bool] = None
     pricing_mode: Optional[str] = Field(None, pattern="^(VAT_EXCLUSIVE|VAT_INCLUSIVE)$")
+    notes: Optional[str] = Field(None, max_length=500)
 
 
 class CreditNoteCreate(BaseModel):
@@ -53,6 +55,7 @@ class CreditNoteCreate(BaseModel):
     reason: str = Field(..., min_length=3, max_length=255)
     return_date_ad: Optional[str] = None
     return_date_bs: Optional[str] = None
+    idempotency_key: Optional[str] = None
 
 @router.get("")
 def list_invoices(
@@ -116,14 +119,14 @@ def compute_invoice_amounts(
     """
     if order_items:
         raw_items_paisa = sum(
-            int(round(float(item.quantity) * float(item.unit_price) * 100))
+            int(round(Decimal(str(item.quantity)) * Decimal(str(item.unit_price)) * Decimal("100")))
             for item in order_items
         )
     else:
-        raw_items_paisa = int(round(float(order_total) * 100))
+        raw_items_paisa = int(round(Decimal(str(order_total)) * Decimal("100")))
 
-    disc_paisa = int(round(float(discount_amount or 0.0) * 100))
-    charges_paisa = int(round(float(other_charges or 0.0) * 100))
+    disc_paisa = int(round(Decimal(str(discount_amount or "0.0")) * Decimal("100")))
+    charges_paisa = int(round(Decimal(str(other_charges or "0.0")) * Decimal("100")))
     net_before_tax_paisa = max(0, raw_items_paisa - disc_paisa)
 
     is_exempt = bool(is_tax_exempt) or (not order_items and vat_enabled is False)
@@ -180,14 +183,17 @@ def generate_invoice(data: InvoiceCreate, current_user: User = Depends(require_e
     vat_amount = quantize_npr(Decimal(vat_paisa) / Decimal(100))
     total_amount = quantize_npr(Decimal(total_paisa) / Decimal(100))
 
+    is_draft = bool(data.is_draft)
+
     # Defensive Security & Statutory Invariant: Prevent duplicate tax liabilities
     # Under Nepal IRD Schedule-5 VAT rules, a sales order cannot have duplicate active VAT invoices.
-    if eff_vat_enabled:
+    if eff_vat_enabled and not is_draft:
         existing_vat_inv = db.query(Invoice).filter(
             Invoice.sales_order_id == order.id,
             Invoice.company_id == current_user.company_id,
             Invoice.vat_enabled == True,
-            Invoice.is_void == False
+            Invoice.is_void == False,
+            ~Invoice.invoice_number.like("DRAFT-%")
         ).first()
         if existing_vat_inv:
             raise HTTPException(
@@ -197,6 +203,29 @@ def generate_invoice(data: InvoiceCreate, current_user: User = Depends(require_e
 
     received_dec = quantize_npr(order.received_amount)
     receivable_dec = quantize_npr(total_amount - received_dec)
+
+    if is_draft:
+        draft_num = f"DRAFT-{current_user.company_id:02d}-{order.id:04d}-{int(datetime.now(timezone.utc).timestamp())}"
+        invoice = invoice_repo.create(
+            sales_order_id=order.id,
+            invoice_number=draft_num,
+            sequence_number=0,
+            date_ad=order.order_date_ad,
+            date_bs=order.order_date_bs,
+            subtotal=subtotal,
+            vat_enabled=eff_vat_enabled,
+            vat_rate=vat_rate,
+            vat_amount=vat_amount,
+            total_amount=total_amount,
+            received_amount=order.received_amount,
+            receivable_amount=receivable_dec,
+            is_void=False
+        )
+        invoice.taxable_amount_paisa = taxable_paisa
+        invoice.vat_amount_paisa = vat_paisa
+        invoice.total_amount_paisa = total_paisa
+        db.commit()
+        return invoice
 
     # Atomic sequence allocation with bounded fallback retry loop for constraint conflict recovery
     max_retries = 3
@@ -264,16 +293,37 @@ def generate_invoice(data: InvoiceCreate, current_user: User = Depends(require_e
 @router.patch("/{invoice_id}")
 def update_invoice(invoice_id: int, data: InvoiceUpdate, current_user: User = Depends(require_editor), db: Session = Depends(get_db)):
     """
-    Authoritative server-side invoice edit endpoint.
-    Recalculates taxable amount and 13% VAT, adjusting the AR subledger accordingly.
-    Disallows edits on voided invoices.
+    Invoice update endpoint.
+    Under Nepal VAT Act 2052, once a tax invoice is issued, its financial fields (subtotal, VAT, discount, pricing)
+    are strictly immutable. Any post-issuance correction must be made via Credit Note (Schedule 10) or Void.
+    Draft invoices (invoice_number starting with DRAFT-) remain editable prior to final issuance.
     """
-    invoice_repo = TenantRepository(Invoice, db, current_user.company_id)
-    invoice = invoice_repo.get_by_id(invoice_id)
+    invoice = db.query(Invoice).filter(
+        Invoice.id == invoice_id,
+        Invoice.company_id == current_user.company_id
+    ).with_for_update().first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     if invoice.is_void:
         raise HTTPException(status_code=400, detail="Cannot edit a voided invoice.")
+
+    is_draft = invoice.invoice_number.startswith("DRAFT-")
+    has_financial_changes = any([
+        data.discount_amount is not None,
+        data.other_charges is not None,
+        data.is_tax_exempt is not None,
+        data.pricing_mode is not None,
+    ])
+
+    if not is_draft and has_financial_changes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Tax invoice {invoice.invoice_number} is already finalized and issued. "
+                "Under Nepal VAT statutory regulations, issued tax invoices are immutable. "
+                "Post-issuance financial corrections must be executed via Credit Note (Schedule 10) or Void Cancellation."
+            )
+        )
 
     order = db.query(SalesOrder).filter(
         SalesOrder.id == invoice.sales_order_id,
@@ -282,51 +332,96 @@ def update_invoice(invoice_id: int, data: InvoiceUpdate, current_user: User = De
     if not order:
         raise HTTPException(status_code=404, detail="Associated sales order not found")
 
-    order_items = db.query(SalesItem).filter(
-        SalesItem.sales_order_id == order.id,
-        SalesItem.company_id == current_user.company_id
-    ).all()
+    if is_draft and has_financial_changes:
+        order_items = db.query(SalesItem).filter(
+            SalesItem.sales_order_id == order.id,
+            SalesItem.company_id == current_user.company_id
+        ).all()
 
-    old_total_paisa = int(round(float(invoice.total_amount) * 100))
-
-    taxable_paisa, vat_paisa, total_paisa, vat_rate, eff_vat_enabled = compute_invoice_amounts(
-        order_items=order_items,
-        order_total=order.total_amount,
-        pricing_mode=data.pricing_mode or "VAT_EXCLUSIVE",
-        discount_amount=data.discount_amount or Decimal("0.0"),
-        other_charges=data.other_charges or Decimal("0.0"),
-        is_tax_exempt=data.is_tax_exempt if data.is_tax_exempt is not None else (not invoice.vat_enabled),
-        vat_enabled=True
-    )
-
-    invoice.subtotal = quantize_npr(Decimal(taxable_paisa) / Decimal(100))
-    invoice.vat_amount = quantize_npr(Decimal(vat_paisa) / Decimal(100))
-    invoice.total_amount = quantize_npr(Decimal(total_paisa) / Decimal(100))
-    invoice.vat_rate = vat_rate
-    invoice.vat_enabled = eff_vat_enabled
-    invoice.receivable_amount = quantize_npr(invoice.total_amount - invoice.received_amount)
-
-    invoice.taxable_amount_paisa = taxable_paisa
-    invoice.vat_amount_paisa = vat_paisa
-    invoice.total_amount_paisa = total_paisa
-
-    # Post an adjustment entry to AR subledger if the grand total changed
-    diff_paisa = total_paisa - old_total_paisa
-    if diff_paisa != 0:
-        rec_repo = TenantRepository(ReceivableEntry, db, current_user.company_id)
-        rec_repo.create(
-            client_id=order.client_id,
-            entry_type="DISPUTE_ADJUSTED",
-            direction=1 if diff_paisa > 0 else -1,
-            amount_paisa=abs(diff_paisa),
-            source_doc_ref=f"ADJ-{invoice.invoice_number}",
-            invoice_id=invoice.id,
-            actor_id=current_user.id,
-            occurred_at=datetime.now(timezone.utc),
-            due_date=None,
-            is_disputed=False,
-            notes=f"Tax adjustment for invoice {invoice.invoice_number} (recalculated VAT)"
+        taxable_paisa, vat_paisa, total_paisa, vat_rate, eff_vat_enabled = compute_invoice_amounts(
+            order_items=order_items,
+            order_total=order.total_amount,
+            pricing_mode=data.pricing_mode or "VAT_EXCLUSIVE",
+            discount_amount=data.discount_amount or Decimal("0.0"),
+            other_charges=data.other_charges or Decimal("0.0"),
+            is_tax_exempt=data.is_tax_exempt if data.is_tax_exempt is not None else (not invoice.vat_enabled),
+            vat_enabled=True
         )
+
+        invoice.subtotal = quantize_npr(Decimal(taxable_paisa) / Decimal(100))
+        invoice.vat_amount = quantize_npr(Decimal(vat_paisa) / Decimal(100))
+        invoice.total_amount = quantize_npr(Decimal(total_paisa) / Decimal(100))
+        invoice.vat_rate = vat_rate
+        invoice.vat_enabled = eff_vat_enabled
+        invoice.receivable_amount = quantize_npr(invoice.total_amount - invoice.received_amount)
+
+        invoice.taxable_amount_paisa = taxable_paisa
+        invoice.vat_amount_paisa = vat_paisa
+        invoice.total_amount_paisa = total_paisa
+
+    if data.notes and order:
+        order.dispatch_notes = data.notes.strip()
+
+    db.commit()
+    db.refresh(invoice)
+    return invoice
+
+
+@router.post("/{invoice_id}/finalize")
+def finalize_invoice(invoice_id: int, current_user: User = Depends(require_editor), db: Session = Depends(get_db)):
+    """
+    Finalizes an unissued draft invoice:
+    Allocates an atomic sequential tax invoice number (INV-xx-xxxxx) and posts an INVOICE_POSTED debit
+    entry to the customer Accounts Receivable subledger. Uses row-level locking for concurrency safety.
+    """
+    invoice = db.query(Invoice).filter(
+        Invoice.id == invoice_id,
+        Invoice.company_id == current_user.company_id
+    ).with_for_update().first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if invoice.is_void:
+        raise HTTPException(status_code=400, detail="Cannot finalize a voided invoice.")
+    if not invoice.invoice_number.startswith("DRAFT-"):
+        raise HTTPException(status_code=400, detail=f"Invoice {invoice.invoice_number} is already finalized.")
+
+    order = db.query(SalesOrder).filter(
+        SalesOrder.id == invoice.sales_order_id,
+        SalesOrder.company_id == current_user.company_id
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Associated sales order not found")
+
+    next_seq = allocate_next_invoice_sequence(db, current_user.company_id)
+    invoice_num = f"INV-{current_user.company_id:02d}-{next_seq:05d}"
+    invoice.invoice_number = invoice_num
+    invoice.sequence_number = next_seq
+
+    # Statutory AR Subledger posting: INVOICE_POSTED (+1 debit)
+    due_dt = None
+    if order.order_date_ad:
+        try:
+            parsed_d = datetime.strptime(order.order_date_ad, "%Y-%m-%d").date()
+            due_dt = datetime.combine(parsed_d + timedelta(days=30), datetime.min.time(), tzinfo=timezone.utc)
+        except Exception:
+            due_dt = datetime.now(timezone.utc) + timedelta(days=30)
+    else:
+        due_dt = datetime.now(timezone.utc) + timedelta(days=30)
+
+    rec_repo = TenantRepository(ReceivableEntry, db, current_user.company_id)
+    rec_repo.create(
+        client_id=order.client_id,
+        entry_type="INVOICE_POSTED",
+        direction=1,
+        amount_paisa=invoice.total_amount_paisa,
+        source_doc_ref=invoice_num,
+        invoice_id=invoice.id,
+        actor_id=current_user.id,
+        occurred_at=datetime.now(timezone.utc),
+        due_date=due_dt,
+        is_disputed=False,
+        notes=f"Tax invoice {invoice_num} issued for Order #{order.order_number}"
+    )
 
     db.commit()
     db.refresh(invoice)
@@ -337,14 +432,19 @@ def update_invoice(invoice_id: int, data: InvoiceUpdate, current_user: User = De
 def issue_credit_note(invoice_id: int, data: CreditNoteCreate, current_user: User = Depends(require_editor), db: Session = Depends(get_db)):
     """
     Issues a Nepal VAT statutory Credit Note (अनुसूची-१०) for sales returns / price adjustments.
-    Applies 13% VAT reduction and posts CREDIT_NOTE (-1) to the customer AR subledger.
+    Applies 13% VAT reduction, enforces creditable balance ceiling, and posts CREDIT_NOTE (-1) to AR.
+    Uses row-level locking on the parent invoice to prevent concurrent over-crediting races.
     """
-    invoice_repo = TenantRepository(Invoice, db, current_user.company_id)
-    invoice = invoice_repo.get_by_id(invoice_id)
+    invoice = db.query(Invoice).filter(
+        Invoice.id == invoice_id,
+        Invoice.company_id == current_user.company_id
+    ).with_for_update().first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     if invoice.is_void:
         raise HTTPException(status_code=400, detail="Cannot issue a credit note on a voided invoice.")
+    if invoice.invoice_number.startswith("DRAFT-"):
+        raise HTTPException(status_code=400, detail="Cannot issue a credit note on an unfinalized draft invoice.")
 
     order = db.query(SalesOrder).filter(
         SalesOrder.id == invoice.sales_order_id,
@@ -353,8 +453,26 @@ def issue_credit_note(invoice_id: int, data: CreditNoteCreate, current_user: Use
     if not order:
         raise HTTPException(status_code=404, detail="Sales order not found")
 
-    # In Nepal VAT rules, if original invoice was 13% VAT, credit note reduces VAT proportionally
     credit_amount_paisa = data.amount_paisa
+
+    # 1. Enforce credit ceiling (cannot over-credit an invoice)
+    existing_credits_paisa = db.query(func.coalesce(func.sum(ReceivableEntry.amount_paisa), 0)).filter(
+        ReceivableEntry.company_id == current_user.company_id,
+        ReceivableEntry.invoice_id == invoice.id,
+        ReceivableEntry.entry_type == "CREDIT_NOTE"
+    ).scalar() or 0
+
+    remaining_creditable_paisa = invoice.total_amount_paisa - existing_credits_paisa
+    if credit_amount_paisa > remaining_creditable_paisa:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Credit note amount (Rs. {credit_amount_paisa / 100:.2f}) exceeds remaining creditable "
+                f"invoice balance (Rs. {remaining_creditable_paisa / 100:.2f})."
+            )
+        )
+
+    # 2. Nepal VAT rules: credit note reduces VAT proportionally
     if invoice.vat_enabled and invoice.vat_rate > 0:
         taxable_credit_paisa = int(round(Decimal(credit_amount_paisa) / Decimal("1.13")))
         vat_credit_paisa = credit_amount_paisa - taxable_credit_paisa
@@ -362,7 +480,13 @@ def issue_credit_note(invoice_id: int, data: CreditNoteCreate, current_user: Use
         taxable_credit_paisa = credit_amount_paisa
         vat_credit_paisa = 0
 
-    cn_ref = f"CN-{invoice.invoice_number}-{datetime.now(timezone.utc).strftime('%m%d%H%M')}"
+    cn_count = db.query(func.count(ReceivableEntry.id)).filter(
+        ReceivableEntry.company_id == current_user.company_id,
+        ReceivableEntry.invoice_id == invoice.id,
+        ReceivableEntry.entry_type == "CREDIT_NOTE"
+    ).scalar() or 0
+
+    cn_ref = f"CN-{invoice.invoice_number}-{cn_count + 1:02d}"
 
     rec_repo = TenantRepository(ReceivableEntry, db, current_user.company_id)
     rec_repo.create(
@@ -388,6 +512,7 @@ def issue_credit_note(invoice_id: int, data: CreditNoteCreate, current_user: Use
         "total_credit_paisa": credit_amount_paisa,
         "taxable_credit_paisa": taxable_credit_paisa,
         "vat_credit_paisa": vat_credit_paisa,
+        "remaining_creditable_paisa": remaining_creditable_paisa - credit_amount_paisa,
         "reason": data.reason
     }
 
@@ -397,10 +522,14 @@ def cancel_invoice(invoice_id: int, current_user: User = Depends(require_editor)
     """
     Voids an invoice adhering to Nepal statutory VAT rules (RULES.md §2).
     The record is NEVER physically deleted, preserving the sequence and audit trail.
-    Writes a matching VOID_REVERSAL entry (-1 direction) to the AR subledger.
+    - If the invoice was finalized, writes a matching VOID_REVERSAL entry (-1 direction) to the AR subledger.
+    - If the invoice was a draft (never posted to AR), marks void without creating a phantom AR reversal.
+    - Blocks voiding if Credit Notes already exist against the invoice to preserve Schedule-10 integrity.
     """
-    invoice_repo = TenantRepository(Invoice, db, current_user.company_id)
-    invoice = invoice_repo.get_by_id(invoice_id)
+    invoice = db.query(Invoice).filter(
+        Invoice.id == invoice_id,
+        Invoice.company_id == current_user.company_id
+    ).with_for_update().first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
@@ -410,28 +539,47 @@ def cancel_invoice(invoice_id: int, current_user: User = Depends(require_editor)
             detail=f"Invoice {invoice.invoice_number} is already cancelled/voided."
         )
 
+    is_draft = invoice.invoice_number.startswith("DRAFT-")
+
+    # Reject voiding if credit notes already exist on a finalized invoice
+    if not is_draft:
+        existing_credits_paisa = db.query(func.coalesce(func.sum(ReceivableEntry.amount_paisa), 0)).filter(
+            ReceivableEntry.company_id == current_user.company_id,
+            ReceivableEntry.invoice_id == invoice.id,
+            ReceivableEntry.entry_type == "CREDIT_NOTE"
+        ).scalar() or 0
+        if existing_credits_paisa > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Cannot void invoice {invoice.invoice_number} because Credit Notes have already been issued against it. "
+                    "Issue a credit note for the remaining balance instead to preserve Schedule-10 audit reconciliation."
+                )
+            )
+
     invoice.is_void = True
 
-    # Post VOID_REVERSAL to AR subledger
-    order = db.query(SalesOrder).filter(
-        SalesOrder.id == invoice.sales_order_id,
-        SalesOrder.company_id == current_user.company_id
-    ).first()
-    if order:
-        rec_repo = TenantRepository(ReceivableEntry, db, current_user.company_id)
-        rec_repo.create(
-            client_id=order.client_id,
-            entry_type="VOID_REVERSAL",
-            direction=-1,
-            amount_paisa=int(round(float(invoice.total_amount) * 100)),
-            source_doc_ref=f"VOID-{invoice.invoice_number}",
-            invoice_id=invoice.id,
-            actor_id=current_user.id,
-            occurred_at=datetime.now(timezone.utc),
-            due_date=None,
-            is_disputed=False,
-            notes=f"Void cancellation reversal for {invoice.invoice_number}"
-        )
+    # Post VOID_REVERSAL to AR subledger ONLY for finalized invoices that posted an initial debit
+    if not is_draft:
+        order = db.query(SalesOrder).filter(
+            SalesOrder.id == invoice.sales_order_id,
+            SalesOrder.company_id == current_user.company_id
+        ).first()
+        if order:
+            rec_repo = TenantRepository(ReceivableEntry, db, current_user.company_id)
+            rec_repo.create(
+                client_id=order.client_id,
+                entry_type="VOID_REVERSAL",
+                direction=-1,
+                amount_paisa=invoice.total_amount_paisa or int(round(Decimal(str(invoice.total_amount)) * Decimal("100"))),
+                source_doc_ref=f"VOID-{invoice.invoice_number}",
+                invoice_id=invoice.id,
+                actor_id=current_user.id,
+                occurred_at=datetime.now(timezone.utc),
+                due_date=None,
+                is_disputed=False,
+                notes=f"Void cancellation reversal for {invoice.invoice_number}"
+            )
 
     db.commit()
     db.refresh(invoice)

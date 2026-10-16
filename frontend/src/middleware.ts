@@ -19,20 +19,27 @@ export function middleware(request: NextRequest) {
     return res;
   }
 
-  // Unauthenticated access to protected routes -> bounce immediately to /login
+  // Unauthenticated access to protected routes -> redirect cleanly to /login
   if (!token && !isAuthRoute) {
     const loginUrl = new URL('/login', request.url);
+    if (pathname && pathname !== '/' && !pathname.startsWith('/login')) {
+      loginUrl.searchParams.set('return_url', pathname);
+    }
     const redirectResponse = NextResponse.redirect(loginUrl);
     redirectResponse.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
     return redirectResponse;
   }
 
-  // Authenticated user hitting /login -> bounce directly to root workspace
-  if (token && isAuthRoute) {
-    const rootUrl = new URL('/', request.url);
-    const redirectResponse = NextResponse.redirect(rootUrl);
-    redirectResponse.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
-    return redirectResponse;
+  // Auth route (/login): always allow viewing the login page.
+  // Never bounce back to root to prevent infinite ping-pong loops when tokens expire.
+  if (isAuthRoute) {
+    const res = NextResponse.next();
+    res.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    if (request.nextUrl.searchParams.get('session_expired') === '1') {
+      res.cookies.delete('livo_access_token');
+      res.cookies.delete('token');
+    }
+    return res;
   }
 
   const response = NextResponse.next();

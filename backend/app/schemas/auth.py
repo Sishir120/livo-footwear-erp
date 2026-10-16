@@ -27,10 +27,10 @@ class UserCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=150)
     email: Optional[str] = Field(None, max_length=150)
     password: str = Field(..., min_length=6, max_length=100)
-    role: str = Field("editor", pattern="^(admin|editor|viewer)$")
+    role: str = Field("editor", pattern="^(admin|manager|editor|viewer)$")
 
 class UserUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=150)
     email: Optional[str] = Field(None, max_length=150)
-    role: Optional[str] = Field(None, pattern="^(admin|editor|viewer)$")
+    role: Optional[str] = Field(None, pattern="^(admin|manager|editor|viewer)$")
     active: Optional[bool] = None

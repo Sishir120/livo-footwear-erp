@@ -33,9 +33,11 @@ class Warehouse(Base):
     code = Column(String(50), nullable=False, index=True)
     location = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    branch_id = Column(Integer, ForeignKey("branches.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     company = relationship("Company")
+    branch = relationship("Branch", back_populates="warehouses")
 
 class StockMovement(Base):
     """

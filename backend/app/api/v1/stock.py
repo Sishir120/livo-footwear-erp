@@ -488,7 +488,10 @@ def list_warehouses(
             "id": w.id,
             "name": w.name,
             "code": w.code,
-            "location": w.location
+            "location": w.location,
+            "branch_id": w.branch_id,
+            "branch_name": w.branch.name if w.branch else None,
+            "branch_code": w.branch.code if w.branch else None
         }
         for w in warehouses
     ]
@@ -509,7 +512,10 @@ def get_warehouse(
         "id": wh.id,
         "name": wh.name,
         "code": wh.code,
-        "location": wh.location
+        "location": wh.location,
+        "branch_id": wh.branch_id,
+        "branch_name": wh.branch.name if wh.branch else None,
+        "branch_code": wh.branch.code if wh.branch else None
     }
 
 

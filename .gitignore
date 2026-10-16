@@ -18,13 +18,22 @@ backend/.pytest_cache/
 # Databases & Backups
 *.db
 *.sqlite3
+*.db-shm
+*.db-wal
 backend/*.db
+backend/*.db-shm
+backend/*.db-wal
 backend/pg_binaries.zip
 backend/backups/*.sql
 backend/backups/*.sql.gz
 backend/backups/*.db
+backend/backups/*.tar.gz
+backend/backups/livo_*.json
+backend/backups/livo_*.tar.gz
 backend/staging_pgdata/
 staging_pgdata/
+livo_staging_artifact.tar.gz
+staging_artifact_manifest.sha256
 logs/
 backend/logs/
 
@@ -33,6 +42,9 @@ scratch/
 scratch_*
 last_transcript.txt
 backend/tests_list.txt
+live_*.json
+*.session.json
+live_session.json
 
 # Node & Next.js
 node_modules/

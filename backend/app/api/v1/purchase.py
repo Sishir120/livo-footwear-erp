@@ -44,6 +44,13 @@ class RawMaterialCreate(BaseModel):
     reorder_level: float = Field(0.0, ge=0.0)
     min_stock_alert: Decimal = Field(Decimal('0.0'), ge=Decimal('0.0'))
 
+
+class RawMaterialUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=150)
+    unit: Optional[Literal["kg", "pcs", "litre"]] = None
+    reorder_level: Optional[float] = Field(None, ge=0.0)
+    min_stock_alert: Optional[Decimal] = Field(None, ge=Decimal('0.0'))
+
 class PurchaseCreate(BaseModel):
     supplier_id: int = Field(..., gt=0)
     raw_material_id: int = Field(..., gt=0)
@@ -123,6 +130,30 @@ def get_raw_material(material_id: int, current_user: User = Depends(get_current_
     mat = repo.get_by_id(material_id)
     if not mat:
         raise HTTPException(status_code=404, detail="Raw material not found")
+    return mat
+
+@router.patch("/raw-materials/{material_id}")
+def update_raw_material(material_id: int, data: RawMaterialUpdate, current_user: User = Depends(require_editor), db: Session = Depends(get_db)):
+    """
+    Updates raw material metadata strictly for the current tenant company.
+    Enforces valid unit constraints (kg, pcs, litre) with HTTP 422 validation.
+    """
+    repo = TenantRepository(RawMaterial, db, current_user.company_id)
+    mat = repo.get_by_id(material_id)
+    if not mat:
+        raise HTTPException(status_code=404, detail="Raw material not found")
+
+    if data.name is not None:
+        mat.name = data.name.strip()
+    if data.unit is not None:
+        mat.unit = data.unit
+    if data.reorder_level is not None:
+        mat.reorder_level = data.reorder_level
+    if data.min_stock_alert is not None:
+        mat.min_stock_alert = data.min_stock_alert
+
+    db.commit()
+    db.refresh(mat)
     return mat
 
 # --- Shared Implementation Handlers for Purchases & Movements ---

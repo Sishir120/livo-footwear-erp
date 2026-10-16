@@ -303,16 +303,50 @@ def test_6_invoice_edit_changes_taxable_and_vat(setup_vat_test_env):
         inv_res = client.post("/api/v1/invoices", json={"sales_order_id": order_id})
         inv_id = inv_res.json()["id"]
 
-        # Edit invoice to add discount of NPR 2,000 (taxable becomes 8,000)
+        # Statutory Immutability: Editing financial fields of issued invoice must be rejected
         patch_res = client.patch(f"/api/v1/invoices/{inv_id}", json={
             "discount_amount": 2000.0
         })
-        assert patch_res.status_code == 200
-        updated_inv = patch_res.json()
+        assert patch_res.status_code == 400
+        assert "immutable" in patch_res.json()["detail"].lower()
 
-        assert float(updated_inv["subtotal"]) == 8000.0
-        assert float(updated_inv["vat_amount"]) == 1040.0  # 8000 * 0.13
-        assert float(updated_inv["total_amount"]) == 9040.0
+        # Non-financial edits (notes) on issued invoice succeed
+        notes_res = client.patch(f"/api/v1/invoices/{inv_id}", json={
+            "notes": "Urgent wholesale dispatch"
+        })
+        assert notes_res.status_code == 200
+
+        # Create Draft Invoice for editing prior to final issuance
+        o2_res = client.post("/api/v1/sales/orders", json={
+            "client_id": c_id,
+            "order_date_ad": "2026-10-15",
+            "order_date_bs": "2083-06-29",
+            "status": "CONFIRMED",
+            "items": [{"product_id": p_id, "quantity": 10, "unit_price": 1000.0}]
+        })
+        draft_res = client.post("/api/v1/invoices", json={
+            "sales_order_id": o2_res.json()["id"],
+            "is_draft": True
+        })
+        assert draft_res.status_code == 200
+        draft_id = draft_res.json()["id"]
+        assert draft_res.json()["invoice_number"].startswith("DRAFT-")
+
+        # Edit Draft invoice to add discount of NPR 2,000 (taxable becomes 8,000)
+        draft_patch = client.patch(f"/api/v1/invoices/{draft_id}", json={
+            "discount_amount": 2000.0
+        })
+        assert draft_patch.status_code == 200
+        updated_draft = draft_patch.json()
+        assert float(updated_draft["subtotal"]) == 8000.0
+        assert float(updated_draft["vat_amount"]) == 1040.0  # 8000 * 0.13
+        assert float(updated_draft["total_amount"]) == 9040.0
+
+        # Finalize the draft invoice
+        fin_res = client.post(f"/api/v1/invoices/{draft_id}/finalize")
+        assert fin_res.status_code == 200
+        assert fin_res.json()["invoice_number"].startswith("INV-")
+        assert fin_res.json()["sequence_number"] > 0
 
 
 # 7. Return or credit note

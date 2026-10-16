@@ -122,7 +122,7 @@ def create_fixed_asset(
 @router.delete("/{asset_id}")
 def delete_fixed_asset(
     asset_id: int,
-    current_user: User = Depends(require_editor),
+    current_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
     """

@@ -125,6 +125,7 @@ export function AppShell({ activeTab, setActiveTab, user, onLogout, children }: 
   const navItems = [
     { id: "daily", label: t("dashboard"), icon: BarChart3 },
     { id: "stock", label: t("stock_ledger"), icon: Boxes },
+    { id: "branches", label: locale === "en" ? "Branches & Godowns" : "शाखा तथा गोदाम", icon: Building2 },
     { id: "sales", label: t("sales_invoicing"), icon: ShoppingBag },
     { id: "receivables", label: t("ar_aging"), icon: CreditCard },
     { id: "production", label: t("production_batches"), icon: Factory },

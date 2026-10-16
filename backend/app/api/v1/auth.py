@@ -128,6 +128,10 @@ def update_company_user(
     Rejects cross-tenant modification (IDOR defense).
     Admin only.
     """
+    if data.active is not None or data.role is not None:
+        from app.core.locks import acquire_user_admin_lock
+        acquire_user_admin_lock(db, current_user.company_id)
+
     target_user = db.query(User).filter(
         User.id == user_id,
         User.company_id == current_user.company_id
@@ -137,6 +141,33 @@ def update_company_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found in your company."
         )
+
+    # SEC-RBAC: Prevent administrator self-lockout or deactivation/demotion of last active admin
+    if target_user.role == "admin" and target_user.active:
+        if data.active is False or (data.role is not None and data.role != "admin"):
+            if target_user.id == current_user.id:
+                if data.active is False:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Administrators cannot deactivate their own account to prevent lockout."
+                    )
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Administrators cannot demote their own account to prevent lockout."
+                    )
+            other_active_admins = db.query(User).filter(
+                User.company_id == current_user.company_id,
+                User.role == "admin",
+                User.active == True,
+                User.id != target_user.id
+            ).count()
+            if other_active_admins == 0:
+                action = "deactivate" if data.active is False else "demote"
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Cannot {action} the last active administrator in the company."
+                )
 
     if data.name is not None:
         target_user.name = data.name.strip()

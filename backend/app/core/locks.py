@@ -15,6 +15,8 @@ _mutation_locks = defaultdict(threading.RLock)
 _credit_locks = defaultdict(threading.RLock)
 _raw_material_locks = defaultdict(threading.RLock)
 _purchase_locks = defaultdict(threading.RLock)
+_transfer_locks = defaultdict(threading.RLock)
+_user_admin_locks = defaultdict(threading.RLock)
 _meta_lock = threading.RLock()
 
 def hash_args_to_bigint(*args: Any) -> int:
@@ -29,6 +31,8 @@ def hash_args_to_bigint(*args: Any) -> int:
 def release_all_session_locks(db: Session):
     """Releases all in-process thread locks registered to the given session."""
     if not hasattr(db, "info"):
+        return
+    if db.info.get("_resetting_snapshot"):
         return
     held = db.info.get("_held_thread_locks", [])
     while held:
@@ -219,5 +223,115 @@ def acquire_purchase_lock(db: Session, company_id: int, purchase_id: int) -> int
         _register_thread_lock_release(db, mutex)
 
     return lock_id
+
+
+def get_stock_transfer_mutex(company_id: int, transfer_id: int) -> threading.RLock:
+    """Returns an in-process mutex dedicated to (company_id, transfer_id)."""
+    with _meta_lock:
+        return _transfer_locks[(company_id, transfer_id)]
+
+
+def acquire_stock_transfer_lock(db: Session, company_id: int, transfer_id: int) -> int:
+    """
+    Acquires a transaction-scoped PostgreSQL Advisory Lock on stock transfer mutations:
+      lock_id = hash_args_to_bigint("transfer", company_id, transfer_id)
+    Falls back to an in-process keyed threading lock on SQLite test runners, auto-released on tx end.
+    """
+    lock_id = hash_args_to_bigint("transfer", company_id, transfer_id)
+    bind = None
+    try:
+        bind = db.get_bind()
+    except Exception:
+        pass
+
+    if bind and bind.dialect.name == "postgresql":
+        try:
+            db.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": lock_id})
+        except Exception:
+            pass
+    else:
+        mutex = get_stock_transfer_mutex(company_id, transfer_id)
+        mutex.acquire()
+        _register_thread_lock_release(db, mutex)
+
+    return lock_id
+
+
+def reset_service_read_snapshot_under_lock(db: Session):
+    """
+    Explicit service-level transaction boundary:
+    Refreshes SQLite transactional snapshot after lock acquisition so that
+    queries observe writes committed by racing threads while blocked on the lock.
+    Preserves acquired mutexes so lock ownership remains intact across the snapshot refresh.
+    On PostgreSQL, this is a no-op as MVCC read-committed / SELECT FOR UPDATE handles row versioning.
+    """
+    try:
+        bind = db.get_bind()
+        if not bind or bind.dialect.name != "sqlite":
+            return
+    except Exception:
+        return
+
+    if not hasattr(db, "info"):
+        return
+
+    db.info["_resetting_snapshot"] = True
+    try:
+        db.rollback()
+        # On Python's sqlite3 DBAPI, in_transaction is False if only SELECT queries (such as
+        # FastAPI user auth dependency) have executed. Python's sqlite3 driver skips issuing
+        # a real ROLLBACK to the SQLite engine if in_transaction is False, leaving SQLite's
+        # internal WAL read transaction pinned to the pre-lock timestamp mark.
+        # Cycling a brief autocommit transaction boundary (BEGIN IMMEDIATE; ROLLBACK;) forces
+        # SQLite's WAL read transaction to terminate and advance to the latest committed state.
+        try:
+            raw_conn = getattr(db.connection().connection, "dbapi_connection", None) or getattr(db.connection().connection, "connection", None)
+            if raw_conn:
+                old_iso = raw_conn.isolation_level
+                raw_conn.isolation_level = None
+                cur = raw_conn.cursor()
+                cur.execute("BEGIN IMMEDIATE")
+                cur.execute("ROLLBACK")
+                cur.close()
+                raw_conn.isolation_level = old_iso
+        except Exception:
+            pass
+    finally:
+        db.info["_resetting_snapshot"] = False
+
+
+def get_user_admin_mutex(company_id: int) -> threading.RLock:
+    with _meta_lock:
+        return _user_admin_locks[company_id]
+
+
+def acquire_user_admin_lock(db: Session, company_id: int) -> int:
+    """
+    Acquires a transaction-scoped PostgreSQL Advisory Lock for user administration in a company.
+    Hash: hash_args_to_bigint("user_admin", company_id)
+    Serializes concurrent admin promotions, deactivations, and demotions.
+    Falls back to thread-level RLock on SQLite.
+    """
+    lock_id = hash_args_to_bigint("user_admin", company_id)
+    bind = None
+    try:
+        bind = db.get_bind()
+    except Exception:
+        pass
+
+    if bind and bind.dialect.name == "postgresql":
+        try:
+            db.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": lock_id})
+        except Exception:
+            pass
+    else:
+        mutex = get_user_admin_mutex(company_id)
+        mutex.acquire()
+        _register_thread_lock_release(db, mutex)
+
+    reset_service_read_snapshot_under_lock(db)
+    return lock_id
+
+
 
 

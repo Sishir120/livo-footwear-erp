@@ -18,6 +18,8 @@ from app.api.v1.metrics_endpoint import router as metrics_router
 from app.api.v1.assets import router as assets_router
 from app.api.v1.waste import router as waste_router
 from app.api.v1.factory_expenses import router as factory_expenses_router
+from app.api.v1.transfers import router as transfers_router
+from app.api.v1.branches import router as branches_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -39,5 +41,7 @@ api_router.include_router(analytics_router)
 api_router.include_router(assets_router)
 api_router.include_router(waste_router)
 api_router.include_router(factory_expenses_router)
+api_router.include_router(transfers_router)
+api_router.include_router(branches_router)
 
 

@@ -146,12 +146,12 @@ from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.idempotency import IdempotencyMiddleware
 
-# Middlewares
+# Middlewares (ordered from inner to outer)
 app.add_middleware(IdempotencyMiddleware)
-app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(AuditLogMiddleware)
 app.add_middleware(BasicRateLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS Policy - Locked to frontend origins
 app.add_middleware(

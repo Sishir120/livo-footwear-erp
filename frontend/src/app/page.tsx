@@ -75,6 +75,11 @@ const ExpensesAssetsView = dynamic(
   { loading: () => <SkeletonLoader title="Loading Factory Expenses & Assets..." type="table" />, ssr: false }
 );
 
+const BranchWarehouseView = dynamic(
+  () => import("@/components/BranchWarehouseView").then((mod) => mod.BranchWarehouseView),
+  { loading: () => <SkeletonLoader title="Loading Branch & Warehouse Architecture..." type="table" />, ssr: false }
+);
+
 export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -103,6 +108,13 @@ export default function Home() {
     }
   }, []);
 
+  const clearSessionCookie = () => {
+    if (typeof document !== "undefined") {
+      document.cookie = "livo_access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0";
+      document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0";
+    }
+  };
+
   const checkUser = async () => {
     setLoading(true);
     try {
@@ -112,10 +124,12 @@ export default function Home() {
         setUser(userData);
       } else {
         setUser(null);
+        clearSessionCookie();
         window.location.href = "/login";
       }
     } catch (e) {
       setUser(null);
+      clearSessionCookie();
       window.location.href = "/login";
     } finally {
       setLoading(false);
@@ -127,6 +141,7 @@ export default function Home() {
       await fetch("/api/v1/auth/logout", { method: "POST" });
     } finally {
       setUser(null);
+      clearSessionCookie();
       window.location.href = "/login";
     }
   };
@@ -155,6 +170,12 @@ export default function Home() {
       {activeTab === "stock" && (
         <ErrorBoundary screenName="Stock Ledger">
           <StockReportView userRole={user.role} />
+        </ErrorBoundary>
+      )}
+
+      {activeTab === "branches" && (
+        <ErrorBoundary screenName="Branches & Warehouses">
+          <BranchWarehouseView />
         </ErrorBoundary>
       )}
 

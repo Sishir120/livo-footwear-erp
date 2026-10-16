@@ -361,6 +361,7 @@ class TestPrintableInvoiceQueryCount:
             "received_amount": 0.0,
             "items": items,
             "delivered": False,
+            "supervisor_override": True,
         })
         if order_resp.status_code != 200:
             return None, None

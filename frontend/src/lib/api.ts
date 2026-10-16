@@ -157,10 +157,28 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
             },
           })
         );
+
+        // H-04: Auto-redirect on 401 Unauthorized for expired or invalidated sessions
+        // Excludes /auth/login (bad credentials challenge) and /auth/logout (manual sign-out)
+        const isAuthEndpoint = rawEndpoint.includes("/auth/login") || rawEndpoint.includes("/auth/logout");
+        const isAlreadyOnLogin = window.location.pathname === "/login";
+        const redirectFlagKey = "__LIVO_REDIRECTING_401__";
+
+        if (res.status === 401 && !isAuthEndpoint && !isAlreadyOnLogin) {
+          const win = window as any;
+          if (!win[redirectFlagKey]) {
+            win[redirectFlagKey] = true;
+            window.dispatchEvent(new CustomEvent("livo:session-expired"));
+            const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+            // Navigate cleanly to login with session expired notice and return route
+            window.location.href = `/login?session_expired=1&return_url=${returnUrl}`;
+          }
+        }
       }
     }
 
     return res;
+
   } catch (error: any) {
     // 3. If network fails mid-flight on a mutating request, buffer into outbox
     if (isMutation) {

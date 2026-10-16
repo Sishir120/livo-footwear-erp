@@ -1,7 +1,10 @@
 {
+  "timestamp": "2026-10-16T10:13:40.741227+00:00",
   "status": "success",
-  "timestamp": "2026-10-01T12:00:00+00:00",
-  "file_name": "livo_test.dump",
-  "file_size_bytes": 1024,
-  "storage_destination": "local"
+  "file_name": "livo_backup_20261016_101340.db",
+  "file_size_bytes": 24,
+  "storage_destination": "Local Server Storage (C:\\Users\\sishi\\AppData\\Local\\Temp\\tmpk1hvqd8m\\livo_backup_20261016_101340.db)",
+  "error_message": null,
+  "sha256": "53b7a090b71f73d1474304b67942929bb37867adc911bd8172669bcdfbce3140",
+  "cloud_upload_warning": "S3 Connection Timeout: 504 Gateway Timeout"
 }

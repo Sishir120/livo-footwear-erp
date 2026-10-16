@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from pydantic import BaseModel, Field
 
-from app.api.deps import get_db, get_current_user, require_editor
+from app.api.deps import get_db, get_current_user, require_editor, require_admin
 from app.core.sequence import generate_document_number
 from app.core.nepali_date import ad_to_bs_str
 from app.core.currency import quantize_npr
@@ -770,7 +770,7 @@ def list_sales_expenses(
 @router.delete("/expenses/{expense_id}")
 def delete_sales_expense(
     expense_id: int,
-    current_user: User = Depends(require_editor),
+    current_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
     """

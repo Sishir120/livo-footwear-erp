@@ -815,6 +815,35 @@ Execute this 10-step Factory Acceptance Test prior to signing off on plant commi
 
 ---
 
+## 14. Phase 2 Financial Integrity Hardening & Warehouse Logistics
+
+### 14.1 Statutory Invoice Immutability (Nepal VAT Act 2052)
+- **Draft Invoices:** Created with `is_draft: true` and prefixed `DRAFT-`. These may have line items, rates, discounts, and customer notes modified in place. Draft invoices generate **no accounts receivable postings** and **no VAT ledger liabilities**.
+- **Finalized Tax Invoices (`INV-`):** Once finalized via `POST /api/v1/invoices/{id}/finalize`, statutory tax invoice numbering is assigned and accounts receivable is incremented. Under Section 14 of Nepal VAT Act 2052, all financial mutations (taxable amounts, discounts, line items, VAT) are strictly prohibited and return `HTTP 400 FINANCIAL_MUTATION_FORBIDDEN`.
+- **Non-Financial Edits:** Only non-financial internal remarks (`notes`) may be updated via `PATCH /api/v1/invoices/{id}`.
+- **Financial Corrections:** Must proceed strictly through Schedule-10 Credit Notes (`POST /api/v1/invoices/{id}/credit-note`). Credit notes enforce:
+  1. A cumulative credit ceiling (`sum(credits) <= original_invoice_total`).
+  2. Proportional 13% VAT reduction and reverse AR posting.
+  3. Gapless unique sequential numbering (`CN-INV-2081/82-XXXX-01`).
+
+### 14.2 Raw Material Unit Validation Contract
+- All endpoints creating or updating raw materials (`POST /api/v1/purchase/raw-materials` and `PATCH /api/v1/purchase/raw-materials/{id}`) strictly enforce typed units: `kg`, `pcs`, and `litre`.
+- Unsupported or arbitrary strings return a clean `HTTP 422 Unprocessable Content` validation barrier before reaching the database, preventing unhandled 500 server errors or corrupted unit conversions.
+
+### 14.3 SOP-11: Inter-Warehouse Stock Transfers & Destination Receipts
+**When to use:** When moving footwear inventory between central factory godowns and retail or regional warehouses.
+
+**Workflow:**
+1. **Creation:** Open **Stock Ledger (स्टक लेजर)** $\to$ Click **Stock Transfers (स्टक स्थानान्तरण)** $\to$ **New Stock Transfer**.
+2. **Parameters:** Select Source Warehouse and Destination Warehouse (must be distinct). Add items (product SKU, size, requested quantity). Save as Draft.
+3. **Dispatch:** Warehouse supervisor clicks **Dispatch Stock**. System acquires granular stock mutation locks, verifies on-hand inventory, records an immutable `TRANSFER_OUT` ledger deduction from the source warehouse, and places the transfer into `IN_TRANSIT` status.
+4. **Independent Destination Receipt:** Destination warehouse manager receives the shipment, counts physical pairs, and enters received quantities into the **Receive Transfer** drawer.
+   - **Full Receipt:** All pairs match $\to$ marked `RECEIVED`; records `TRANSFER_IN` ledger addition to destination warehouse.
+   - **Partial Receipt / Shortage:** If received pairs are fewer than dispatched, the destination enters actual count and selects a discrepancy reason (`DAMAGED_IN_TRANSIT`, `SHORT_SHIPPED`, or `THEFT_LOSS`). The discrepancy is permanently logged for management audit, and only verified physical pairs are added to destination stock.
+5. **Cancellations:** A transfer in transit may be cancelled by authorized supervisors via `POST /transfers/{id}/cancel`. The source stock is automatically restored via an append-only `VOID_REVERSAL` ledger entry. Once received, transfers cannot be cancelled.
+
+---
+
 *Document prepared by: Antigravity Engineering*  
-*Last updated: 2026-09-29 (Phase 6 Concurrency Proving & Recovery Verification)*  
-*Approved for client handover: Verified with 52 automated tests passing and First Load JS <= 106 kB.*
+*Last updated: 2026-10-15 (Phase 2 Financial Integrity Hardening & Multi-Warehouse Stock Transfers)*  
+*Approved for client handover: Verified with 422 automated backend tests passing, 0 type errors, and Next.js production build verified.*
