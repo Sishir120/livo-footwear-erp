@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Text, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
+from sqlalchemy.ext.hybrid import hybrid_property
 from app.db.session import Base
 
 class Invoice(Base):
@@ -16,7 +17,7 @@ class Invoice(Base):
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     sales_order_id = Column(Integer, ForeignKey("sales_orders.id"), nullable=False, index=True)
     invoice_number = Column(String(50), nullable=False, index=True)  # e.g., INV-2026-00001
-    sequence_number = Column(Integer, nullable=False, index=True)      # Sequential per company
+    sequence_number = Column(Integer, nullable=True, index=True)      # Sequential per company (None for drafts)
     date_ad = Column(String(10), nullable=False, index=True)
     date_bs = Column(String(10), nullable=False)
     subtotal = Column(Numeric, nullable=False)
@@ -88,4 +89,49 @@ class InvoiceSequence(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     company = relationship("Company")
+
+
+class CreditNote(Base):
+    __tablename__ = "credit_notes"
+    __table_args__ = (
+        UniqueConstraint("company_id", "credit_note_number", name="uq_credit_note_company_number"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False, index=True)
+    receivable_entry_id = Column(Integer, ForeignKey("receivable_entries.id"), nullable=True, index=True)
+    credit_note_number = Column(String(50), nullable=False, index=True)
+    date_ad = Column(String(10), nullable=False)
+    date_bs = Column(String(10), nullable=False)
+    reason = Column(String(255), nullable=False)
+    taxable_amount_paisa = Column(Integer, nullable=False, default=0)
+    vat_amount_paisa = Column(Integer, nullable=False, default=0)
+    total_amount_paisa = Column(Integer, nullable=False, default=0)
+    return_to_stock = Column(Boolean, nullable=False, default=False)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    invoice = relationship("Invoice")
+    items = relationship("CreditNoteItem", back_populates="credit_note", cascade="all, delete-orphan")
+
+
+class CreditNoteItem(Base):
+    __tablename__ = "credit_note_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    credit_note_id = Column(Integer, ForeignKey("credit_notes.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    quantity = Column(Numeric, nullable=False)
+    unit_price_paisa = Column(Integer, nullable=False)
+    discount_paisa = Column(Integer, nullable=False, default=0)
+    taxable_paisa = Column(Integer, nullable=False, default=0)
+    vat_paisa = Column(Integer, nullable=False, default=0)
+    total_paisa = Column(Integer, nullable=False, default=0)
+    return_to_stock = Column(Boolean, nullable=False, default=False)
+
+    credit_note = relationship("CreditNote", back_populates="items")
+    product = relationship("Product")
+
 

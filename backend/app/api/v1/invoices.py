@@ -1,8 +1,10 @@
+import hashlib
+import json
 from decimal import Decimal
 import html
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
-from decimal import Decimal
+from app.core.idempotency import IdempotencyService
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
@@ -13,11 +15,13 @@ from pydantic import BaseModel, Field
 from app.api.deps import get_db, get_current_user, require_editor
 from app.models.user import User
 from app.models.company import Company
-from app.models.invoice import Invoice, InvoiceSequence
+from app.models.invoice import Invoice, InvoiceSequence, CreditNote, CreditNoteItem
 from app.models.sales import SalesOrder, SalesItem, Client
-from app.models.stock import Product
+from app.models.stock import Product, StockMovement, Warehouse
 from app.models.receivable import ReceivableEntry
 from app.db.repository import TenantRepository
+from app.api.v1.stock import _get_default_or_validate_warehouse
+from app.core.nepali_date import ad_to_bs_str
 from app.core.currency import (
     quantize_npr,
     calculate_vat,
@@ -42,19 +46,36 @@ class InvoiceCreate(BaseModel):
     is_draft: Optional[bool] = False
 
 
+class InvoiceLineUpdate(BaseModel):
+    product_id: int = Field(..., gt=0)
+    quantity: Decimal = Field(..., gt=0)
+    unit_price: Decimal = Field(..., ge=Decimal('0.0'))
+    discount_amount: Optional[Decimal] = Field(Decimal('0.0'), ge=Decimal('0.0'))
+
+
 class InvoiceUpdate(BaseModel):
     discount_amount: Optional[Decimal] = Field(None, ge=Decimal('0.0'))
     other_charges: Optional[Decimal] = Field(None, ge=Decimal('0.0'))
     is_tax_exempt: Optional[bool] = None
     pricing_mode: Optional[str] = Field(None, pattern="^(VAT_EXCLUSIVE|VAT_INCLUSIVE)$")
     notes: Optional[str] = Field(None, max_length=500)
+    items: Optional[List[InvoiceLineUpdate]] = None
+
+
+class ReturnItem(BaseModel):
+    product_id: int = Field(..., gt=0)
+    quantity: Decimal = Field(..., gt=0)
+    unit_price_paisa: Optional[int] = None
 
 
 class CreditNoteCreate(BaseModel):
-    amount_paisa: int = Field(..., gt=0)
+    amount_paisa: Optional[int] = Field(None, gt=0)
     reason: str = Field(..., min_length=3, max_length=255)
     return_date_ad: Optional[str] = None
     return_date_bs: Optional[str] = None
+    return_to_stock: Optional[bool] = False
+    warehouse_id: Optional[int] = None
+    items: Optional[List[ReturnItem]] = None
     idempotency_key: Optional[str] = None
 
 @router.get("")
@@ -119,7 +140,7 @@ def compute_invoice_amounts(
     """
     if order_items:
         raw_items_paisa = sum(
-            int(round(Decimal(str(item.quantity)) * Decimal(str(item.unit_price)) * Decimal("100")))
+            int(round(Decimal(str(getattr(item, "total_price", None) if getattr(item, "total_price", None) is not None else (Decimal(str(item.quantity)) * Decimal(str(item.unit_price))))) * Decimal("100")))
             for item in order_items
         )
     else:
@@ -209,7 +230,7 @@ def generate_invoice(data: InvoiceCreate, current_user: User = Depends(require_e
         invoice = invoice_repo.create(
             sales_order_id=order.id,
             invoice_number=draft_num,
-            sequence_number=0,
+            sequence_number=None,
             date_ad=order.order_date_ad,
             date_bs=order.order_date_bs,
             subtotal=subtotal,
@@ -313,6 +334,7 @@ def update_invoice(invoice_id: int, data: InvoiceUpdate, current_user: User = De
         data.other_charges is not None,
         data.is_tax_exempt is not None,
         data.pricing_mode is not None,
+        data.items is not None,
     ])
 
     if not is_draft and has_financial_changes:
@@ -333,10 +355,33 @@ def update_invoice(invoice_id: int, data: InvoiceUpdate, current_user: User = De
         raise HTTPException(status_code=404, detail="Associated sales order not found")
 
     if is_draft and has_financial_changes:
+        if data.items is not None:
+            # Delete existing draft items and insert updated ones
+            db.query(SalesItem).filter(
+                SalesItem.sales_order_id == order.id,
+                SalesItem.company_id == current_user.company_id
+            ).delete()
+            for itm in data.items:
+                line_disc = quantize_npr(itm.discount_amount or Decimal('0.0'))
+                line_total = max(Decimal('0.00'), quantize_npr(Decimal(str(itm.quantity)) * quantize_npr(itm.unit_price) - line_disc))
+                si = SalesItem(
+                    company_id=current_user.company_id,
+                    sales_order_id=order.id,
+                    product_id=itm.product_id,
+                    quantity=itm.quantity,
+                    unit_price=Decimal(quantize_npr(itm.unit_price)),
+                    total_price=Decimal(line_total)
+                )
+                db.add(si)
+            db.flush()
+
         order_items = db.query(SalesItem).filter(
             SalesItem.sales_order_id == order.id,
             SalesItem.company_id == current_user.company_id
         ).all()
+
+        order.total_amount = sum(it.total_price for it in order_items)
+        order.receivable_amount = quantize_npr(max(Decimal('0.00'), order.total_amount - order.received_amount))
 
         taxable_paisa, vat_paisa, total_paisa, vat_rate, eff_vat_enabled = compute_invoice_amounts(
             order_items=order_items,
@@ -353,7 +398,7 @@ def update_invoice(invoice_id: int, data: InvoiceUpdate, current_user: User = De
         invoice.total_amount = quantize_npr(Decimal(total_paisa) / Decimal(100))
         invoice.vat_rate = vat_rate
         invoice.vat_enabled = eff_vat_enabled
-        invoice.receivable_amount = quantize_npr(invoice.total_amount - invoice.received_amount)
+        invoice.receivable_amount = quantize_npr(max(Decimal('0.00'), invoice.total_amount - invoice.received_amount))
 
         invoice.taxable_amount_paisa = taxable_paisa
         invoice.vat_amount_paisa = vat_paisa
@@ -433,7 +478,11 @@ def issue_credit_note(invoice_id: int, data: CreditNoteCreate, current_user: Use
     """
     Issues a Nepal VAT statutory Credit Note (अनुसूची-१०) for sales returns / price adjustments.
     Applies 13% VAT reduction, enforces creditable balance ceiling, and posts CREDIT_NOTE (-1) to AR.
+    Supports physical stock restoration (SALES_RETURN) when return_to_stock=True.
     Uses row-level locking on the parent invoice to prevent concurrent over-crediting races.
+    Prevents duplicate returns and cumulative over-returns across partial credit notes,
+    tracking quantities via authoritative CreditNoteItem records (even when return_to_stock=False).
+    Deterministically pro-rates invoice-level commercial discounts across invoice lines.
     """
     invoice = db.query(Invoice).filter(
         Invoice.id == invoice_id,
@@ -443,7 +492,7 @@ def issue_credit_note(invoice_id: int, data: CreditNoteCreate, current_user: Use
         raise HTTPException(status_code=404, detail="Invoice not found")
     if invoice.is_void:
         raise HTTPException(status_code=400, detail="Cannot issue a credit note on a voided invoice.")
-    if invoice.invoice_number.startswith("DRAFT-"):
+    if invoice.invoice_number.startswith("DRAFT-") or invoice.sequence_number is None:
         raise HTTPException(status_code=400, detail="Cannot issue a credit note on an unfinalized draft invoice.")
 
     order = db.query(SalesOrder).filter(
@@ -453,9 +502,157 @@ def issue_credit_note(invoice_id: int, data: CreditNoteCreate, current_user: Use
     if not order:
         raise HTTPException(status_code=404, detail="Sales order not found")
 
-    credit_amount_paisa = data.amount_paisa
+    # 1. Determine original invoice pricing mode from line prices and totals
+    order_items = db.query(SalesItem).filter(
+        SalesItem.sales_order_id == order.id,
+        SalesItem.company_id == current_user.company_id
+    ).all()
+    raw_lines_paisa = sum(int(round(Decimal(str(it.total_price)) * 100)) for it in order_items) if order_items else int(round(float(order.total_amount) * 100))
+    is_vat_inclusive = bool(
+        invoice.vat_enabled and
+        (invoice.vat_rate or 0) > 0 and
+        invoice.total_amount_paisa <= raw_lines_paisa and
+        invoice.taxable_amount_paisa < raw_lines_paisa
+    )
 
-    # 1. Enforce credit ceiling (cannot over-credit an invoice)
+    # 2. Derive original invoice-level commercial discount and pro-rate across lines (DEF-03)
+    if is_vat_inclusive:
+        inv_commercial_discount_paisa = max(0, raw_lines_paisa - invoice.total_amount_paisa)
+    else:
+        inv_commercial_discount_paisa = max(0, raw_lines_paisa - invoice.taxable_amount_paisa)
+
+    line_alloc_disc = {}
+    if order_items and raw_lines_paisa > 0 and inv_commercial_discount_paisa > 0:
+        cum_allocated = 0
+        for idx, it in enumerate(order_items):
+            it_gross_paisa = int(round(Decimal(str(it.total_price)) * 100))
+            if idx == len(order_items) - 1:
+                line_disc = inv_commercial_discount_paisa - cum_allocated
+            else:
+                line_disc = int(round(Decimal(inv_commercial_discount_paisa) * Decimal(it_gross_paisa) / Decimal(raw_lines_paisa)))
+                cum_allocated += line_disc
+            line_alloc_disc[it.product_id] = line_disc
+    else:
+        line_alloc_disc = {it.product_id: 0 for it in order_items}
+
+    # 3. Process item returns (DEF-02 & DEF-03)
+    prepared_items = []
+    computed_taxable_paisa = 0
+    computed_vat_paisa = 0
+    computed_total_paisa = 0
+
+    if data.items:
+        for ret_item in data.items:
+            orig_item = db.query(SalesItem).filter(
+                SalesItem.sales_order_id == order.id,
+                SalesItem.product_id == ret_item.product_id,
+                SalesItem.company_id == current_user.company_id
+            ).first()
+            if not orig_item:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Product #{ret_item.product_id} was not invoiced on this order."
+                )
+
+            orig_qty = Decimal(str(orig_item.quantity))
+            if Decimal(str(ret_item.quantity)) <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Return quantity for Product #{ret_item.product_id} must be greater than zero."
+                )
+
+            # Cumulative returned quantity check across previous credit notes (DEF-02)
+            # Checks CreditNoteItem (authoritative across stock and non-stock credits)
+            prev_credited_qty = db.query(func.coalesce(func.sum(CreditNoteItem.quantity), Decimal('0.0'))).join(
+                CreditNote, CreditNote.id == CreditNoteItem.credit_note_id
+            ).filter(
+                CreditNote.company_id == current_user.company_id,
+                CreditNote.invoice_id == invoice.id,
+                CreditNoteItem.product_id == ret_item.product_id
+            ).scalar() or Decimal('0.0')
+
+            # Fallback to check StockMovement for pre-existing records
+            prev_sm_qty = db.query(func.coalesce(func.sum(StockMovement.quantity), Decimal('0.0'))).filter(
+                StockMovement.company_id == current_user.company_id,
+                StockMovement.ref_type == "credit_note",
+                StockMovement.ref_id == invoice.id,
+                StockMovement.product_id == ret_item.product_id,
+                StockMovement.movement_type == "SALES_RETURN"
+            ).scalar() or Decimal('0.0')
+
+            prev_effective_qty = max(Decimal(str(prev_credited_qty)), Decimal(str(prev_sm_qty)))
+            cum_qty = prev_effective_qty + Decimal(str(ret_item.quantity))
+            if cum_qty > orig_qty:
+                remaining_ret_qty = max(Decimal('0.0'), orig_qty - prev_effective_qty)
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Cumulative returned quantity ({cum_qty}) exceeds original invoiced quantity ({orig_qty}) for Product #{ret_item.product_id}. Remaining returnable: {remaining_ret_qty}."
+                )
+
+            # Net line paisa after allocated commercial discount (DEF-03)
+            orig_gross_line_paisa = int(round(Decimal(str(orig_item.total_price)) * 100))
+            orig_net_line_paisa = orig_gross_line_paisa - line_alloc_disc.get(orig_item.product_id, 0)
+
+            # Prior credited amount for this line
+            prev_credited_line_paisa = db.query(func.coalesce(func.sum(CreditNoteItem.taxable_paisa if not is_vat_inclusive else CreditNoteItem.total_paisa), 0)).join(
+                CreditNote, CreditNote.id == CreditNoteItem.credit_note_id
+            ).filter(
+                CreditNote.company_id == current_user.company_id,
+                CreditNote.invoice_id == invoice.id,
+                CreditNoteItem.product_id == ret_item.product_id
+            ).scalar() or 0
+
+            rem_line_paisa = max(0, orig_net_line_paisa - prev_credited_line_paisa)
+            rem_line_qty = max(Decimal('0.0'), orig_qty - prev_effective_qty)
+
+            if ret_item.unit_price_paisa is not None:
+                line_base_paisa = int(round(Decimal(str(ret_item.quantity)) * Decimal(str(ret_item.unit_price_paisa))))
+                rate_paisa = ret_item.unit_price_paisa
+            else:
+                if Decimal(str(ret_item.quantity)) == rem_line_qty:
+                    line_base_paisa = rem_line_paisa
+                else:
+                    effective_rate = Decimal(orig_net_line_paisa) / orig_qty if orig_qty > 0 else Decimal(0)
+                    line_base_paisa = int(round(Decimal(str(ret_item.quantity)) * effective_rate))
+                rate_paisa = int(round(Decimal(orig_net_line_paisa) / orig_qty)) if orig_qty > 0 else 0
+
+            # Tax calculation per line item
+            if is_vat_inclusive:
+                it_taxable = int(round(Decimal(line_base_paisa) / Decimal("1.13")))
+                it_vat = line_base_paisa - it_taxable
+                it_total = line_base_paisa
+            elif invoice.vat_enabled and float(invoice.vat_rate or 0) > 0:
+                it_taxable = line_base_paisa
+                it_vat = int(round(Decimal(it_taxable) * Decimal("0.13")))
+                it_total = it_taxable + it_vat
+            else:
+                it_taxable = line_base_paisa
+                it_vat = 0
+                it_total = line_base_paisa
+
+            computed_taxable_paisa += it_taxable
+            computed_vat_paisa += it_vat
+            computed_total_paisa += it_total
+
+            prepared_items.append({
+                "product_id": ret_item.product_id,
+                "quantity": ret_item.quantity,
+                "unit_price_paisa": rate_paisa,
+                "discount_paisa": line_alloc_disc.get(ret_item.product_id, 0),
+                "taxable_paisa": it_taxable,
+                "vat_paisa": it_vat,
+                "total_paisa": it_total
+            })
+
+    credit_amount_paisa = data.amount_paisa if data.amount_paisa is not None else computed_total_paisa
+
+    if not credit_amount_paisa or credit_amount_paisa <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Credit note amount_paisa must be greater than zero."
+        )
+
+    # 4. Enforce credit ceiling (cannot over-credit an invoice)
     existing_credits_paisa = db.query(func.coalesce(func.sum(ReceivableEntry.amount_paisa), 0)).filter(
         ReceivableEntry.company_id == current_user.company_id,
         ReceivableEntry.invoice_id == invoice.id,
@@ -472,13 +669,17 @@ def issue_credit_note(invoice_id: int, data: CreditNoteCreate, current_user: Use
             )
         )
 
-    # 2. Nepal VAT rules: credit note reduces VAT proportionally
-    if invoice.vat_enabled and invoice.vat_rate > 0:
-        taxable_credit_paisa = int(round(Decimal(credit_amount_paisa) / Decimal("1.13")))
-        vat_credit_paisa = credit_amount_paisa - taxable_credit_paisa
+    # 5. VAT distribution for manual or total credit
+    if data.items and not data.amount_paisa:
+        taxable_credit_paisa = computed_taxable_paisa
+        vat_credit_paisa = computed_vat_paisa
     else:
-        taxable_credit_paisa = credit_amount_paisa
-        vat_credit_paisa = 0
+        if invoice.vat_enabled and float(invoice.vat_rate or 0) > 0:
+            taxable_credit_paisa = int(round(Decimal(credit_amount_paisa) / Decimal("1.13")))
+            vat_credit_paisa = credit_amount_paisa - taxable_credit_paisa
+        else:
+            taxable_credit_paisa = credit_amount_paisa
+            vat_credit_paisa = 0
 
     cn_count = db.query(func.count(ReceivableEntry.id)).filter(
         ReceivableEntry.company_id == current_user.company_id,
@@ -487,9 +688,43 @@ def issue_credit_note(invoice_id: int, data: CreditNoteCreate, current_user: Use
     ).scalar() or 0
 
     cn_ref = f"CN-{invoice.invoice_number}-{cn_count + 1:02d}"
+    ret_date_ad = data.return_date_ad or datetime.now().strftime("%Y-%m-%d")
+    try:
+        parsed_d = datetime.strptime(ret_date_ad, "%Y-%m-%d").date()
+        ret_date_bs = data.return_date_bs or ad_to_bs_str(parsed_d)
+    except Exception:
+        ret_date_bs = data.return_date_bs or ""
 
+    target_wh_id = None
+    stock_restored = False
+    if data.return_to_stock and data.items:
+        target_wh_id = data.warehouse_id or _get_default_or_validate_warehouse(db, current_user.company_id, None, user=current_user)
+        movement_repo = TenantRepository(StockMovement, db, current_user.company_id)
+        for it in prepared_items:
+            prod = db.query(Product).filter(
+                Product.id == it["product_id"],
+                Product.company_id == current_user.company_id
+            ).first()
+            movement_repo.create(
+                product_id=it["product_id"],
+                warehouse_id=target_wh_id,
+                size=prod.size if prod else None,
+                quantity=it["quantity"],
+                direction=1,  # Stock restored IN
+                ref_type="credit_note",
+                ref_id=invoice.id,
+                movement_type="SALES_RETURN",
+                source_doc_ref=cn_ref,
+                actor_id=current_user.id,
+                date_ad=ret_date_ad,
+                date_bs=ret_date_bs,
+                notes=f"Sales return under Credit Note {cn_ref}: {data.reason}"
+            )
+        stock_restored = True
+
+    # 6. Post CREDIT_NOTE (-1) entry to AR Subledger
     rec_repo = TenantRepository(ReceivableEntry, db, current_user.company_id)
-    rec_repo.create(
+    rec_entry = rec_repo.create(
         client_id=order.client_id,
         entry_type="CREDIT_NOTE",
         direction=-1,
@@ -503,9 +738,48 @@ def issue_credit_note(invoice_id: int, data: CreditNoteCreate, current_user: Use
         notes=f"Credit Note: {data.reason} (VAT reduction: Rs. {vat_credit_paisa/100:.2f})"
     )
 
+    # 7. Persist authoritative CreditNote and CreditNoteItem records
+    cn = CreditNote(
+        company_id=current_user.company_id,
+        invoice_id=invoice.id,
+        receivable_entry_id=rec_entry.id,
+        credit_note_number=cn_ref,
+        date_ad=ret_date_ad,
+        date_bs=ret_date_bs,
+        reason=data.reason,
+        taxable_amount_paisa=taxable_credit_paisa,
+        vat_amount_paisa=vat_credit_paisa,
+        total_amount_paisa=credit_amount_paisa,
+        return_to_stock=stock_restored,
+        warehouse_id=target_wh_id
+    )
+    db.add(cn)
+    db.flush()
+
+    for it in prepared_items:
+        cni = CreditNoteItem(
+            company_id=current_user.company_id,
+            credit_note_id=cn.id,
+            product_id=it["product_id"],
+            quantity=it["quantity"],
+            unit_price_paisa=it["unit_price_paisa"],
+            discount_paisa=it["discount_paisa"],
+            taxable_paisa=it["taxable_paisa"],
+            vat_paisa=it["vat_paisa"],
+            total_paisa=it["total_paisa"],
+            return_to_stock=stock_restored
+        )
+        db.add(cni)
+
+    # 8. Synchronize invoice and order receivable amounts
+    credit_dec = quantize_npr(Decimal(credit_amount_paisa) / Decimal(100))
+    invoice.receivable_amount = quantize_npr(max(Decimal('0.00'), Decimal(str(invoice.receivable_amount or 0)) - credit_dec))
+    order.receivable_amount = quantize_npr(max(Decimal('0.00'), Decimal(str(order.receivable_amount or 0)) - credit_dec))
+
     db.commit()
-    return {
+    result = {
         "message": "Credit note issued successfully",
+        "credit_note_id": cn.id,
         "credit_note_ref": cn_ref,
         "invoice_id": invoice.id,
         "invoice_number": invoice.invoice_number,
@@ -513,8 +787,10 @@ def issue_credit_note(invoice_id: int, data: CreditNoteCreate, current_user: Use
         "taxable_credit_paisa": taxable_credit_paisa,
         "vat_credit_paisa": vat_credit_paisa,
         "remaining_creditable_paisa": remaining_creditable_paisa - credit_amount_paisa,
+        "stock_restored": stock_restored,
         "reason": data.reason
     }
+    return result
 
 
 @router.post("/{invoice_id}/cancel")
@@ -586,6 +862,152 @@ def cancel_invoice(invoice_id: int, current_user: User = Depends(require_editor)
     return {"message": "Invoice successfully marked as void", "id": invoice.id, "invoice_number": invoice.invoice_number, "is_void": True}
 
 
+@router.get("/{invoice_id}/credit-notes")
+def list_invoice_credit_notes(
+    invoice_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns all credit notes and their line items issued against a specific invoice.
+    Strictly tenant-scoped.
+    """
+    invoice = db.query(Invoice).filter(
+        Invoice.id == invoice_id,
+        Invoice.company_id == current_user.company_id
+    ).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    credit_notes = db.query(CreditNote).filter(
+        CreditNote.company_id == current_user.company_id,
+        CreditNote.invoice_id == invoice_id
+    ).order_by(CreditNote.id.asc()).all()
+
+    result = []
+    for cn in credit_notes:
+        result.append({
+            "id": cn.id,
+            "credit_note_number": cn.credit_note_number,
+            "invoice_id": cn.invoice_id,
+            "date_ad": cn.date_ad,
+            "date_bs": cn.date_bs,
+            "reason": cn.reason,
+            "taxable_amount_paisa": cn.taxable_amount_paisa,
+            "vat_amount_paisa": cn.vat_amount_paisa,
+            "total_amount_paisa": cn.total_amount_paisa,
+            "return_to_stock": cn.return_to_stock,
+            "warehouse_id": cn.warehouse_id,
+            "created_at": cn.created_at.isoformat() if cn.created_at else None,
+            "items": [
+                {
+                    "id": it.id,
+                    "product_id": it.product_id,
+                    "quantity": float(it.quantity),
+                    "unit_price_paisa": it.unit_price_paisa,
+                    "taxable_paisa": it.taxable_paisa,
+                    "vat_paisa": it.vat_paisa,
+                    "total_paisa": it.total_paisa,
+                    "return_to_stock": it.return_to_stock
+                }
+                for it in cn.items
+            ]
+        })
+    return result
+
+
+@router.get("/{invoice_id}/returnable-items")
+def get_invoice_returnable_items(
+    invoice_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns returnable item breakdown for an invoice:
+    - product_id
+    - name, code, size
+    - invoiced_quantity
+    - credited_quantity (authoritative cumulative returned across all past credit notes)
+    - remaining_quantity (invoiced_quantity - credited_quantity)
+    - unit_price
+    - unit_price_paisa
+    Calculated authoritatively against CreditNoteItem records and stock movements.
+    Strictly tenant-scoped.
+    """
+    invoice = db.query(Invoice).filter(
+        Invoice.id == invoice_id,
+        Invoice.company_id == current_user.company_id
+    ).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    order = db.query(SalesOrder).filter(
+        SalesOrder.id == invoice.sales_order_id,
+        SalesOrder.company_id == current_user.company_id
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Sales order not found")
+
+    order_items = db.query(SalesItem).filter(
+        SalesItem.sales_order_id == order.id,
+        SalesItem.company_id == current_user.company_id
+    ).all()
+
+    # Query all credit note items for this invoice
+    credited_totals = db.query(
+        CreditNoteItem.product_id,
+        func.coalesce(func.sum(CreditNoteItem.quantity), Decimal('0.0')).label("tot_credited")
+    ).join(
+        CreditNote, CreditNote.id == CreditNoteItem.credit_note_id
+    ).filter(
+        CreditNote.company_id == current_user.company_id,
+        CreditNote.invoice_id == invoice.id
+    ).group_by(CreditNoteItem.product_id).all()
+
+    credited_map = {row.product_id: Decimal(str(row.tot_credited)) for row in credited_totals}
+
+    # Also query any stock movements with movement_type=SALES_RETURN and ref_id=invoice.id
+    sm_totals = db.query(
+        StockMovement.product_id,
+        func.coalesce(func.sum(StockMovement.quantity), Decimal('0.0')).label("tot_sm")
+    ).filter(
+        StockMovement.company_id == current_user.company_id,
+        StockMovement.ref_type == "credit_note",
+        StockMovement.ref_id == invoice.id,
+        StockMovement.movement_type == "SALES_RETURN"
+    ).group_by(StockMovement.product_id).all()
+    sm_map = {row.product_id: Decimal(str(row.tot_sm)) for row in sm_totals}
+
+    prod_ids = [it.product_id for it in order_items]
+    prods = {p.id: p for p in db.query(Product).filter(Product.id.in_(prod_ids), Product.company_id == current_user.company_id).all()} if prod_ids else {}
+
+    items = []
+    for it in order_items:
+        p = prods.get(it.product_id)
+        orig_qty = Decimal(str(it.quantity))
+        prev_cred = credited_map.get(it.product_id, Decimal('0.0'))
+        prev_sm = sm_map.get(it.product_id, Decimal('0.0'))
+        prev_effective = max(prev_cred, prev_sm)
+        remaining_qty = max(Decimal('0.0'), orig_qty - prev_effective)
+        items.append({
+            "product_id": it.product_id,
+            "name": p.name if p else f"Product #{it.product_id}",
+            "code": p.code if p else "-",
+            "size": p.size if p and p.size else "-",
+            "invoiced_quantity": float(orig_qty),
+            "credited_quantity": float(prev_effective),
+            "remaining_quantity": float(remaining_qty),
+            "unit_price": float(it.unit_price),
+            "unit_price_paisa": int(round(Decimal(str(it.unit_price)) * 100))
+        })
+
+    return {
+        "invoice_id": invoice.id,
+        "invoice_number": invoice.invoice_number,
+        "items": items
+    }
+
+
 @router.get("/{invoice_id}")
 def get_invoice(
     invoice_id: int,
@@ -649,6 +1071,7 @@ def get_printable_invoice(invoice_id: int, current_user: User = Depends(get_curr
     safe_date_bs = html.escape(str(invoice.date_bs))
 
     safe_client_name = html.escape(client.name if client else "N/A")
+    safe_client_pan = html.escape(client.pan_number if client and client.pan_number else "N/A")
     safe_client_address = html.escape(client.address if client and client.address else "N/A")
     safe_client_phone = html.escape(client.phone if client and client.phone else "N/A")
     safe_order_ref = html.escape(order.order_number if order else "N/A")
@@ -763,6 +1186,7 @@ def get_printable_invoice(invoice_id: int, current_user: User = Depends(get_curr
             <div>
                 <strong>Billed To / खरिदकर्ता:</strong><br>
                 Client: {safe_client_name}<br>
+                PAN / स्थायी लेखा नं: <strong>{safe_client_pan}</strong><br>
                 Address: {safe_client_address}<br>
                 Phone: {safe_client_phone}
             </div>
@@ -838,3 +1262,249 @@ def get_printable_invoice(invoice_id: int, current_user: User = Depends(get_curr
     </html>
     """
     return HTMLResponse(content=html_content)
+
+
+@router.get("/{invoice_id}/credit-notes/{credit_note_id}/printable", response_class=HTMLResponse)
+@router.get("/credit-notes/{credit_note_id}/printable", response_class=HTMLResponse)
+def get_printable_credit_note(
+    credit_note_id: int,
+    invoice_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Renders a Schedule-10 (अनुसूची-१०) compliant printable HTML credit note
+    per Nepal VAT Rules 2053 (Rule 23(5) & Rule 24).
+    Contains Seller PAN, Buyer PAN, Original Tax Invoice Number & Date,
+    Returned SKU breakdown, Taxable Reduction, 13% VAT Credit, Total Credit, and In Words (अक्षरमा).
+    Strictly tenant-scoped and sanitized with html.escape() to neutralize Stored XSS.
+    """
+    cn = db.query(CreditNote).filter(
+        CreditNote.id == credit_note_id,
+        CreditNote.company_id == current_user.company_id
+    ).first()
+    if not cn:
+        raise HTTPException(status_code=404, detail="Credit note not found")
+
+    invoice = db.query(Invoice).filter(
+        Invoice.id == cn.invoice_id,
+        Invoice.company_id == current_user.company_id
+    ).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Original invoice not found")
+
+    company = db.query(Company).filter(Company.id == current_user.company_id).first()
+    order = db.query(SalesOrder).filter(
+        SalesOrder.id == invoice.sales_order_id,
+        SalesOrder.company_id == current_user.company_id
+    ).first()
+    client = db.query(Client).filter(
+        Client.id == order.client_id,
+        Client.company_id == current_user.company_id
+    ).first() if order else None
+
+    cn_items = db.query(CreditNoteItem).filter(
+        CreditNoteItem.credit_note_id == cn.id,
+        CreditNoteItem.company_id == current_user.company_id
+    ).all()
+
+    prod_ids = list({it.product_id for it in cn_items})
+    prods = {p.id: p for p in db.query(Product).filter(Product.id.in_(prod_ids), Product.company_id == current_user.company_id).all()} if prod_ids else {}
+
+    safe_company_name = html.escape(company.name if company else "LIVO FOOTWEAR INDUSTRIES PVT. LTD.")
+    safe_company_address = html.escape(company.address if company and company.address else "Kathmandu, Nepal")
+    safe_company_phone = html.escape(company.phone if company and company.phone else "+977-1-4000000")
+    safe_company_pan = html.escape(company.pan_number if company and company.pan_number else "609823412")
+
+    safe_cn_num = html.escape(str(cn.credit_note_number))
+    safe_date_ad = html.escape(str(cn.date_ad))
+    safe_date_bs = html.escape(str(cn.date_bs))
+    safe_orig_inv = html.escape(str(invoice.invoice_number))
+    safe_orig_date_ad = html.escape(str(invoice.date_ad))
+    safe_orig_date_bs = html.escape(str(invoice.date_bs))
+
+    safe_client_name = html.escape(client.name if client else "N/A")
+    safe_client_pan = html.escape(client.pan_number if client and client.pan_number else "N/A")
+    safe_client_address = html.escape(client.address if client and client.address else "N/A")
+    safe_client_phone = html.escape(client.phone if client and client.phone else "N/A")
+    safe_reason = html.escape(str(cn.reason))
+
+    total_credit_dec = Decimal(cn.total_amount_paisa) / Decimal(100)
+    words_en = amount_to_words_en(total_credit_dec)
+    words_np = amount_to_words_np(total_credit_dec)
+
+    items_html = ""
+    if cn_items:
+        for idx, item in enumerate(cn_items, 1):
+            prod = prods.get(item.product_id)
+            prod_name = html.escape(prod.name if prod else f"Product #{item.product_id}")
+            hs_code = html.escape(getattr(prod, "hs_code", "6403.99") or "6403.99")
+            rate_rs = item.unit_price_paisa / 100.0
+            tot_rs = item.total_paisa / 100.0
+            items_html += f"""
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">{idx}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">{prod_name}</td>
+                <td style="border: 1px solid #ddd; padding: 8px; text-align: center; font-family: monospace;">{hs_code}</td>
+                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">{item.quantity:.0f} pairs</td>
+                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rs. {rate_rs:,.2f}</td>
+                <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">Rs. {tot_rs:,.2f}</td>
+            </tr>
+            """
+    else:
+        tot_rs = cn.total_amount_paisa / 100.0
+        items_html = f"""
+        <tr>
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">1</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">Sales Return / Price Allowance: {safe_reason}</td>
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: center; font-family: monospace;">6403.99</td>
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">1 lot</td>
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rs. {tot_rs:,.2f}</td>
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">Rs. {tot_rs:,.2f}</td>
+        </tr>
+        """
+
+    taxable_rs = cn.taxable_amount_paisa / 100.0
+    vat_rs = cn.vat_amount_paisa / 100.0
+    total_rs = cn.total_amount_paisa / 100.0
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>CREDIT NOTE {safe_cn_num} - {safe_company_name}</title>
+        <style>
+            body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #333; }}
+            .header {{ display: flex; justify-content: space-between; border-bottom: 2px solid #dc2626; padding-bottom: 15px; margin-bottom: 20px; }}
+            .company-title {{ font-size: 24px; font-weight: bold; color: #1a252f; }}
+            .badge {{ background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 4px 8px; border-radius: 4px; font-size: 14px; font-weight: 600; }}
+            .info-grid {{ display: flex; justify-content: space-between; margin-bottom: 20px; }}
+            table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
+            th {{ background: #fef2f2; border: 1px solid #ddd; padding: 10px; text-align: left; }}
+            .totals {{ float: right; width: 400px; background: #fafbfc; border: 1px solid #e1e4e8; padding: 15px; border-radius: 6px; }}
+            .totals table {{ margin-bottom: 0; width: 100%; }}
+            .totals td {{ border: none; padding: 6px 0; }}
+            .in-words-box {{ clear: both; margin-top: 20px; padding: 12px 16px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }}
+            .print-btn {{ background: #dc2626; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; margin-right: 8px; }}
+            .toggle-btn {{ background: #475569; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; }}
+            .action-bar {{ margin-bottom: 20px; }}
+            @media print {{ .action-bar {{ display: none; }} }}
+        </style>
+        <script>
+            function toggleLanguage() {{
+                const npElems = document.querySelectorAll('.lbl-np');
+                const enElems = document.querySelectorAll('.lbl-en');
+                const isNpVisible = npElems.length > 0 && npElems[0].style.display !== 'none';
+                npElems.forEach(el => el.style.display = isNpVisible ? 'none' : 'inline');
+                enElems.forEach(el => el.style.display = isNpVisible ? 'inline' : 'none');
+            }}
+        </script>
+    </head>
+    <body>
+        <div class="action-bar">
+            <button class="print-btn" onclick="window.print()">🖨️ Print Credit Note</button>
+            <button class="toggle-btn" onclick="toggleLanguage()">🌐 Toggle EN / नेपाली</button>
+        </div>
+
+        <div class="header">
+            <div>
+                <div class="company-title">{safe_company_name}</div>
+                <div>Address: {safe_company_address} | Phone: {safe_company_phone}</div>
+                <div>PAN Number: <strong>{safe_company_pan}</strong></div>
+            </div>
+            <div style="text-align: right;">
+                <h2 style="margin: 0; color: #dc2626;">
+                    <span class="lbl-np">क्रेडिट नोट (CREDIT NOTE)</span>
+                    <span class="lbl-en" style="display: none;">CREDIT NOTE</span>
+                </h2>
+                <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
+                    <span class="lbl-np">अनुसूची-१० (नियम २३ को उपनियम (५) सँग सम्बन्धित)</span>
+                    <span class="lbl-en" style="display: none;">Schedule-10, Value Added Tax Rules, 2053</span>
+                </div>
+                <div style="font-size: 16px; margin-top: 5px;"><strong>{safe_cn_num}</strong></div>
+                <div>Date (AD): {safe_date_ad} | (BS): {safe_date_bs}</div>
+                <div style="margin-top: 4px; font-size: 13px; color: #475569;">
+                    Ref Tax Invoice: <strong>{safe_orig_inv}</strong> ({safe_orig_date_bs} BS)
+                </div>
+            </div>
+        </div>
+
+        <div class="info-grid">
+            <div>
+                <strong>Billed To / खरिदकर्ता:</strong><br>
+                Client: {safe_client_name}<br>
+                PAN / स्थायी लेखा नं: <strong>{safe_client_pan}</strong><br>
+                Address: {safe_client_address}<br>
+                Phone: {safe_client_phone}
+            </div>
+            <div style="text-align: right;">
+                <strong>Reason / कारण:</strong> {safe_reason}<br>
+                <strong>Stock Restored:</strong> <span class="badge">{'YES (RESTOCKED)' if cn.return_to_stock else 'NO (FINANCIAL CREDIT)'}</span>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="text-align: center; width: 45px;">
+                        <span class="lbl-np">क्र.सं.</span><span class="lbl-en" style="display: none;">S.N.</span>
+                    </th>
+                    <th>
+                        <span class="lbl-np">विवरण / वस्तु (Description / SKU)</span><span class="lbl-en" style="display: none;">Description / SKU</span>
+                    </th>
+                    <th style="text-align: center; width: 90px;">HS Code</th>
+                    <th style="text-align: right; width: 90px;">
+                        <span class="lbl-np">परिमाण (Qty)</span><span class="lbl-en" style="display: none;">Quantity</span>
+                    </th>
+                    <th style="text-align: right; width: 110px;">
+                        <span class="lbl-np">दर (Rate)</span><span class="lbl-en" style="display: none;">Rate (Rs.)</span>
+                    </th>
+                    <th style="text-align: right; width: 120px;">
+                        <span class="lbl-np">रकम (Amount)</span><span class="lbl-en" style="display: none;">Amount (Rs.)</span>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                {items_html}
+            </tbody>
+        </table>
+
+        <div class="totals">
+            <table>
+                <tr>
+                    <td>
+                        <span class="lbl-np">फिर्ता करयोग्य रकम (Taxable Credit):</span>
+                        <span class="lbl-en" style="display: none;">Taxable Credit Amount:</span>
+                    </td>
+                    <td style="text-align: right; font-weight: 600;">Rs. {taxable_rs:,.2f}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 0; color: #b91c1c; font-weight: 600;">
+                        <span class="lbl-np">१३% मूल्य अभिवृद्धि कर कटौती (13% VAT Reduction):</span>
+                        <span class="lbl-en" style="display: none;">13% Value Added Tax Credit:</span>
+                    </td>
+                    <td style="text-align: right; font-weight: 600; color: #b91c1c;">Rs. {vat_rs:,.2f}</td>
+                </tr>
+                <tr style="border-top: 2px solid #333; font-weight: bold; font-size: 16px;">
+                    <td style="padding-top: 8px;">
+                        <span class="lbl-np">कुल क्रेडिट रकम (Total Credit Amount):</span>
+                        <span class="lbl-en" style="display: none;">Total Credit Amount:</span>
+                    </td>
+                    <td style="text-align: right; padding-top: 8px; color: #b91c1c;">Rs. {total_rs:,.2f}</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="in-words-box">
+            <strong>
+                <span class="lbl-np">अक्षरमा (In Words):</span>
+                <span class="lbl-en" style="display: none;">In Words:</span>
+            </strong>
+            <span class="lbl-np" style="font-style: italic; margin-left: 6px;">{words_np} ({words_en})</span>
+            <span class="lbl-en" style="display: none; font-style: italic; margin-left: 6px;">{words_en}</span>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+

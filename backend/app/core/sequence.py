@@ -14,15 +14,72 @@ Strategy:
 Gap policy: Gaps are ACCEPTABLE (e.g., after rollbacks). Duplicates are NEVER acceptable.
 """
 
+import re
+import time
+import logging
 import threading
 from datetime import datetime
+from typing import Optional
+from fastapi import HTTPException
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from app.models.sequence import DocumentSequence
 
+logger = logging.getLogger("livo_erp.sequence")
+
+
+class SequenceAllocationError(HTTPException):
+    """
+    Raised when document sequence allocation fails.
+    Ensures fail-closed behavior: never fabricates or duplicates document numbers.
+    """
+    def __init__(
+        self,
+        detail: str = "Failed to allocate document sequence number. Please retry.",
+        status_code: int = 503,
+        document_type: Optional[str] = None,
+        company_id: Optional[int] = None,
+        original_error: Optional[Exception] = None,
+    ):
+        self.document_type = document_type
+        self.company_id = company_id
+        self.original_error = original_error
+        super().__init__(status_code=status_code, detail=detail)
+
+
+def is_transient_retryable_sequence_error(exc: Exception) -> bool:
+    """
+    Evaluates whether a database exception encountered during sequence allocation
+    is demonstrably transient and safe to retry under a savepoint.
+
+    Safe to retry under savepoint (transient lock conflicts):
+    - 40P01: deadlock_detected (transient lock conflict resolved on rollback)
+    - 55P03: lock_not_available (transient lock timeout resolved after backoff)
+
+    Unsafe to retry under savepoint (fail-closed immediately):
+    - 40001: serialization_failure (snapshot is pinned; in-transaction savepoint
+      retry cannot advance snapshot under REPEATABLE READ / SERIALIZABLE;
+      requires whole-transaction retry at service boundary)
+    - Connection drops / network down
+    - IntegrityError (FK violations, constraint corruptions)
+    - Syntax / Schema errors
+    """
+    orig = getattr(exc, "orig", None)
+    pgcode = getattr(orig, "pgcode", None) or ""
+    if pgcode in ("40P01", "55P03"):
+        return True
+
+    msg = str(exc).lower()
+    if "deadlock detected" in msg or "canceling statement due to lock timeout" in msg or "could not obtain lock" in msg:
+        return True
+
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Python-level mutex registry for SQLite environments (test only)
-# On PostgreSQL, DB-level SELECT FOR UPDATE provides the serialization.
+# On PostgreSQL, DB-level row updates / FOR UPDATE provide the serialization.
 # ---------------------------------------------------------------------------
 _sqlite_locks: dict[tuple, threading.Lock] = {}
 _registry_lock = threading.Lock()
@@ -46,77 +103,100 @@ def _is_sqlite(db: Session) -> bool:
     return str(url).startswith("sqlite")
 
 
-def allocate_next_sequence(db: Session, company_id: int, document_type: str) -> int:
+def allocate_next_sequence(
+    db: Session,
+    company_id: int,
+    document_type: str,
+    max_retries: int = 3
+) -> int:
     """
     Atomically allocates the next sequence number for (company_id, document_type).
 
-    PostgreSQL: Uses SELECT ... FOR UPDATE on the DocumentSequence row.
+    PostgreSQL: Uses atomic UPDATE ... RETURNING on the DocumentSequence row.
     SQLite: Uses a Python threading.Lock (safe for unit tests, not for multi-process).
 
-    Returns: The next integer sequence number (always monotonically increasing per scope).
+    Returns: The next integer sequence number (monotonically increasing per scope).
+    Fails closed: Raises SequenceAllocationError on contention exhaustion or failure.
+    Never falls back to un-locked table max ID queries.
     """
     lock = _get_sqlite_lock(company_id, document_type) if _is_sqlite(db) else None
     if lock:
         lock.acquire()
     try:
-        # First ensure the row exists
-        seq_record = db.query(DocumentSequence).filter(
-            DocumentSequence.company_id == company_id,
-            DocumentSequence.document_type == document_type
-        ).first()
-
-        if not seq_record:
-            # Try to create if missing
+        last_error = None
+        for attempt in range(max_retries):
             try:
                 with db.begin_nested():
-                    new_seq = DocumentSequence(
-                        company_id=company_id,
-                        document_type=document_type,
-                        current_sequence=0
-                    )
-                    db.add(new_seq)
-                    db.flush()
-            except IntegrityError:
-                pass  # Someone else created it, we can safely proceed to atomic update
+                    # 1. Ensure seed row exists
+                    seq_record = db.query(DocumentSequence).filter(
+                        DocumentSequence.company_id == company_id,
+                        DocumentSequence.document_type == document_type
+                    ).first()
 
-        # Atomic UPDATE with RETURNING
-        from sqlalchemy import update
-        stmt = (
-            update(DocumentSequence)
-            .where(
-                DocumentSequence.company_id == company_id,
-                DocumentSequence.document_type == document_type
-            )
-            .values(current_sequence=DocumentSequence.current_sequence + 1)
-            .returning(DocumentSequence.current_sequence)
+                    if not seq_record:
+                        try:
+                            with db.begin_nested():
+                                new_seq = DocumentSequence(
+                                    company_id=company_id,
+                                    document_type=document_type,
+                                    current_sequence=0
+                                )
+                                db.add(new_seq)
+                                db.flush()
+                        except IntegrityError:
+                            pass  # Concurrently created by racing worker
+
+                    # 2. Atomic UPDATE with RETURNING
+                    stmt = (
+                        update(DocumentSequence)
+                        .where(
+                            DocumentSequence.company_id == company_id,
+                            DocumentSequence.document_type == document_type
+                        )
+                        .values(current_sequence=DocumentSequence.current_sequence + 1)
+                        .returning(DocumentSequence.current_sequence)
+                    )
+                    result = db.execute(stmt).scalar()
+
+                    if result is None:
+                        # Fallback for concurrent transaction race: explicit row lock
+                        seq_record = db.query(DocumentSequence).filter(
+                            DocumentSequence.company_id == company_id,
+                            DocumentSequence.document_type == document_type
+                        ).with_for_update().first()
+                        if seq_record:
+                            seq_record.current_sequence += 1
+                            db.flush()
+                            return seq_record.current_sequence
+                        raise SequenceAllocationError(
+                            detail=f"Document sequence record for '{document_type}' not found after creation.",
+                            document_type=document_type,
+                            company_id=company_id
+                        )
+
+                    db.flush()
+                    return result
+
+            except Exception as exc:
+                last_error = exc
+                if attempt < max_retries - 1 and is_transient_retryable_sequence_error(exc):
+                    time.sleep(0.01 * (2 ** attempt))
+                    continue
+                # Non-transient error or exhausted retries: break immediately
+                break
+
+        sanitized = re.sub(r"://([^:]+):([^@]+)@", r"://\1:***@", str(last_error))
+        logger.error(
+            "Failed to allocate document sequence for company %s, type %s: %s",
+            company_id, document_type, sanitized
         )
-        result = db.execute(stmt).scalar()
-        
-        if result is None:
-            # Fallback for concurrent transaction race
-            seq_record = db.query(DocumentSequence).filter(
-                DocumentSequence.company_id == company_id,
-                DocumentSequence.document_type == document_type
-            ).with_for_update().first()
-            if seq_record:
-                seq_record.current_sequence += 1
-                db.flush()
-                return seq_record.current_sequence
-            raise RuntimeError(f"Failed to allocate sequence for {document_type}")
-            
-        db.flush()
-        return result
-    except Exception as exc:
-        from sqlalchemy import func
-        if document_type == "SALES_ORDER":
-            from app.models.sales import SalesOrder
-            max_id = db.query(func.coalesce(func.max(SalesOrder.id), 0)).filter(SalesOrder.company_id == company_id).scalar() or 0
-            return int(max_id) + 1
-        elif document_type == "PRODUCTION":
-            from app.models.production import ProductionBatch
-            max_id = db.query(func.coalesce(func.max(ProductionBatch.id), 0)).filter(ProductionBatch.company_id == company_id).scalar() or 0
-            return int(max_id) + 1
-        raise
+        raise SequenceAllocationError(
+            detail=f"Failed to allocate document sequence for '{document_type}': {sanitized}",
+            status_code=503,
+            document_type=document_type,
+            company_id=company_id,
+            original_error=last_error
+        ) from last_error
     finally:
         if lock:
             lock.release()
