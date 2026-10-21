@@ -1,0 +1,280 @@
+name: Verify Caddy Edge Runtime & Body Limit
+
+'on':
+  pull_request:
+    paths:
+      - 'Caddyfile'
+      - 'docker-compose.yml'
+      - 'scripts/caddy_synthetic_backend.py'
+      - '.github/workflows/verify_caddy_runtime.yml'
+  push:
+    branches:
+      - main
+      - 'release/**'
+    paths:
+      - 'Caddyfile'
+      - 'docker-compose.yml'
+      - 'scripts/caddy_synthetic_backend.py'
+      - '.github/workflows/verify_caddy_runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-caddy-runtime:
+    name: Validate Caddy Syntax & 10MB Request-Body Limit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Inspect Pinned Caddy Image Reference & Version Resolution
+        id: caddy-meta
+        run: |
+          COMPOSE_IMAGE=$(grep -E '^\s*image:\s*caddy:' docker-compose.yml | head -n 1 | awk '{print $2}')
+          echo "Declared image in docker-compose.yml: ${COMPOSE_IMAGE}"
+          echo "Note: '${COMPOSE_IMAGE}' is a mutable rolling tag (not an immutable sha256 digest)."
+
+          echo "Pulling Caddy image..."
+          docker pull "${COMPOSE_IMAGE}"
+
+          CADDY_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${COMPOSE_IMAGE}" 2>/dev/null || echo "digest-unavailable")
+          CADDY_VERSION=$(docker run --rm "${COMPOSE_IMAGE}" caddy version)
+
+          echo "=================================================="
+          echo "Caddy Image Reference: ${COMPOSE_IMAGE}"
+          echo "Caddy Image Digest:    ${CADDY_DIGEST}"
+          echo "Caddy Resolved Version:${CADDY_VERSION}"
+          echo "=================================================="
+
+      - name: Validate Repository Caddyfile Syntax (Default DOMAIN)
+        run: |
+          COMPOSE_IMAGE=$(grep -E '^\s*image:\s*caddy:' docker-compose.yml | head -n 1 | awk '{print $2}')
+          echo "Running 'caddy validate' with default DOMAIN (localhost)..."
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            "${COMPOSE_IMAGE}" \
+            caddy validate --config /etc/caddy/Caddyfile
+
+      - name: Validate Repository Caddyfile Syntax (HTTP Domain Override)
+        run: |
+          COMPOSE_IMAGE=$(grep -E '^\s*image:\s*caddy:' docker-compose.yml | head -n 1 | awk '{print $2}')
+          echo "Running 'caddy validate' with DOMAIN=http://localhost..."
+          docker run --rm \
+            -e DOMAIN=http://localhost \
+            -v "${GITHUB_WORKSPACE}/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            "${COMPOSE_IMAGE}" \
+            caddy validate --config /etc/caddy/Caddyfile
+
+      - name: Execute Isolated Caddy Runtime Verification
+        id: runtime-tests
+        run: |
+          set -euo pipefail
+
+          COMPOSE_IMAGE=$(grep -E '^\s*image:\s*caddy:' docker-compose.yml | head -n 1 | awk '{print $2}')
+          NET_NAME="caddy_edge_verify_net_${GITHUB_RUN_ID:-$$}"
+          echo "Creating isolated Docker network: ${NET_NAME}"
+          docker network create "${NET_NAME}"
+
+          ORIGINAL_EXIT=0
+          cleanup() {
+            ORIGINAL_EXIT=$?
+            echo "Executing in-script cleanup (exit code: ${ORIGINAL_EXIT})..."
+            docker rm -f caddy_proxy synthetic_backend 2>/dev/null || true
+            docker network rm "${NET_NAME}" 2>/dev/null || true
+            exit "${ORIGINAL_EXIT}"
+          }
+          trap cleanup EXIT
+
+          echo "Starting synthetic backend (dual port 8000/3000)..."
+          docker run -d \
+            --name synthetic_backend \
+            --network "${NET_NAME}" \
+            --network-alias backend \
+            --network-alias frontend \
+            -v "${GITHUB_WORKSPACE}/scripts/caddy_synthetic_backend.py:/app/backend.py:ro" \
+            python:3.11-alpine \
+            python /app/backend.py
+
+          echo "Waiting for synthetic backend readiness on port 8000..."
+          BACKEND_READY=false
+          for i in $(seq 1 15); do
+            if docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s http://backend:8000/health | grep -q "healthy"; then
+              echo "Synthetic backend is healthy."
+              BACKEND_READY=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "${BACKEND_READY}" != "true" ]; then
+            echo "::error::Synthetic backend failed to become healthy within 15 seconds."
+            docker logs synthetic_backend
+            exit 1
+          fi
+
+          echo "Starting Caddy container with repository Caddyfile..."
+          docker run -d \
+            --name caddy_proxy \
+            --network "${NET_NAME}" \
+            --network-alias caddy \
+            -e DOMAIN=http://caddy \
+            -v "${GITHUB_WORKSPACE}/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            "${COMPOSE_IMAGE}" \
+            caddy run --config /etc/caddy/Caddyfile
+
+          echo "Waiting for Caddy proxy readiness..."
+          CADDY_READY=false
+          for i in $(seq 1 15); do
+            if docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -I http://caddy/health | grep -qE "200|404"; then
+              echo "Caddy is responding."
+              CADDY_READY=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "${CADDY_READY}" != "true" ]; then
+            echo "::error::Caddy failed to respond within 15 seconds."
+            docker logs caddy_proxy
+            exit 1
+          fi
+
+          echo "=== Caddy Initial Startup Logs ==="
+          docker logs caddy_proxy
+
+          mkdir -p /tmp/caddy_test
+          chmod 777 /tmp/caddy_test
+          dd if=/dev/urandom of=/tmp/caddy_test/payload_1mib.bin bs=1M count=1 2>/dev/null
+          PAYLOAD_1MIB_BYTES=$(stat -c%s /tmp/caddy_test/payload_1mib.bin)
+          echo "Created 1 MiB test payload: ${PAYLOAD_1MIB_BYTES} bytes"
+
+          dd if=/dev/urandom of=/tmp/caddy_test/payload_11mib.bin bs=1M count=11 2>/dev/null
+          PAYLOAD_11MIB_BYTES=$(stat -c%s /tmp/caddy_test/payload_11mib.bin)
+          echo "Created 11 MiB test payload: ${PAYLOAD_11MIB_BYTES} bytes"
+
+          # -------------------------------------------------------------
+          # TEST CASE A: Ordinary Request Below Configured Limit (1 MiB)
+          # -------------------------------------------------------------
+          echo ""
+          echo "=========================================================="
+          echo "EXECUTING TEST CASE A: Ordinary Request (1 MiB <= 10MB)"
+          echo "=========================================================="
+
+          rm -f /tmp/caddy_test/headers_a.txt /tmp/caddy_test/resp_a.txt /tmp/caddy_test/curl_err_a.txt
+
+          CURL_EXIT_A=0
+          HTTP_STATUS_A=$(docker run --rm \
+            --network "${NET_NAME}" \
+            -v /tmp/caddy_test:/data \
+            curlimages/curl:latest \
+            -s -S -o /data/resp_a.txt -D /data/headers_a.txt -w "%{http_code}" \
+            -X POST http://caddy/api/test_ordinary \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@/data/payload_1mib.bin" 2>/tmp/caddy_test/curl_err_a.txt) || CURL_EXIT_A=$?
+
+          echo "Case A curl exit code: ${CURL_EXIT_A}"
+          echo "Case A HTTP Status received from Caddy: '${HTTP_STATUS_A}'"
+          if [ "${CURL_EXIT_A}" -ne 0 ] || [ "${HTTP_STATUS_A}" != "200" ]; then
+            echo "::error::Case A failed! Expected clean curl exit (0) and HTTP 200, got exit code ${CURL_EXIT_A}, HTTP status '${HTTP_STATUS_A}'"
+            echo "=== Case A Curl Stderr ==="
+            cat /tmp/caddy_test/curl_err_a.txt 2>/dev/null || true
+            echo "=== Case A Response Body ==="
+            cat /tmp/caddy_test/resp_a.txt 2>/dev/null || true
+            echo "=== Caddy Logs ==="
+            docker logs caddy_proxy
+            exit 1
+          fi
+
+          BACKEND_INSPECT_A=$(docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -S -f http://backend:8000/inspect/requests)
+          echo "Synthetic Backend Inspection after Case A: ${BACKEND_INSPECT_A}"
+          echo "${BACKEND_INSPECT_A}" | python3 "${GITHUB_WORKSPACE}/scripts/caddy_synthetic_backend.py" --validate-inspect 1 "${PAYLOAD_1MIB_BYTES}"
+          echo "Case A PASSED: Ordinary request successfully proxied (${PAYLOAD_1MIB_BYTES} bytes) and verified by synthetic backend inspection validator."
+
+          # -------------------------------------------------------------
+          # TEST CASE B: Oversized Request Exceeding Limit (11 MiB)
+          # -------------------------------------------------------------
+          echo ""
+          echo "=========================================================="
+          echo "EXECUTING TEST CASE B: Oversized Request (11 MiB > 10MB)"
+          echo "=========================================================="
+
+          rm -f /tmp/caddy_test/headers_b.txt /tmp/caddy_test/resp_b.txt /tmp/caddy_test/curl_err_b.txt
+
+          CURL_EXIT_B=0
+          HTTP_STATUS_B=$(docker run --rm \
+            --network "${NET_NAME}" \
+            -v /tmp/caddy_test:/data \
+            curlimages/curl:latest \
+            -s -S -o /data/resp_b.txt -D /data/headers_b.txt -w "%{http_code}" \
+            -X POST http://caddy/api/test_oversized \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@/data/payload_11mib.bin" 2>/tmp/caddy_test/curl_err_b.txt) || CURL_EXIT_B=$?
+
+          echo "Case B curl exit code: ${CURL_EXIT_B}"
+          echo "Case B HTTP Status received from Caddy: '${HTTP_STATUS_B}'"
+          echo "Case B Response Headers:"
+          cat /tmp/caddy_test/headers_b.txt 2>/dev/null || echo "(no headers captured)"
+
+          # Strictly require clean curl exit (0) and exact HTTP status 413
+          # Any nonzero curl exit, empty status, '000', or non-413 status fails immediately
+          if [ "${CURL_EXIT_B}" -ne 0 ] || [ -z "${HTTP_STATUS_B:-}" ] || [ "${HTTP_STATUS_B}" = "000" ] || [ "${HTTP_STATUS_B}" != "413" ]; then
+            echo "::error::Case B failed! Expected clean curl exit (0) and HTTP 413 from Caddy. Got curl exit code: ${CURL_EXIT_B}, HTTP status: '${HTTP_STATUS_B}'"
+            echo "=== Curl Stderr ==="
+            cat /tmp/caddy_test/curl_err_b.txt 2>/dev/null || true
+            echo "=== Response Body ==="
+            cat /tmp/caddy_test/resp_b.txt 2>/dev/null || true
+            echo "=== Caddy Logs ==="
+            docker logs caddy_proxy
+            exit 1
+          fi
+
+          echo "Case B verified: clean curl exit (code 0) and exact HTTP status 413 received from Caddy."
+
+          echo "Polling synthetic backend across bounded settling period (5 iterations, 1s interval)..."
+          POLL_PASS_COUNT=0
+          for attempt in $(seq 1 5); do
+            sleep 1
+            echo "--- Settling poll #${attempt}/5 ---"
+            BACKEND_DATA=$(docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -S -f http://backend:8000/inspect/requests)
+            echo "Inspection response #${attempt}: ${BACKEND_DATA}"
+            echo "${BACKEND_DATA}" | python3 "${GITHUB_WORKSPACE}/scripts/caddy_synthetic_backend.py" --validate-inspect 1
+            POLL_PASS_COUNT=$((POLL_PASS_COUNT + 1))
+            echo "Settling poll #${attempt}/5 passed (valid JSON structure and exact count == 1 verified)."
+          done
+
+          if [ "${POLL_PASS_COUNT}" -ne 5 ]; then
+            echo "::error::Case B failed! Required 5 of 5 successful settling polls, but only ${POLL_PASS_COUNT} completed."
+            exit 1
+          fi
+
+          echo "Case B PASSED: Bounded application-layer observation verified across all 5 polling iterations (each poll verified valid JSON and count == 1; 0 additional requests forwarded to backend during the settling window). Note: This confirms bounded application-layer settling observation under isolated test conditions, not an unlimited guarantee about future network traffic."
+
+          # -------------------------------------------------------------
+          # TEST SUMMARY & FINAL LOG CAPTURE
+          # -------------------------------------------------------------
+          echo ""
+          echo "=========================================================="
+          echo "TEST SUMMARY & EVIDENCE CAPTURE"
+          echo "=========================================================="
+          echo "All Caddy runtime test cases (A, B) completed successfully."
+          echo "=== Final Caddy Access Logs ==="
+          docker logs caddy_proxy
+
+      - name: Teardown and Cleanup Docker Resources
+        if: always()
+        run: |
+          echo "Executing post-run container and network cleanup..."
+          NET_NAME="caddy_edge_verify_net_${GITHUB_RUN_ID:-$$}"
+          docker rm -f caddy_proxy synthetic_backend 2>/dev/null || true
+          docker network rm "${NET_NAME}" 2>/dev/null || true
