@@ -783,6 +783,7 @@ def test_gate_e_atomic_rollback_on_injected_failure_pg16(pg16_target):
         db.commit()
 
         inv_id = invoice.id
+        order_id = order.id
         wh_id = warehouse.id
         prod_id = product.id
         user_id = user.id
@@ -795,13 +796,14 @@ def test_gate_e_atomic_rollback_on_injected_failure_pg16(pg16_target):
         @sa.event.listens_for(db, "before_flush")
         def inject_disruption(session, flush_context, instances):
             for obj in session.new:
-                if isinstance(obj, CreditNoteItem) and getattr(obj, "unit_price_paisa", None) == 88888888:
+                if isinstance(obj, CreditNoteItem) and getattr(obj, "unit_price_paisa", None) == 400000:
                     raise sa.exc.OperationalError(
                         "Simulated database disruption during CreditNoteItem persistence",
                         params=None,
                         orig=Exception("SIMULATED_PG16_CRASH")
                     )
 
+        failure_triggered = False
         try:
             issue_credit_note(
                 invoice_id=inv_id,
@@ -809,23 +811,27 @@ def test_gate_e_atomic_rollback_on_injected_failure_pg16(pg16_target):
                     reason="Injected Atomicity Disruption Test",
                     return_to_stock=True,
                     warehouse_id=wh_id,
-                    items=[ReturnItem(product_id=prod_id, quantity=Decimal("1.0"), unit_price_paisa=88888888)]
+                    items=[ReturnItem(product_id=prod_id, quantity=Decimal("1.0"), unit_price_paisa=400000)]
                 ),
                 current_user=curr_user,
                 db=db
             )
             pytest.fail("Injected failure was not triggered!")
-        except sa.exc.OperationalError:
+        except sa.exc.OperationalError as exc:
+            failure_triggered = True
+            assert "Simulated database disruption during CreditNoteItem persistence" in str(exc)
             db.rollback()
         finally:
             sa.event.remove(db, "before_flush", inject_disruption)
 
+        assert failure_triggered, "OperationalError was not observed!"
+
     # Verify atomic rollback across all 4 tables in a clean session
     with SessionMaker() as fresh_db:
-        cn_count = fresh_db.query(CreditNote).filter(CreditNote.reason == "Injected Atomicity Disruption Test").count()
-        cni_count = fresh_db.query(CreditNoteItem).filter(CreditNoteItem.unit_price_paisa == 88888888).count()
-        sm_count = fresh_db.query(StockMovement).filter(StockMovement.notes.like("%Injected Atomicity Disruption Test%")).count()
-        rec_count = fresh_db.query(ReceivableEntry).filter(ReceivableEntry.notes.like("%Injected Atomicity Disruption Test%")).count()
+        cn_count = fresh_db.query(CreditNote).filter(CreditNote.company_id == comp_id).count()
+        cni_count = fresh_db.query(CreditNoteItem).filter(CreditNoteItem.company_id == comp_id).count()
+        sm_count = fresh_db.query(StockMovement).filter(StockMovement.company_id == comp_id).count()
+        rec_count = fresh_db.query(ReceivableEntry).filter(ReceivableEntry.company_id == comp_id).count()
 
         assert cn_count == 0, f"Orphaned CreditNote rows found: {cn_count}"
         assert cni_count == 0, f"Orphaned CreditNoteItem rows found: {cni_count}"
@@ -833,7 +839,11 @@ def test_gate_e_atomic_rollback_on_injected_failure_pg16(pg16_target):
         assert rec_count == 0, f"Orphaned ReceivableEntry rows found: {rec_count}"
 
         inv_reload = fresh_db.query(Invoice).filter(Invoice.id == inv_id).one()
-        assert inv_reload.receivable_amount == Decimal("4520.00"), "Invoice receivable_amount was mutated despite rollback!"
+        assert inv_reload.receivable_amount == Decimal("4520.00"), f"Invoice receivable_amount was mutated despite rollback: {inv_reload.receivable_amount}"
+        assert inv_reload.total_amount == Decimal("4520.00"), f"Invoice total_amount was mutated: {inv_reload.total_amount}"
+
+        order_reload = fresh_db.query(SalesOrder).filter(SalesOrder.id == order_id).one()
+        assert order_reload.receivable_amount == Decimal("4520.00"), f"SalesOrder receivable_amount was mutated despite rollback: {order_reload.receivable_amount}"
 
 
 # =============================================================================
