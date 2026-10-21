@@ -1,0 +1,119 @@
+name: Verify Wave P1 on PostgreSQL 16
+
+'on':
+  pull_request:
+    paths:
+      - 'backend/migrations/**'
+      - 'backend/alembic.ini'
+      - 'backend/requirements.txt'
+      - 'backend/pytest.ini'
+      - 'backend/tests/test_migration_028*'
+      - 'backend/tests/test_wave_p1*'
+      - 'backend/tests/conftest.py'
+      - 'backend/app/db/session.py'
+      - 'backend/app/config.py'
+      - 'backend/app/api/v1/invoices.py'
+      - 'backend/app/core/sequence.py'
+      - '.github/workflows/verify_migration_028_pg16.yml'
+  push:
+    branches:
+      - main
+      - 'release/**'
+    paths:
+      - 'backend/migrations/**'
+      - 'backend/alembic.ini'
+      - 'backend/requirements.txt'
+      - 'backend/pytest.ini'
+      - 'backend/tests/test_migration_028*'
+      - 'backend/tests/test_wave_p1*'
+      - 'backend/tests/conftest.py'
+      - 'backend/app/db/session.py'
+      - 'backend/app/config.py'
+      - 'backend/app/api/v1/invoices.py'
+      - 'backend/app/core/sequence.py'
+      - '.github/workflows/verify_migration_028_pg16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-migration-pg16:
+    name: Verify Migration Chain & Wave P1 on PostgreSQL 16
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:16.8-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_test_password_pg16
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install PostgreSQL Client Binaries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Verify PostgreSQL 16 Engine Version
+        env:
+          PGPASSWORD: ci_test_password_pg16
+        run: |
+          PG_VERSION=$(psql -h localhost -p 5432 -U postgres -d postgres -tAc "SHOW server_version;")
+          echo "Connected to PostgreSQL engine: ${PG_VERSION}"
+          if [[ ! "${PG_VERSION}" =~ ^16\. ]]; then
+            echo "::error::Target database is not PostgreSQL 16! Detected version: ${PG_VERSION}"
+            exit 1
+          fi
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Execute Migration & Wave P1 Verification Suite (PostgreSQL 16)
+        env:
+          PG152_TEST_URL: postgresql://postgres:ci_test_password_pg16@localhost:5432/postgres
+          PYTHONPATH: backend
+        run: |
+          python -m pytest backend/tests/test_migration_028_isolated.py \
+                           backend/tests/test_migration_028_postgres.py \
+                           backend/tests/test_wave_p1_postgres.py -v --tb=short
+
+      - name: Verify Disposable DB Cleanup
+        if: always()
+        env:
+          PGPASSWORD: ci_test_password_pg16
+        run: |
+          REMAINING=$(psql -h localhost -p 5432 -U postgres -d postgres -tAc "SELECT datname FROM pg_database WHERE datname LIKE 'disp_mig028_%' OR datname LIKE 'disp_wave_p1_%';")
+          if [ -n "${REMAINING}" ]; then
+            echo "::warning::Uncleaned disposable databases detected: ${REMAINING}"
+            for db in ${REMAINING}; do
+              dropdb -h localhost -p 5432 -U postgres --if-exists "${db}"
+            done
+          else
+            echo "All disposable test databases successfully dropped."
+          fi
