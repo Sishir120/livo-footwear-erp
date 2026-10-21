@@ -139,7 +139,7 @@ def pg16_target():
     # Construct the URL for the disposable DB
     parsed = sa.engine.make_url(server_url)
     disp_url_obj = parsed.set(database=db_name)
-    disp_raw_url = str(disp_url_obj)
+    disp_raw_url = disp_url_obj.render_as_string(hide_password=False)
     disp_sa_url = disp_raw_url
     if disp_sa_url.startswith("postgresql://"):
         disp_sa_url = disp_sa_url.replace("postgresql://", "postgresql+psycopg2://", 1)
