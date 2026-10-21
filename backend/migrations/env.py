@@ -20,7 +20,7 @@ except ImportError:
 if not os.getenv("SECRET_KEY"):
     os.environ["SECRET_KEY"] = "alembic-migration-placeholder-not-for-runtime"
 
-from app.db.session import Base
+from app.db.session import Base, validate_database_target_safety
 import app.models
 
 config = context.config
@@ -41,18 +41,28 @@ def get_url() -> str:
     else:
         url = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url", ""))
 
+    if not url or not str(url).strip():
+        raise RuntimeError("[ALEMBIC CONFIG ERROR] Effective database URL could not be resolved from -x db_url, configuration, or DATABASE_URL.")
+
+    url = str(url).strip()
+
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
     elif url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+psycopg2://", 1)
 
     url = url.replace("&channel_binding=require", "").replace("?channel_binding=require&", "?").replace("?channel_binding=require", "")
+
+    # Validate the final effective URL before allowing migrations to access the database
+    validate_database_target_safety(url)
+
     return url
 
 
 def run_migrations_offline() -> None:
     """Run migrations without a live DB connection (generates SQL script)."""
     url = get_url()
+    validate_database_target_safety(url)
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -68,8 +78,10 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations against a live DB connection."""
+    url = get_url()
+    validate_database_target_safety(url)
     cfg = config.get_section(config.config_ini_section, {})
-    cfg["sqlalchemy.url"] = get_url()
+    cfg["sqlalchemy.url"] = url
     connectable = engine_from_config(
         cfg,
         prefix="sqlalchemy.",

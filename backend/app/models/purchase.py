@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 from sqlalchemy import Column, Integer, BigInteger, String, Numeric, DateTime, ForeignKey, Text, UniqueConstraint, Date, Float, CheckConstraint, func
 from sqlalchemy.orm import relationship
 from app.db.session import Base
@@ -16,6 +17,7 @@ class Supplier(Base):
     contact_person = Column(String(255), nullable=True)
     phone = Column(String(50), nullable=True)
     address = Column(String(255), nullable=True)
+    pan_number = Column(String(15), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class RawMaterial(Base):
@@ -30,9 +32,9 @@ class RawMaterial(Base):
     code = Column(String(50), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     unit = Column(String(50), nullable=False, default="kg")  # kg, pcs, litre
-    reorder_level = Column(Float, default=0.0, nullable=False, server_default="0.0")
-    current_stock = Column(Float, default=0.0, nullable=False, server_default="0.0")
-    min_stock_alert = Column(Numeric, default=0.0)
+    reorder_level = Column(Numeric(12, 4), default=Decimal("0.0000"), nullable=False, server_default="0.0000")
+    current_stock = Column(Numeric(12, 4), default=Decimal("0.0000"), nullable=False, server_default="0.0000")
+    min_stock_alert = Column(Numeric(12, 4), default=Decimal("0.0000"))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class Purchase(Base):
@@ -63,7 +65,7 @@ class Purchase(Base):
     effective_unit_rate_paisa = Column(BigInteger, default=0, nullable=False, server_default="0")
     
     # Receiving tracking
-    received_quantity = Column(Float, default=0.0, nullable=False, server_default="0.0")
+    received_quantity = Column(Numeric(12, 4), default=Decimal("0.0000"), nullable=False, server_default="0.0000")
     grn_number = Column(String(32), unique=True, nullable=True)
     received_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
@@ -87,7 +89,7 @@ class RawMaterialMovement(Base):
     movement_date = Column(Date, nullable=False)
     movement_date_bs = Column(String(10), nullable=False)
     direction = Column(Integer, nullable=False)  # +1 (Inward/Receipt/Adj In), -1 (Outward/BOM Issue/Scrap/Adj Out)
-    quantity = Column(Float, nullable=False)
+    quantity = Column(Numeric(12, 4), nullable=False)
     unit_cost_paisa = Column(BigInteger, nullable=False, default=0)
     movement_type = Column(String(32), nullable=False)  # PURCHASE_RECEIPT, BOM_ISSUE, SCRAP_WRITEOFF, ADJUSTMENT
     reference_voucher = Column(String(64), nullable=False)  # PO-2026-0042, BATCH-0118, ADJ-005

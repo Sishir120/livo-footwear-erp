@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey, CheckConstraint
+from sqlalchemy import Column, Integer, String, Numeric, Date, DateTime, ForeignKey, CheckConstraint
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
@@ -23,7 +23,7 @@ class WasteRecord(Base):
     raw_material_id = Column(Integer, ForeignKey("raw_materials.id"), nullable=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=True, index=True)
     batch_id = Column(Integer, ForeignKey("production_batches.id"), nullable=True, index=True)
-    quantity = Column(Float, nullable=False)
+    quantity = Column(Numeric(12, 4), nullable=False)
     unit = Column(String(20), nullable=False)  # kg, pcs, litre, pair
     reason = Column(String(255), nullable=True)
     disposal_method = Column(String(64), nullable=True, default="DISCARDED")  # DISCARDED, RECYCLED, STORED, RESOLD

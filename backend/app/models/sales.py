@@ -16,6 +16,7 @@ class Client(Base):
     contact_person = Column(String(255), nullable=True)
     phone = Column(String(50), nullable=True)
     address = Column(String(255), nullable=True)
+    pan_number = Column(String(15), nullable=True)
     credit_limit = Column(Numeric, default=0.0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

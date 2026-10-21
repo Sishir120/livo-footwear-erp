@@ -12,9 +12,12 @@ class User(Base):
     username = Column(String(100), nullable=False, unique=True, index=True)
     email = Column(String(255), nullable=True)
     password_hash = Column(String(255), nullable=False)
-    role = Column(String(50), nullable=False, default="viewer")  # "editor" or "viewer"
+    role = Column(String(50), nullable=False, default="viewer")  # "admin", "manager", "editor", "storekeeper", "cashier", "operator", "viewer"
     active = Column(Boolean, default=True, nullable=False)
+    branch_id = Column(Integer, ForeignKey("branches.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     company = relationship("Company", back_populates="users")
+    branch = relationship("Branch")
+
