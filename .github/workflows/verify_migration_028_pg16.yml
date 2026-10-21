@@ -96,6 +96,7 @@ jobs:
 
       - name: Execute Migration & Wave P1 Verification Suite (PostgreSQL 16)
         env:
+          DATABASE_URL: postgresql://postgres:ci_test_password_pg16@localhost:5432/postgres
           PG152_TEST_URL: postgresql://postgres:ci_test_password_pg16@localhost:5432/postgres
           SECRET_KEY: ci_verify_wave_p1_secret_key_minimum_32_chars
           PYTHONPATH: backend
