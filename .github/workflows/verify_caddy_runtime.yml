@@ -136,16 +136,19 @@ jobs:
 
           echo "Waiting for Caddy proxy readiness..."
           CADDY_READY=false
+          PROBE_STATUS=""
           for i in $(seq 1 15); do
-            if docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -I http://caddy/health | grep -qE "200|404"; then
-              echo "Caddy is responding."
+            PROBE_STATUS=$(docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -o /dev/null -w "%{http_code}" http://caddy/health/ || true)
+            if [ "${PROBE_STATUS}" = "200" ]; then
+              echo "Caddy proxy is ready (HTTP 200 on /health/)."
               CADDY_READY=true
               break
             fi
+            echo "Caddy readiness attempt #${i}/15 returned HTTP '${PROBE_STATUS}'; retrying in 1s..."
             sleep 1
           done
           if [ "${CADDY_READY}" != "true" ]; then
-            echo "::error::Caddy failed to respond within 15 seconds."
+            echo "::error::Caddy failed to respond with HTTP 200 within 15 seconds (last status: '${PROBE_STATUS:-empty}')."
             docker logs caddy_proxy
             exit 1
           fi
