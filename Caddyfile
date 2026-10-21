@@ -1,4 +1,9 @@
 {$DOMAIN:localhost} {
+    # Enforce request body size limit to protect backend against memory exhaustion
+    request_body {
+        max_size 10MB
+    }
+
     # Reverse proxy API and Swagger/OpenAPI endpoints to FastAPI backend
     handle /api/* {
         reverse_proxy backend:8000
