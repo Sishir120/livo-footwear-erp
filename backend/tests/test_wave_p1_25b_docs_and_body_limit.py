@@ -602,9 +602,9 @@ def test_caddyfile_early_rejection_configuration():
     """
     CATEGORY A: STATIC CONFIGURATION TEXTUAL ASSERTION.
     Verifies that the repository Caddyfile text contains the expected directive syntax:
-    - Caddyfile contains @oversized_cl named matcher matching Content-Length > 10485760.
-    - respond @oversized_cl 413 is present.
-    - @oversized_cl and respond directives appear before handle /api/* to short-circuit before proxying.
+    - Caddyfile contains @oversized_cl named matcher matching Content-Length > 10000000.
+    - handle @oversized_cl block is present with respond 413.
+    - handle @oversized_cl appears before handle /api/* to short-circuit before proxying under Caddy's stable route grouping.
     - request_body max_size 10MB streaming limit is preserved as defense-in-depth.
     NOTE: Static textual assertions cannot prove runtime execution order or CEL evaluation.
     Actual runtime execution is established exclusively by containerized Caddy runtime tests in CI.
@@ -616,19 +616,128 @@ def test_caddyfile_early_rejection_configuration():
     content = caddyfile_path.read_text(encoding="utf-8")
 
     assert "@oversized_cl" in content, "Caddyfile must define @oversized_cl matcher"
-    assert "respond @oversized_cl 413" in content, "Caddyfile must configure respond @oversized_cl 413"
+    assert "> 10000000" in content, "Caddyfile expression must compare against 10000000 (10MB decimal limit)"
+    assert "handle @oversized_cl" in content, "Caddyfile must configure handle @oversized_cl block"
+    assert "respond 413" in content, "handle @oversized_cl must contain respond 413"
     assert "request_body" in content, "Caddyfile must preserve request_body directive"
     assert "max_size 10MB" in content, "request_body must preserve max_size 10MB"
 
     # Directive order verification
     req_body_pos = content.find("request_body")
     matcher_pos = content.find("@oversized_cl")
-    respond_pos = content.find("respond @oversized_cl 413")
-    handle_pos = content.find("handle /api/*")
+    handle_oversized_pos = content.find("handle @oversized_cl")
+    handle_api_pos = content.find("handle /api/*")
 
     assert req_body_pos < matcher_pos, "request_body must be configured before early rejection matcher"
-    assert matcher_pos < respond_pos, "@oversized_cl must be defined before respond directive"
-    assert respond_pos < handle_pos, "respond @oversized_cl 413 must appear before handle /api/* reverse_proxy"
+    assert matcher_pos < handle_oversized_pos, "@oversized_cl must be defined before handle @oversized_cl"
+    assert handle_oversized_pos < handle_api_pos, "handle @oversized_cl must appear before handle /api/* reverse_proxy"
+
+
+def test_caddy_cel_expression_evaluation_logic():
+    """
+    CATEGORY A: PURE UNIT TEST.
+    Verifies the mathematical and short-circuit evaluation semantics of the Caddy CEL expression:
+    `{http.request.header.Content-Length} != "" && int({http.request.header.Content-Length}) > 10000000`
+    """
+    def eval_cel(content_length_header: Optional[str]) -> bool:
+        # Replicate CEL evaluation semantics exactly:
+        # If Content-Length is missing or empty, short-circuit false without int() conversion
+        if content_length_header is None or content_length_header == "":
+            return False
+        # Otherwise, parse string digits into integer and compare to 10 MB decimal limit (10000000)
+        try:
+            val = int(content_length_header)
+        except ValueError:
+            return False
+        return val > 10000000
+
+    # 1. Missing or empty header (e.g. GET /health/ or chunked transfer) -> False
+    assert eval_cel(None) is False
+    assert eval_cel("") is False
+
+    # 2. Zero or small payload -> False
+    assert eval_cel("0") is False
+    assert eval_cel("1024") is False
+
+    # 3. Case A test payload: 1 MiB (1048576 bytes) -> False
+    assert eval_cel("1048576") is False
+
+    # 4. Just below boundary: 9,999,999 bytes -> False (within allowed limit)
+    assert eval_cel("9999999") is False
+
+    # 5. Exact boundary: 10 MB decimal limit (10,000,000 bytes) -> False (within allowed limit)
+    assert eval_cel("10000000") is False
+
+    # 6. Boundary exceed: 10,000,000 + 1 byte (10,000,001 bytes) -> True (matches early rejection!)
+    assert eval_cel("10000001") is True
+
+    # 7. Gap case: 10,200,000 bytes -> True (matches early rejection, preventing upstream forward!)
+    assert eval_cel("10200000") is True
+
+    # 8. 10 MiB binary boundary (10,485,760 bytes) -> True (exceeds decimal 10,000,000 bytes limit)
+    assert eval_cel("10485760") is True
+
+    # 9. Case B test payload: 11 MiB (11534336 bytes) -> True (matches early rejection!)
+    assert eval_cel("11534336") is True
+
+
+def test_caddy_route_group_mutual_exclusivity_simulation():
+    """
+    CATEGORY B: ROUTE SIMULATION TEST.
+    Simulates Caddy's HTTP server route grouping behavior across:
+    - Route 0 (group0): handle @oversized_cl -> respond 413
+    - Route 1 (group0): handle /api/* -> reverse_proxy backend:8000
+    Verifies that when @oversized_cl matches (Case B or gap case), Route 0 short-circuits group0 and
+    Route 1 (reverse_proxy) is NEVER reached.
+    """
+    class SimulatedCaddyServer:
+        def __init__(self, limit_bytes: int = 10000000):
+            self.limit_bytes = limit_bytes
+            self.backend_requests = []
+
+        def handle_request(self, method: str, path: str, headers: dict) -> tuple[int, str]:
+            # Route 0 (handle @oversized_cl)
+            cl = headers.get("Content-Length")
+            if cl is not None and cl != "" and int(cl) > self.limit_bytes:
+                # Early rejection: respond 413, mutually excludes subsequent routes in group0
+                return 413, "Request Entity Too Large"
+
+            # Route 1 (handle /api/*)
+            if path.startswith("/api/"):
+                self.backend_requests.append({"method": method, "path": path, "headers": headers})
+                return 200, "OK from backend"
+
+            # Fallback (handle frontend)
+            return 200, "OK from frontend"
+
+    server = SimulatedCaddyServer()
+
+    # Case A: 1 MiB fixed-length -> reaches backend
+    status_a, _ = server.handle_request("POST", "/api/test_ordinary", {"Content-Length": "1048576"})
+    assert status_a == 200
+    assert len(server.backend_requests) == 1
+    assert server.backend_requests[0]["path"] == "/api/test_ordinary"
+
+    # Exact boundary: 10,000,000 bytes -> reaches backend
+    status_boundary, _ = server.handle_request("POST", "/api/test_boundary", {"Content-Length": "10000000"})
+    assert status_boundary == 200
+    assert len(server.backend_requests) == 2
+
+    # Gap case: 10,200,000 bytes -> early rejected with 413, 0 requests added to backend!
+    status_gap, _ = server.handle_request("POST", "/api/test_gap", {"Content-Length": "10200000"})
+    assert status_gap == 413
+    assert len(server.backend_requests) == 2, "Gap case (10.2 MB) must NOT forward to backend!"
+
+    # Case B: 11 MiB fixed-length -> early rejected with 413, 0 requests added to backend!
+    status_b, _ = server.handle_request("POST", "/api/test_oversized", {"Content-Length": "11534336"})
+    assert status_b == 413
+    assert len(server.backend_requests) == 2, "Case B must NOT forward any request to backend!"
+
+    # Case C: 11 MiB chunked (no Content-Length) -> passes early check, reaches backend
+    status_c, _ = server.handle_request("POST", "/api/test_streaming_oversized", {"Transfer-Encoding": "chunked"})
+    assert status_c == 200
+    assert len(server.backend_requests) == 3
+    assert server.backend_requests[2]["path"] == "/api/test_streaming_oversized"
 
 
 def test_synthetic_backend_partial_read_and_metadata():
@@ -711,7 +820,7 @@ def test_synthetic_backend_inspection_parser_error_diagnostics():
             {
                 "method": "POST",
                 "path": "/api/test_oversized",
-                "body_bytes_read": 10485760,
+                "body_bytes_read": 10000000,
                 "bytes_expected": 11534336,
                 "completed": False,
                 "truncated": True
@@ -725,7 +834,7 @@ def test_synthetic_backend_inspection_parser_error_diagnostics():
     err_msg = str(excinfo.value)
     assert "expected count == 1, got 2" in err_msg
     assert "read 1048576/1048576 bytes, completed=True, truncated=False" in err_msg
-    assert "read 10485760/11534336 bytes, completed=False, truncated=True" in err_msg
+    assert "read 10000000/11534336 bytes, completed=False, truncated=True" in err_msg
 
 
 def test_edge_body_limit_boundary_and_malformed_spec():
@@ -738,8 +847,10 @@ def test_edge_body_limit_boundary_and_malformed_spec():
     by actual Caddy runtime execution in CI.
     - Missing Content-Length (streamed/chunked or empty)
     - Valid length below limit (1,048,576 bytes / 1 MiB) -> HTTP 200, backend invoked
-    - Exactly 10,485,760 bytes (exact 10MB limit boundary) -> HTTP 200, backend invoked
-    - 10,485,761 bytes (10MB + 1 byte) -> HTTP 413, backend NOT reached
+    - 9,999,999 bytes (just below 10MB limit) -> HTTP 200, backend invoked
+    - Exactly 10,000,000 bytes (exact 10MB decimal limit boundary) -> HTTP 200, backend invoked
+    - 10,000,001 bytes (10MB + 1 byte) -> HTTP 413, backend NOT reached
+    - 10,200,000 bytes (gap case) -> HTTP 413, backend NOT reached
     - 11,534,336 bytes (existing 11 MiB Case B) -> HTTP 413, backend NOT reached
     - Non-numeric Content-Length ("abc") -> HTTP 400 Bad Request, backend NOT reached
     - Negative Content-Length ("-100") -> HTTP 400 Bad Request, backend NOT reached
@@ -751,7 +862,7 @@ def test_edge_body_limit_boundary_and_malformed_spec():
     from starlette.responses import PlainTextResponse
     from fastapi import FastAPI
 
-    MAX_EDGE_BODY = 10 * 1024 * 1024  # 10,485,760 bytes
+    MAX_EDGE_BODY = 10_000_000  # 10,000,000 bytes (10MB decimal limit)
 
     async def edge_proxy_oracle(request: Request, call_next):
         te = request.headers.get("transfer-encoding", "").lower()
@@ -777,7 +888,7 @@ def test_edge_body_limit_boundary_and_malformed_spec():
             if cl_val < 0:
                 return PlainTextResponse("Bad Request: negative Content-Length", status_code=400)
 
-            # Early rejection if known Content-Length > 10MB
+            # Early rejection if known Content-Length > 10MB (10,000,000 bytes)
             if cl_val > MAX_EDGE_BODY:
                 return PlainTextResponse("Payload Too Large", status_code=413)
 
@@ -802,16 +913,28 @@ def test_edge_body_limit_boundary_and_malformed_spec():
     assert r1.status_code == 200
     assert backend_invoked is True
 
-    # 2. Exactly boundary (10,485,760 bytes)
+    # 1b. Just below boundary (9,999,999 bytes)
     backend_invoked = False
-    r2 = client.post("/test-boundary", headers={"Content-Length": "10485760"})
+    r1b = client.post("/test-boundary", headers={"Content-Length": "9999999"})
+    assert r1b.status_code == 200
+    assert backend_invoked is True
+
+    # 2. Exactly boundary (10,000,000 bytes)
+    backend_invoked = False
+    r2 = client.post("/test-boundary", headers={"Content-Length": "10000000"})
     assert r2.status_code == 200
     assert backend_invoked is True
 
-    # 3. Boundary + 1 (10,485,761 bytes)
+    # 3. Boundary + 1 (10,000,001 bytes)
     backend_invoked = False
-    r3 = client.post("/test-boundary", headers={"Content-Length": "10485761"})
+    r3 = client.post("/test-boundary", headers={"Content-Length": "10000001"})
     assert r3.status_code == 413
+    assert backend_invoked is False
+
+    # 3b. Gap case (10,200,000 bytes)
+    backend_invoked = False
+    r_gap = client.post("/test-boundary", headers={"Content-Length": "10200000"})
+    assert r_gap.status_code == 413
     assert backend_invoked is False
 
     # 4. Existing 11 MiB (11,534,336 bytes)
@@ -1180,7 +1303,7 @@ def test_synthetic_backend_case_c_outcome_classification():
                 "request_id": 2,
                 "method": "POST",
                 "path": "/api/test_streaming_oversized",
-                "body_bytes_read": 10485760,
+                "body_bytes_read": 10000000,
                 "completed": False,
                 "truncated": True
             }
@@ -1214,7 +1337,7 @@ def test_synthetic_backend_case_c_outcome_classification():
     assert res2["outcome"] == "C2"
     assert res2["count"] == 2
     assert "Streaming termination" in res2["description"]
-    assert res2["bytes_received"] == 10485760
+    assert res2["bytes_received"] == 10000000
 
     # 4b. Outcome C3 correctly classified (client stream severed / status 000 / curl exit 55)
     res3 = caddy_synthetic_backend.validate_case_c_inspection_json(
@@ -1223,7 +1346,7 @@ def test_synthetic_backend_case_c_outcome_classification():
     assert res3["outcome"] == "C3"
     assert res3["count"] == 2
     assert "Connection failure" in res3["description"] or "stream severed" in res3["description"]
-    assert res3["bytes_received"] == 10485760
+    assert res3["bytes_received"] == 10000000
 
     # 5. Outcome C2 passes with required_outcome="C2"
     res2_req = caddy_synthetic_backend.validate_case_c_inspection_json(
@@ -1254,7 +1377,7 @@ def test_synthetic_backend_case_c_outcome_classification():
         "count": 2,
         "requests": [
             {"method": "POST", "body_bytes_read": 1048576, "completed": True, "truncated": False},
-            {"method": "POST", "path": "/api/wrong_path", "body_bytes_read": 10485760, "completed": False, "truncated": True}
+            {"method": "POST", "path": "/api/wrong_path", "body_bytes_read": 10000000, "completed": False, "truncated": True}
         ]
     })
     with pytest.raises(ValueError, match="Case C path mismatch"):
@@ -1267,12 +1390,12 @@ def test_synthetic_backend_case_c_outcome_classification():
         "count": 2,
         "requests": [
             {"method": "POST", "body_bytes_read": 1048576, "completed": True, "truncated": False},
-            {"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10485761, "completed": False, "truncated": True}
+            {"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10000001, "completed": False, "truncated": True}
         ]
     })
     with pytest.raises(ValueError, match="Backend received excess bytes in Case C"):
         caddy_synthetic_backend.validate_case_c_inspection_json(
-            excess_bytes_payload, max_bytes=10485760
+            excess_bytes_payload, max_bytes=10000000
         )
 
     # 9. Outcome C2 fails if completed is True
@@ -1280,7 +1403,7 @@ def test_synthetic_backend_case_c_outcome_classification():
         "count": 2,
         "requests": [
             {"method": "POST", "body_bytes_read": 1048576, "completed": True, "truncated": False},
-            {"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10485760, "completed": True, "truncated": True}
+            {"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10000000, "completed": True, "truncated": True}
         ]
     })
     with pytest.raises(ValueError, match="completed=False"):
@@ -1291,7 +1414,7 @@ def test_synthetic_backend_case_c_outcome_classification():
         "count": 2,
         "requests": [
             {"method": "POST", "body_bytes_read": 1048576, "completed": True, "truncated": False},
-            {"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10485760, "completed": False, "truncated": False}
+            {"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10000000, "completed": False, "truncated": False}
         ]
     })
     with pytest.raises(ValueError, match="truncated=True"):
@@ -1302,7 +1425,7 @@ def test_synthetic_backend_case_c_outcome_classification():
         "count": 2,
         "requests": [
             {"method": "POST", "body_bytes_read": 500, "completed": True, "truncated": False},
-            {"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10485760, "completed": False, "truncated": True}
+            {"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10000000, "completed": False, "truncated": True}
         ]
     })
     with pytest.raises(ValueError, match="Case A payload modified"):
@@ -1315,7 +1438,7 @@ def test_synthetic_backend_case_c_outcome_classification():
         "count": 3,
         "requests": [
             {"method": "POST", "path": "/api/a", "body_bytes_read": 1048576, "completed": True, "truncated": False},
-            {"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10485760, "completed": False, "truncated": True},
+            {"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10000000, "completed": False, "truncated": True},
             {"method": "POST", "path": "/api/spurious", "body_bytes_read": 100, "completed": True, "truncated": False}
         ]
     })
@@ -1341,7 +1464,7 @@ def test_synthetic_backend_cli_validation_streaming():
     outcome_2_payload = (
         '{"count": 2, "requests": ['
         '{"method": "POST", "body_bytes_read": 1048576, "completed": true, "truncated": false},'
-        '{"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10485760, "completed": false, "truncated": true}'
+        '{"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10000000, "completed": false, "truncated": true}'
         ']}'
     )
 
@@ -1353,7 +1476,7 @@ def test_synthetic_backend_cli_validation_streaming():
 
     # 1. Outcome C2 passes CLI with --client-status 413
     proc_o2 = subprocess.run(
-        [sys.executable, str(backend_script), "--validate-case-c", "--client-status", "413", "--max-bytes", "10485760"],
+        [sys.executable, str(backend_script), "--validate-case-c", "--client-status", "413", "--max-bytes", "10000000"],
         input=outcome_2_payload,
         text=True,
         capture_output=True
@@ -1363,7 +1486,7 @@ def test_synthetic_backend_cli_validation_streaming():
 
     # 1b. Outcome C3 passes CLI with --client-status 000 --curl-exit 55
     proc_o3 = subprocess.run(
-        [sys.executable, str(backend_script), "--validate-case-c", "--client-status", "000", "--curl-exit", "55", "--max-bytes", "10485760"],
+        [sys.executable, str(backend_script), "--validate-case-c", "--client-status", "000", "--curl-exit", "55", "--max-bytes", "10000000"],
         input=outcome_2_payload,
         text=True,
         capture_output=True
@@ -1373,7 +1496,7 @@ def test_synthetic_backend_cli_validation_streaming():
 
     # 2. Outcome C1 passes CLI
     proc_o1 = subprocess.run(
-        [sys.executable, str(backend_script), "--validate-case-c", "--client-status", "413", "--max-bytes", "10485760"],
+        [sys.executable, str(backend_script), "--validate-case-c", "--client-status", "413", "--max-bytes", "10000000"],
         input=outcome_1_payload,
         text=True,
         capture_output=True
@@ -1399,7 +1522,7 @@ def test_synthetic_backend_cli_validation_streaming():
         ']}'
     )
     proc_excess = subprocess.run(
-        [sys.executable, str(backend_script), "--validate-case-c", "--max-bytes", "10485760"],
+        [sys.executable, str(backend_script), "--validate-case-c", "--max-bytes", "10000000"],
         input=excess_payload,
         text=True,
         capture_output=True
@@ -1417,3 +1540,20 @@ def test_synthetic_backend_cli_validation_streaming():
     )
     assert proc_dup.returncode == 1
     assert "Duplicate key 'count' detected" in proc_dup.stderr
+
+    # 6. Expected prior requests CLI argument (e.g. prior count = 2)
+    prior_2_payload = (
+        '{"count": 3, "requests": ['
+        '{"method": "POST", "body_bytes_read": 1048576, "completed": true, "truncated": false},'
+        '{"method": "POST", "path": "/api/prior_spurious", "body_bytes_read": 10000000, "completed": false, "truncated": true},'
+        '{"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10000000, "completed": false, "truncated": true}'
+        ']}'
+    )
+    proc_p2 = subprocess.run(
+        [sys.executable, str(backend_script), "--validate-case-c", "--client-status", "413", "--expected-prior-requests", "2"],
+        input=prior_2_payload,
+        text=True,
+        capture_output=True
+    )
+    assert proc_p2.returncode == 0
+    assert "CLASSIFIED OUTCOME: C2" in proc_p2.stdout

@@ -4,9 +4,11 @@
         max_size 10MB
     }
 
-    # Reject known oversized requests before proxying upstream
-    @oversized_cl expression `{http.request.header.Content-Length} != "" && int({http.request.header.Content-Length}) > 10485760`
-    respond @oversized_cl 413
+    # Reject known oversized requests before proxying upstream (10,000,000 bytes decimal limit)
+    @oversized_cl expression `{http.request.header.Content-Length} != "" && int({http.request.header.Content-Length}) > 10000000`
+    handle @oversized_cl {
+        respond 413
+    }
 
     # Reverse proxy API and Swagger/OpenAPI endpoints to FastAPI backend
     handle /api/* {

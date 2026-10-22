@@ -67,6 +67,11 @@ jobs:
             -v "${GITHUB_WORKSPACE}/Caddyfile:/etc/caddy/Caddyfile:ro" \
             "${COMPOSE_IMAGE}" \
             caddy validate --config /etc/caddy/Caddyfile
+          echo "Adapted Caddy JSON configuration:"
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            "${COMPOSE_IMAGE}" \
+            caddy adapt --config /etc/caddy/Caddyfile --pretty
 
       - name: Validate Repository Caddyfile Syntax (HTTP Domain Override)
         run: |
@@ -166,6 +171,11 @@ jobs:
           PAYLOAD_11MIB_BYTES=$(stat -c%s /tmp/caddy_test/payload_11mib.bin)
           echo "Created 11 MiB test payload: ${PAYLOAD_11MIB_BYTES} bytes"
 
+          # Tracking test outcomes across all cases
+          CASE_A_PASSED=false
+          CASE_B_PASSED=false
+          CASE_C_PASSED=false
+
           # -------------------------------------------------------------
           # TEST CASE A: Ordinary Request Below Configured Limit (1 MiB)
           # -------------------------------------------------------------
@@ -188,21 +198,22 @@ jobs:
 
           echo "Case A curl exit code: ${CURL_EXIT_A}"
           echo "Case A HTTP Status received from Caddy: '${HTTP_STATUS_A}'"
-          if [ "${CURL_EXIT_A}" -ne 0 ] || [ "${HTTP_STATUS_A}" != "200" ]; then
+          if [ "${CURL_EXIT_A}" -eq 0 ] && [ "${HTTP_STATUS_A}" = "200" ]; then
+            BACKEND_INSPECT_A=$(docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -S -f http://backend:8000/inspect/requests || true)
+            echo "Synthetic Backend Inspection after Case A: ${BACKEND_INSPECT_A}"
+            if echo "${BACKEND_INSPECT_A}" | python3 "${GITHUB_WORKSPACE}/scripts/caddy_synthetic_backend.py" --validate-inspect 1 "${PAYLOAD_1MIB_BYTES}"; then
+              echo "Case A PASSED: Ordinary request successfully proxied (${PAYLOAD_1MIB_BYTES} bytes) and verified by synthetic backend inspection validator."
+              CASE_A_PASSED=true
+            else
+              echo "::error::Case A failed! Synthetic backend inspection validation failed."
+            fi
+          else
             echo "::error::Case A failed! Expected clean curl exit (0) and HTTP 200, got exit code ${CURL_EXIT_A}, HTTP status '${HTTP_STATUS_A}'"
             echo "=== Case A Curl Stderr ==="
             cat /tmp/caddy_test/curl_err_a.txt 2>/dev/null || true
             echo "=== Case A Response Body ==="
             cat /tmp/caddy_test/resp_a.txt 2>/dev/null || true
-            echo "=== Caddy Logs ==="
-            docker logs caddy_proxy
-            exit 1
           fi
-
-          BACKEND_INSPECT_A=$(docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -S -f http://backend:8000/inspect/requests)
-          echo "Synthetic Backend Inspection after Case A: ${BACKEND_INSPECT_A}"
-          echo "${BACKEND_INSPECT_A}" | python3 "${GITHUB_WORKSPACE}/scripts/caddy_synthetic_backend.py" --validate-inspect 1 "${PAYLOAD_1MIB_BYTES}"
-          echo "Case A PASSED: Ordinary request successfully proxied (${PAYLOAD_1MIB_BYTES} bytes) and verified by synthetic backend inspection validator."
 
           # -------------------------------------------------------------
           # TEST CASE B: Oversized Request Exceeding Limit (11 MiB)
@@ -230,38 +241,41 @@ jobs:
           cat /tmp/caddy_test/headers_b.txt 2>/dev/null || echo "(no headers captured)"
 
           # Strictly require clean curl exit (0) and exact HTTP status 413
-          # Any nonzero curl exit, empty status, '000', or non-413 status fails immediately
-          if [ "${CURL_EXIT_B}" -ne 0 ] || [ -z "${HTTP_STATUS_B:-}" ] || [ "${HTTP_STATUS_B}" = "000" ] || [ "${HTTP_STATUS_B}" != "413" ]; then
+          if [ "${CURL_EXIT_B}" -eq 0 ] && [ "${HTTP_STATUS_B:-}" = "413" ]; then
+            echo "Case B verified: clean curl exit (code 0) and exact HTTP status 413 received from Caddy."
+            echo "Polling synthetic backend across bounded settling period (5 iterations, 1s interval)..."
+            POLL_PASS_COUNT=0
+            for attempt in $(seq 1 5); do
+              sleep 1
+              echo "--- Settling poll #${attempt}/5 ---"
+              BACKEND_DATA=$(docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -S -f http://backend:8000/inspect/requests || true)
+              echo "Inspection response #${attempt}: ${BACKEND_DATA}"
+              if echo "${BACKEND_DATA}" | python3 "${GITHUB_WORKSPACE}/scripts/caddy_synthetic_backend.py" --validate-inspect 1 "${PAYLOAD_1MIB_BYTES}"; then
+                POLL_PASS_COUNT=$((POLL_PASS_COUNT + 1))
+                echo "Settling poll #${attempt}/5 passed (valid JSON structure, exact count == 1, and Case A payload unchanged at ${PAYLOAD_1MIB_BYTES} bytes)."
+              else
+                echo "Settling poll #${attempt}/5 failed inspection assertion."
+              fi
+            done
+
+            if [ "${POLL_PASS_COUNT}" -eq 5 ]; then
+              echo "Case B PASSED: Bounded application-layer observation verified across all 5 polling iterations (each poll verified valid JSON and count == 1; 0 additional requests forwarded to backend during the settling window). Note: This confirms bounded application-layer settling observation under isolated test conditions, not an unlimited guarantee about future network traffic."
+              CASE_B_PASSED=true
+            else
+              echo "::error::Case B failed! Required 5 of 5 successful settling polls, but only ${POLL_PASS_COUNT} completed."
+            fi
+          else
             echo "::error::Case B failed! Expected clean curl exit (0) and HTTP 413 from Caddy. Got curl exit code: ${CURL_EXIT_B}, HTTP status: '${HTTP_STATUS_B}'"
             echo "=== Curl Stderr ==="
             cat /tmp/caddy_test/curl_err_b.txt 2>/dev/null || true
             echo "=== Response Body ==="
             cat /tmp/caddy_test/resp_b.txt 2>/dev/null || true
-            echo "=== Caddy Logs ==="
-            docker logs caddy_proxy
-            exit 1
           fi
 
-          echo "Case B verified: clean curl exit (code 0) and exact HTTP status 413 received from Caddy."
-
-          echo "Polling synthetic backend across bounded settling period (5 iterations, 1s interval)..."
-          POLL_PASS_COUNT=0
-          for attempt in $(seq 1 5); do
-            sleep 1
-            echo "--- Settling poll #${attempt}/5 ---"
-            BACKEND_DATA=$(docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -S -f http://backend:8000/inspect/requests)
-            echo "Inspection response #${attempt}: ${BACKEND_DATA}"
-            echo "${BACKEND_DATA}" | python3 "${GITHUB_WORKSPACE}/scripts/caddy_synthetic_backend.py" --validate-inspect 1 "${PAYLOAD_1MIB_BYTES}"
-            POLL_PASS_COUNT=$((POLL_PASS_COUNT + 1))
-            echo "Settling poll #${attempt}/5 passed (valid JSON structure, exact count == 1, and Case A payload unchanged at ${PAYLOAD_1MIB_BYTES} bytes)."
-          done
-
-          if [ "${POLL_PASS_COUNT}" -ne 5 ]; then
-            echo "::error::Case B failed! Required 5 of 5 successful settling polls, but only ${POLL_PASS_COUNT} completed."
-            exit 1
-          fi
-
-          echo "Case B PASSED: Bounded application-layer observation verified across all 5 polling iterations (each poll verified valid JSON and count == 1; 0 additional requests forwarded to backend during the settling window). Note: This confirms bounded application-layer settling observation under isolated test conditions, not an unlimited guarantee about future network traffic."
+          # Capture backend state after Case B for diagnostic evidence and Case C baseline
+          BACKEND_AFTER_B=$(docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -S -f http://backend:8000/inspect/requests || true)
+          COUNT_AFTER_B=$(echo "${BACKEND_AFTER_B}" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('count', 1))" 2>/dev/null || echo "1")
+          echo "Backend state after Case B: count=${COUNT_AFTER_B}, data=${BACKEND_AFTER_B}"
 
           # -------------------------------------------------------------
           # TEST CASE C: Streaming / Chunked Request Exceeding Limit (11 MiB)
@@ -295,18 +309,21 @@ jobs:
           elif [ "${HTTP_STATUS_C}" = "000" ]; then
             echo "Case C Client Result: Stream severed mid-upload by Caddy (TCP connection reset / broken pipe, curl exit code: ${CURL_EXIT_C})."
           else
-            echo "::error::Case C failed! Expected HTTP 413 or connection reset (000) from Caddy streaming limit. Got HTTP status: '${HTTP_STATUS_C}', curl exit: ${CURL_EXIT_C}"
+            echo "::error::Case C client outcome failed! Expected HTTP 413 or connection reset (000) from Caddy streaming limit. Got HTTP status: '${HTTP_STATUS_C}', curl exit: ${CURL_EXIT_C}"
             cat /tmp/caddy_test/curl_err_c.txt 2>/dev/null || true
-            exit 1
           fi
 
           echo "Inspecting synthetic backend observation for Case C..."
-          BACKEND_DATA_C=$(docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -S -f http://backend:8000/inspect/requests)
+          BACKEND_DATA_C=$(docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -S -f http://backend:8000/inspect/requests || true)
           echo "Inspection response after Case C: ${BACKEND_DATA_C}"
 
           # Classify outcome and verify streaming limits (C1 = rejected before upstream; C2 = stream truncated with 413; C3 = stream truncated with socket reset)
-          echo "${BACKEND_DATA_C}" | python3 "${GITHUB_WORKSPACE}/scripts/caddy_synthetic_backend.py" --validate-case-c --client-status "${HTTP_STATUS_C}" --curl-exit "${CURL_EXIT_C}" --case-c-path "/api/test_streaming_oversized" --max-bytes 10485760
-          echo "Case C PASSED: Evaluated under explicit C1/C2/C3 streaming acceptance contract (C1 = early rejection before upstream; C2 = stream truncated with HTTP 413; C3 = stream truncated with socket reset <= 10MB without memory exhaustion)."
+          if echo "${BACKEND_DATA_C}" | python3 "${GITHUB_WORKSPACE}/scripts/caddy_synthetic_backend.py" --validate-case-c --client-status "${HTTP_STATUS_C}" --curl-exit "${CURL_EXIT_C}" --case-c-path "/api/test_streaming_oversized" --max-bytes 10000000 --expected-prior-requests "${COUNT_AFTER_B:-1}"; then
+            echo "Case C PASSED: Evaluated under explicit C1/C2/C3 streaming acceptance contract."
+            CASE_C_PASSED=true
+          else
+            echo "::error::Case C failed validation under streaming acceptance contract."
+          fi
 
           # -------------------------------------------------------------
           # TEST SUMMARY & FINAL LOG CAPTURE
@@ -315,9 +332,17 @@ jobs:
           echo "=========================================================="
           echo "TEST SUMMARY & EVIDENCE CAPTURE"
           echo "=========================================================="
-          echo "All Caddy runtime test cases (A, B, C) completed successfully."
+          echo "Case A Result: ${CASE_A_PASSED}"
+          echo "Case B Result: ${CASE_B_PASSED}"
+          echo "Case C Result: ${CASE_C_PASSED}"
           echo "=== Final Caddy Access Logs ==="
-          docker logs caddy_proxy
+          docker logs caddy_proxy 2>/dev/null || true
+
+          if [ "${CASE_A_PASSED}" != "true" ] || [ "${CASE_B_PASSED}" != "true" ] || [ "${CASE_C_PASSED}" != "true" ]; then
+            echo "::error::One or more test cases failed! (Case A: ${CASE_A_PASSED}, Case B: ${CASE_B_PASSED}, Case C: ${CASE_C_PASSED})"
+            exit 1
+          fi
+          echo "All Caddy runtime test cases (A, B, C) completed successfully."
 
       - name: Teardown and Cleanup Docker Resources
         if: always()

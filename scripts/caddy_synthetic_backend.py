@@ -345,11 +345,12 @@ def validate_inspection_json(
 def validate_case_c_inspection_json(
     raw_text: str,
     case_c_path: str = "/api/test_streaming_oversized",
-    max_bytes: int = 10485760,
+    max_bytes: int = 10000000,
     expected_case_a_bytes: int = 1048576,
     required_outcome: Optional[str] = None,
     client_status: Optional[str] = None,
     curl_exit: Optional[int] = None,
+    expected_prior_requests: int = 1,
 ) -> dict:
     """
     Validates synthetic backend inspection response following streaming / chunked test Case C.
@@ -357,32 +358,32 @@ def validate_case_c_inspection_json(
 
     Outcome C1 (Early rejection before upstream initiation):
     - Client status: HTTP 413 (or clean rejection before forwarding).
-    - Exactly 1 request recorded in backend (Case A only; count == 1).
+    - Exactly expected_prior_requests recorded in backend (Case C was rejected before upstream).
     - Case A record remains unchanged (POST, exact bytes, completed=True, truncated=False).
     - Reported explicitly as "Outcome C1: Early rejection before upstream initiation".
 
     Outcome C2 (Streaming termination with HTTP 413):
     - Client status: HTTP 413.
-    - Exactly 2 requests recorded in backend (count == 2).
+    - Exactly expected_prior_requests + 1 requests recorded in backend.
     - Case A record (index 0) remains unchanged.
-    - Case C record (index 1) must have:
+    - Case C record (index expected_prior_requests) must have:
       - path matching case_c_path exactly
       - body_bytes_read <= max_bytes
       - completed is False
       - truncated is True
-    - Reported explicitly as "Outcome C2: Streaming termination (HTTP 413; upstream stream truncated <= 10MB)".
+    - Reported explicitly as "Outcome C2: Streaming termination (HTTP 413; upstream stream truncated <= 10MB / 10,000,000 bytes)".
 
     Outcome C3 (Connection failure / reset mid-upload):
     - Client status: '000' (or non-zero curl exit code / connection reset).
-    - Exactly 2 requests recorded in backend (count == 2).
+    - Exactly expected_prior_requests + 1 requests recorded in backend.
     - Case A record remains unchanged.
     - Case C record has body_bytes_read <= max_bytes, completed=False, truncated=True.
     - Reported explicitly as "Outcome C3: Connection failure / stream severed mid-upload".
 
     Fails closed if:
     - JSON is empty, malformed, non-dict, or contains duplicate keys.
-    - count < 1 (Case A missing).
-    - count > 2 (spurious unexpected requests).
+    - count < expected_prior_requests (prior requests missing).
+    - count > expected_prior_requests + 1 (spurious unexpected requests).
     - Case A payload or completion status was altered.
     - Client status is unexpected (e.g. 200, 500, 502).
     - required_outcome is set and doesn't match the observed outcome.
@@ -406,8 +407,8 @@ def validate_case_c_inspection_json(
     if not isinstance(requests, list):
         raise ValueError("Field 'requests' must be a list")
 
-    if count < 1 or len(requests) < 1:
-        raise ValueError(f"Invalid inspection state: Case A request missing (count={count}, len(requests)={len(requests)})")
+    if count < expected_prior_requests or len(requests) < expected_prior_requests:
+        raise ValueError(f"Invalid inspection state: expected at least {expected_prior_requests} prior request(s), got count={count}, len(requests)={len(requests)})")
 
     # Invariant: Case A (request index 0) must remain completely intact and unchanged
     req_a = requests[0]
@@ -424,7 +425,7 @@ def validate_case_c_inspection_json(
     if req_a.get("truncated") is not False:
         raise ValueError(f"Case A truncated status modified: expected False, got {req_a.get('truncated')}")
 
-    if count > 2 or len(requests) > 2:
+    if count > expected_prior_requests + 1 or len(requests) > expected_prior_requests + 1:
         req_summaries = []
         for i, r in enumerate(requests):
             if isinstance(r, dict):
@@ -432,7 +433,7 @@ def validate_case_c_inspection_json(
                     f"#{i+1} {r.get('method')} {r.get('path')} (read {r.get('body_bytes_read')} bytes, completed={r.get('completed')})"
                 )
         raise ValueError(
-            f"Unexpected request count after Case C: expected 1 or 2, got count={count}, len(requests)={len(requests)}. Requests: [{'; '.join(req_summaries)}]"
+            f"Unexpected request count after Case C: expected {expected_prior_requests} or {expected_prior_requests + 1}, got count={count}, len(requests)={len(requests)}. Requests: [{'; '.join(req_summaries)}]"
         )
 
     # Validate client status if provided
@@ -442,19 +443,19 @@ def validate_case_c_inspection_json(
             raise ValueError(f"Unexpected client status for Case C: expected '413' or '000', got '{client_status_str}'")
 
     # Classify outcome
-    if count == 1 and len(requests) == 1:
+    if count == expected_prior_requests and len(requests) == expected_prior_requests:
         observed_outcome = "C1"
-        outcome_desc = "Outcome C1: Early rejection before upstream initiation (0 Case C requests reached backend)"
+        outcome_desc = f"Outcome C1: Early rejection before upstream initiation (0 Case C requests reached backend; backend count remained {expected_prior_requests})"
         if required_outcome:
             req_norm = required_outcome.strip().lower()
             if req_norm not in ("c1", "outcome_1", "early_rejection", "any"):
                 raise ValueError(
-                    f"Outcome mismatch: required '{required_outcome}', but observed Outcome C1 (request rejected before upstream initiation; backend count remained 1)"
+                    f"Outcome mismatch: required '{required_outcome}', but observed Outcome C1 (request rejected before upstream initiation; backend count remained {expected_prior_requests})"
                 )
         return {
             "outcome": observed_outcome,
             "description": outcome_desc,
-            "count": 1,
+            "count": expected_prior_requests,
             "client_status": client_status,
             "curl_exit": curl_exit,
             "case_a_record": req_a,
@@ -463,8 +464,8 @@ def validate_case_c_inspection_json(
             "data": data,
         }
 
-    # Otherwise count == 2 and len(requests) == 2 -> Streaming truncation observed at backend
-    req_c = requests[1]
+    # Otherwise count == expected_prior_requests + 1 -> Streaming truncation observed at backend
+    req_c = requests[expected_prior_requests]
     if not isinstance(req_c, dict):
         raise ValueError("Case C request record must be an object")
 
@@ -517,7 +518,7 @@ def validate_case_c_inspection_json(
     return {
         "outcome": observed_outcome,
         "description": outcome_desc,
-        "count": 2,
+        "count": expected_prior_requests + 1,
         "client_status": client_status,
         "curl_exit": curl_exit,
         "case_a_record": req_a,
@@ -529,7 +530,7 @@ def validate_case_c_inspection_json(
 
 def validate_streaming_inspection_json(
     raw_text: str,
-    max_bytes: int = 10485760,
+    max_bytes: int = 10000000,
 ) -> dict:
     """Backward-compatible wrapper delegating to validate_case_c_inspection_json."""
     return validate_case_c_inspection_json(raw_text, max_bytes=max_bytes)["data"]
@@ -558,10 +559,11 @@ def run_dual(port_backend: int = 8000, port_frontend: int = 3000):
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] in ("--validate-case-c", "--validate-streaming"):
         args = sys.argv[2:]
-        max_bytes = 10485760
+        max_bytes = 10000000
         case_c_path = "/api/test_streaming_oversized"
         required_outcome = None
         expected_case_a_bytes = 1048576
+        expected_prior_requests = 1
         client_status = None
         curl_exit = None
 
@@ -598,6 +600,14 @@ if __name__ == "__main__":
                     required_outcome = args[idx]
             elif arg.startswith("--require-outcome="):
                 required_outcome = arg.split("=", 1)[1]
+            elif arg in ("--expected-prior-requests", "--prior-count"):
+                idx += 1
+                if idx < len(args):
+                    expected_prior_requests = int(args[idx])
+            elif arg.startswith("--expected-prior-requests="):
+                expected_prior_requests = int(arg.split("=", 1)[1])
+            elif arg.startswith("--prior-count="):
+                expected_prior_requests = int(arg.split("=", 1)[1])
             elif arg.isdigit() and idx == 0:
                 max_bytes = int(arg)
             idx += 1
@@ -612,6 +622,7 @@ if __name__ == "__main__":
                 required_outcome=required_outcome,
                 client_status=client_status,
                 curl_exit=curl_exit,
+                expected_prior_requests=expected_prior_requests,
             )
             outcome = result["outcome"]
             desc = result["description"]
