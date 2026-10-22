@@ -1,8 +1,12 @@
 {$DOMAIN:localhost} {
-    # Enforce request body size limit to protect backend against memory exhaustion
+    # Enforce request body size limit to protect backend against memory exhaustion (streaming defense-in-depth)
     request_body {
         max_size 10MB
     }
+
+    # Reject known oversized requests before proxying upstream
+    @oversized_cl expression `{http.request.header.Content-Length} != "" && int({http.request.header.Content-Length}) > 10485760`
+    respond @oversized_cl 413
 
     # Reverse proxy API and Swagger/OpenAPI endpoints to FastAPI backend
     handle /api/* {

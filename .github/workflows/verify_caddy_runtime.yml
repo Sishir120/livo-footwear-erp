@@ -251,9 +251,9 @@ jobs:
             echo "--- Settling poll #${attempt}/5 ---"
             BACKEND_DATA=$(docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -S -f http://backend:8000/inspect/requests)
             echo "Inspection response #${attempt}: ${BACKEND_DATA}"
-            echo "${BACKEND_DATA}" | python3 "${GITHUB_WORKSPACE}/scripts/caddy_synthetic_backend.py" --validate-inspect 1
+            echo "${BACKEND_DATA}" | python3 "${GITHUB_WORKSPACE}/scripts/caddy_synthetic_backend.py" --validate-inspect 1 "${PAYLOAD_1MIB_BYTES}"
             POLL_PASS_COUNT=$((POLL_PASS_COUNT + 1))
-            echo "Settling poll #${attempt}/5 passed (valid JSON structure and exact count == 1 verified)."
+            echo "Settling poll #${attempt}/5 passed (valid JSON structure, exact count == 1, and Case A payload unchanged at ${PAYLOAD_1MIB_BYTES} bytes)."
           done
 
           if [ "${POLL_PASS_COUNT}" -ne 5 ]; then
@@ -264,13 +264,58 @@ jobs:
           echo "Case B PASSED: Bounded application-layer observation verified across all 5 polling iterations (each poll verified valid JSON and count == 1; 0 additional requests forwarded to backend during the settling window). Note: This confirms bounded application-layer settling observation under isolated test conditions, not an unlimited guarantee about future network traffic."
 
           # -------------------------------------------------------------
+          # TEST CASE C: Streaming / Chunked Request Exceeding Limit (11 MiB)
+          # -------------------------------------------------------------
+          echo ""
+          echo "=========================================================="
+          echo "EXECUTING TEST CASE C: Chunked Streaming Request (11 MiB > 10MB)"
+          echo "=========================================================="
+
+          rm -f /tmp/caddy_test/headers_c.txt /tmp/caddy_test/resp_c.txt /tmp/caddy_test/curl_err_c.txt
+
+          CURL_EXIT_C=0
+          HTTP_STATUS_C=$(docker run --rm \
+            --network "${NET_NAME}" \
+            -v /tmp/caddy_test:/data \
+            curlimages/curl:latest \
+            -s -S -o /data/resp_c.txt -D /data/headers_c.txt -w "%{http_code}" \
+            -X POST http://caddy/api/test_streaming_oversized \
+            -H "Transfer-Encoding: chunked" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@/data/payload_11mib.bin" 2>/tmp/caddy_test/curl_err_c.txt) || CURL_EXIT_C=$?
+
+          echo "Case C curl exit code: ${CURL_EXIT_C}"
+          echo "Case C HTTP Status received from Caddy: '${HTTP_STATUS_C}'"
+          echo "Case C Response Headers:"
+          cat /tmp/caddy_test/headers_c.txt 2>/dev/null || echo "(no headers captured)"
+
+          # Caddy streaming request_body directive aborts the stream and returns 413 or resets socket
+          if [ "${HTTP_STATUS_C}" = "413" ]; then
+            echo "Case C Client Result: Received explicit HTTP 413 Payload Too Large from Caddy."
+          elif [ "${HTTP_STATUS_C}" = "000" ]; then
+            echo "Case C Client Result: Stream severed mid-upload by Caddy (TCP connection reset / broken pipe, curl exit code: ${CURL_EXIT_C})."
+          else
+            echo "::error::Case C failed! Expected HTTP 413 or connection reset (000) from Caddy streaming limit. Got HTTP status: '${HTTP_STATUS_C}', curl exit: ${CURL_EXIT_C}"
+            cat /tmp/caddy_test/curl_err_c.txt 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "Inspecting synthetic backend observation for Case C..."
+          BACKEND_DATA_C=$(docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -S -f http://backend:8000/inspect/requests)
+          echo "Inspection response after Case C: ${BACKEND_DATA_C}"
+
+          # Classify outcome and verify streaming limits (C1 = rejected before upstream; C2 = stream truncated with 413; C3 = stream truncated with socket reset)
+          echo "${BACKEND_DATA_C}" | python3 "${GITHUB_WORKSPACE}/scripts/caddy_synthetic_backend.py" --validate-case-c --client-status "${HTTP_STATUS_C}" --curl-exit "${CURL_EXIT_C}" --case-c-path "/api/test_streaming_oversized" --max-bytes 10485760
+          echo "Case C PASSED: Evaluated under explicit C1/C2/C3 streaming acceptance contract (C1 = early rejection before upstream; C2 = stream truncated with HTTP 413; C3 = stream truncated with socket reset <= 10MB without memory exhaustion)."
+
+          # -------------------------------------------------------------
           # TEST SUMMARY & FINAL LOG CAPTURE
           # -------------------------------------------------------------
           echo ""
           echo "=========================================================="
           echo "TEST SUMMARY & EVIDENCE CAPTURE"
           echo "=========================================================="
-          echo "All Caddy runtime test cases (A, B) completed successfully."
+          echo "All Caddy runtime test cases (A, B, C) completed successfully."
           echo "=== Final Caddy Access Logs ==="
           docker logs caddy_proxy
 
