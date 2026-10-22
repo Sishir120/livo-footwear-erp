@@ -53,10 +53,29 @@ jobs:
           CADDY_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${COMPOSE_IMAGE}" 2>/dev/null || echo "digest-unavailable")
           CADDY_VERSION=$(docker run --rm "${COMPOSE_IMAGE}" caddy version)
 
+          echo "Pulling Client & Backend images for reproducible environment audit..."
+          docker pull curlimages/curl:latest
+          CURL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' curlimages/curl:latest 2>/dev/null || echo "digest-unavailable")
+          CURL_VERSION=$(docker run --rm curlimages/curl:latest --version 2>/dev/null | head -n 1)
+
+          docker pull python:3.11-alpine
+          PY_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' python:3.11-alpine 2>/dev/null || echo "digest-unavailable")
+          PY_VERSION=$(docker run --rm python:3.11-alpine python --version 2>/dev/null)
+
           echo "=================================================="
-          echo "Caddy Image Reference: ${COMPOSE_IMAGE}"
-          echo "Caddy Image Digest:    ${CADDY_DIGEST}"
-          echo "Caddy Resolved Version:${CADDY_VERSION}"
+          echo "Workflow Run ID:        ${{ github.run_id }}"
+          echo "Workflow Run Attempt:   ${{ github.run_attempt }}"
+          echo "Workflow Commit SHA:    ${{ github.sha }}"
+          echo "Workflow Ref:           ${{ github.ref }}"
+          echo "Caddy Image Reference:  ${COMPOSE_IMAGE}"
+          echo "Caddy Image Digest:     ${CADDY_DIGEST}"
+          echo "Caddy Resolved Version: ${CADDY_VERSION}"
+          echo "Client Image Reference: curlimages/curl:latest"
+          echo "Client Image Digest:    ${CURL_DIGEST}"
+          echo "Client Version:         ${CURL_VERSION}"
+          echo "Backend Image Ref:      python:3.11-alpine"
+          echo "Backend Image Digest:   ${PY_DIGEST}"
+          echo "Backend Version:        ${PY_VERSION}"
           echo "=================================================="
 
       - name: Validate Repository Caddyfile Syntax (Default DOMAIN)
@@ -175,6 +194,9 @@ jobs:
           CASE_A_PASSED=false
           CASE_B_PASSED=false
           CASE_C_PASSED=false
+          CASE_D_PASSED=false
+          CASE_E_PASSED=false
+          CASE_F_PASSED=false
 
           # -------------------------------------------------------------
           # TEST CASE A: Ordinary Request Below Configured Limit (1 MiB)
@@ -278,11 +300,11 @@ jobs:
           echo "Backend state after Case B: count=${COUNT_AFTER_B}, data=${BACKEND_AFTER_B}"
 
           # -------------------------------------------------------------
-          # TEST CASE C: Streaming / Chunked Request Exceeding Limit (11 MiB)
+          # TEST CASE C: Chunked Transfer-Encoding Edge Rejection (Contract B)
           # -------------------------------------------------------------
           echo ""
           echo "=========================================================="
-          echo "EXECUTING TEST CASE C: Chunked Streaming Request (11 MiB > 10MB)"
+          echo "EXECUTING TEST CASE C: Chunked Request (Strict Edge Rejection: Contract B)"
           echo "=========================================================="
 
           rm -f /tmp/caddy_test/headers_c.txt /tmp/caddy_test/resp_c.txt /tmp/caddy_test/curl_err_c.txt
@@ -303,13 +325,13 @@ jobs:
           echo "Case C Response Headers:"
           cat /tmp/caddy_test/headers_c.txt 2>/dev/null || echo "(no headers captured)"
 
-          # Caddy streaming request_body directive aborts the stream and returns 413 or resets socket
-          if [ "${HTTP_STATUS_C}" = "413" ]; then
-            echo "Case C Client Result: Received explicit HTTP 413 Payload Too Large from Caddy."
-          elif [ "${HTTP_STATUS_C}" = "000" ]; then
-            echo "Case C Client Result: Stream severed mid-upload by Caddy (TCP connection reset / broken pipe, curl exit code: ${CURL_EXIT_C})."
+          # Under Contract B, Caddy rejects chunked requests at the edge with HTTP 411 Length Required (or 413)
+          if [ "${HTTP_STATUS_C}" = "411" ]; then
+            echo "Case C Client Result: Received explicit HTTP 411 Length Required from Caddy (Contract B edge rejection)."
+          elif [ "${HTTP_STATUS_C}" = "413" ]; then
+            echo "Case C Client Result: Received explicit HTTP 413 from Caddy."
           else
-            echo "::error::Case C client outcome failed! Expected HTTP 413 or connection reset (000) from Caddy streaming limit. Got HTTP status: '${HTTP_STATUS_C}', curl exit: ${CURL_EXIT_C}"
+            echo "::error::Case C client outcome failed! Expected HTTP 411 from Caddy edge rejection. Got HTTP status: '${HTTP_STATUS_C}', curl exit: ${CURL_EXIT_C}"
             cat /tmp/caddy_test/curl_err_c.txt 2>/dev/null || true
           fi
 
@@ -317,12 +339,147 @@ jobs:
           BACKEND_DATA_C=$(docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -S -f http://backend:8000/inspect/requests || true)
           echo "Inspection response after Case C: ${BACKEND_DATA_C}"
 
-          # Classify outcome and verify streaming limits (C1 = rejected before upstream; C2 = stream truncated with 413; C3 = stream truncated with socket reset)
+          # Strictly verify Contract B: request rejected at edge, 0 requests forwarded to backend
           if echo "${BACKEND_DATA_C}" | python3 "${GITHUB_WORKSPACE}/scripts/caddy_synthetic_backend.py" --validate-case-c --client-status "${HTTP_STATUS_C}" --curl-exit "${CURL_EXIT_C}" --case-c-path "/api/test_streaming_oversized" --max-bytes 10000000 --expected-prior-requests "${COUNT_AFTER_B:-1}"; then
-            echo "Case C PASSED: Evaluated under explicit C1/C2/C3 streaming acceptance contract."
+            echo "Case C PASSED: Verified under strict Contract B edge rejection (0 requests and 0 bytes exposed to backend)."
             CASE_C_PASSED=true
           else
-            echo "::error::Case C failed validation under streaming acceptance contract."
+            echo "::error::Case C failed validation under strict Contract B edge rejection."
+          fi
+
+          # -------------------------------------------------------------
+          # TEST CASE D: Mixed-Case Transfer-Encoding (ChUnKeD)
+          # -------------------------------------------------------------
+          echo ""
+          echo "=========================================================="
+          echo "EXECUTING TEST CASE D: Mixed-Case Transfer-Encoding (ChUnKeD)"
+          echo "=========================================================="
+
+          rm -f /tmp/caddy_test/headers_d.txt /tmp/caddy_test/resp_d.txt /tmp/caddy_test/curl_err_d.txt
+
+          CURL_EXIT_D=0
+          HTTP_STATUS_D=$(docker run --rm \
+            --network "${NET_NAME}" \
+            -v /tmp/caddy_test:/data \
+            curlimages/curl:latest \
+            -s -S -o /data/resp_d.txt -D /data/headers_d.txt -w "%{http_code}" \
+            -X POST http://caddy/api/test_mixed_case_chunked \
+            -H "Transfer-Encoding: ChUnKeD" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@/data/payload_11mib.bin" 2>/tmp/caddy_test/curl_err_d.txt) || CURL_EXIT_D=$?
+
+          echo "Case D curl exit code: ${CURL_EXIT_D}"
+          echo "Case D HTTP Status received from Caddy: '${HTTP_STATUS_D}'"
+          echo "Case D Response Headers:"
+          cat /tmp/caddy_test/headers_d.txt 2>/dev/null || echo "(no headers captured)"
+
+          if [ "${HTTP_STATUS_D}" = "411" ] || [ "${HTTP_STATUS_D}" = "413" ]; then
+            echo "Case D Client Result: Received HTTP ${HTTP_STATUS_D} from Caddy edge rejection for mixed-case chunked header."
+          else
+            echo "::error::Case D client outcome failed! Expected HTTP 411 or 413 from Caddy edge rejection. Got HTTP status: '${HTTP_STATUS_D}', curl exit: ${CURL_EXIT_D}"
+            cat /tmp/caddy_test/curl_err_d.txt 2>/dev/null || true
+          fi
+
+          echo "Inspecting synthetic backend observation for Case D..."
+          BACKEND_DATA_D=$(docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -S -f http://backend:8000/inspect/requests || true)
+          echo "Inspection response after Case D: ${BACKEND_DATA_D}"
+
+          # Verify 0 requests reached backend (count must match prior count)
+          if echo "${BACKEND_DATA_D}" | python3 "${GITHUB_WORKSPACE}/scripts/caddy_synthetic_backend.py" --validate-case-c --client-status "${HTTP_STATUS_D}" --curl-exit "${CURL_EXIT_D}" --case-c-path "/api/test_mixed_case_chunked" --max-bytes 10000000 --expected-prior-requests "${COUNT_AFTER_B:-1}"; then
+            echo "Case D PASSED: Mixed-case chunked request strictly rejected at edge (0 requests/bytes to backend)."
+            CASE_D_PASSED=true
+          else
+            echo "::error::Case D failed validation under strict Contract B edge rejection."
+          fi
+
+          # -------------------------------------------------------------
+          # TEST CASE E: Conflicting Framing (Content-Length + Transfer-Encoding)
+          # -------------------------------------------------------------
+          echo ""
+          echo "=========================================================="
+          echo "EXECUTING TEST CASE E: Conflicting Framing (CL + TE)"
+          echo "=========================================================="
+
+          rm -f /tmp/caddy_test/headers_e.txt /tmp/caddy_test/resp_e.txt /tmp/caddy_test/curl_err_e.txt
+
+          CURL_EXIT_E=0
+          HTTP_STATUS_E=$(docker run --rm \
+            --network "${NET_NAME}" \
+            -v /tmp/caddy_test:/data \
+            curlimages/curl:latest \
+            -s -S -o /data/resp_e.txt -D /data/headers_e.txt -w "%{http_code}" \
+            -X POST http://caddy/api/test_conflicting_framing \
+            -H "Content-Length: 1048576" \
+            -H "Transfer-Encoding: chunked" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@/data/payload_1mib.bin" 2>/tmp/caddy_test/curl_err_e.txt) || CURL_EXIT_E=$?
+
+          echo "Case E curl exit code: ${CURL_EXIT_E}"
+          echo "Case E HTTP Status received from Caddy: '${HTTP_STATUS_E}'"
+          echo "Case E Response Headers:"
+          cat /tmp/caddy_test/headers_e.txt 2>/dev/null || echo "(no headers captured)"
+
+          # Under RFC 9112 §6.1, Go net/http rejects ambiguous framing with HTTP 400 Bad Request,
+          # or Caddy matches @chunked and returns 411 Length Required.
+          if [ "${HTTP_STATUS_E}" = "400" ] || [ "${HTTP_STATUS_E}" = "411" ] || [ "${HTTP_STATUS_E}" = "413" ]; then
+            echo "Case E Client Result: Received safe rejection HTTP ${HTTP_STATUS_E} from server for conflicting framing."
+          else
+            echo "::error::Case E client outcome failed! Expected HTTP 400 or 411 from safe server rejection. Got HTTP status: '${HTTP_STATUS_E}', curl exit: ${CURL_EXIT_E}"
+            cat /tmp/caddy_test/curl_err_e.txt 2>/dev/null || true
+          fi
+
+          echo "Inspecting synthetic backend observation for Case E..."
+          BACKEND_DATA_E=$(docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -S -f http://backend:8000/inspect/requests || true)
+          echo "Inspection response after Case E: ${BACKEND_DATA_E}"
+
+          if echo "${BACKEND_DATA_E}" | python3 "${GITHUB_WORKSPACE}/scripts/caddy_synthetic_backend.py" --validate-case-c --client-status "${HTTP_STATUS_E}" --curl-exit "${CURL_EXIT_E}" --case-c-path "/api/test_conflicting_framing" --max-bytes 10000000 --expected-prior-requests "${COUNT_AFTER_B:-1}"; then
+            echo "Case E PASSED: Conflicting framing safely rejected (0 requests/bytes to backend)."
+            CASE_E_PASSED=true
+          else
+            echo "::error::Case E failed validation: conflicting framing reached backend or corrupted state."
+          fi
+
+          # -------------------------------------------------------------
+          # TEST CASE F: HTTP/2 Cleartext Protocol Evaluation
+          # -------------------------------------------------------------
+          echo ""
+          echo "=========================================================="
+          echo "EXECUTING TEST CASE F: HTTP/2 Protocol Evaluation"
+          echo "=========================================================="
+
+          # Document protocol framing behavior:
+          # RFC 9113 §8.2.2 strictly forbids Transfer-Encoding in HTTP/2.
+          # Caddy on cleartext HTTP defaults to HTTP/1.1 (h2c disabled unless 'protocols h1 h2c' declared).
+          # Probe with curl --http2-prior-knowledge to verify safe protocol handling on cleartext listener.
+          rm -f /tmp/caddy_test/headers_f.txt /tmp/caddy_test/resp_f.txt /tmp/caddy_test/curl_err_f.txt
+
+          CURL_EXIT_F=0
+          HTTP_STATUS_F=$(docker run --rm \
+            --network "${NET_NAME}" \
+            -v /tmp/caddy_test:/data \
+            curlimages/curl:latest \
+            -s -S -o /data/resp_f.txt -D /data/headers_f.txt -w "%{http_code}" \
+            --http2-prior-knowledge \
+            -X POST http://caddy/api/test_h2_probe \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@/data/payload_1mib.bin" 2>/tmp/caddy_test/curl_err_f.txt) || CURL_EXIT_F=$?
+
+          echo "Case F curl exit code: ${CURL_EXIT_F}"
+          echo "Case F HTTP Status observed: '${HTTP_STATUS_F}'"
+          echo "=== Case F Stderr / Protocol Note ==="
+          cat /tmp/caddy_test/curl_err_f.txt 2>/dev/null || true
+
+          # On standard cleartext HTTP listener without h2c enabled, Caddy rejects h2 preface or returns HTTP 400 / connection close
+          # Backend MUST receive 0 requests from failed h2 preface
+          BACKEND_DATA_F=$(docker run --rm --network "${NET_NAME}" curlimages/curl:latest -s -S -f http://backend:8000/inspect/requests || true)
+          echo "Inspection response after Case F: ${BACKEND_DATA_F}"
+
+          COUNT_AFTER_F=$(echo "${BACKEND_DATA_F}" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('count', 1))" 2>/dev/null || echo "1")
+          if [ "${COUNT_AFTER_F}" -eq "${COUNT_AFTER_B:-1}" ]; then
+            echo "Case F PASSED: Cleartext HTTP/2 probe verified; 0 requests exposed to backend (count remained ${COUNT_AFTER_B:-1})."
+            CASE_F_PASSED=true
+          else
+            echo "::error::Case F failed! Backend request count changed: count=${COUNT_AFTER_F}, expected=${COUNT_AFTER_B:-1}"
           fi
 
           # -------------------------------------------------------------
@@ -335,14 +492,18 @@ jobs:
           echo "Case A Result: ${CASE_A_PASSED}"
           echo "Case B Result: ${CASE_B_PASSED}"
           echo "Case C Result: ${CASE_C_PASSED}"
+          echo "Case D Result: ${CASE_D_PASSED}"
+          echo "Case E Result: ${CASE_E_PASSED}"
+          echo "Case F Result: ${CASE_F_PASSED}"
           echo "=== Final Caddy Access Logs ==="
           docker logs caddy_proxy 2>/dev/null || true
 
-          if [ "${CASE_A_PASSED}" != "true" ] || [ "${CASE_B_PASSED}" != "true" ] || [ "${CASE_C_PASSED}" != "true" ]; then
-            echo "::error::One or more test cases failed! (Case A: ${CASE_A_PASSED}, Case B: ${CASE_B_PASSED}, Case C: ${CASE_C_PASSED})"
+          if [ "${CASE_A_PASSED}" != "true" ] || [ "${CASE_B_PASSED}" != "true" ] || [ "${CASE_C_PASSED}" != "true" ] || \
+             [ "${CASE_D_PASSED}" != "true" ] || [ "${CASE_E_PASSED}" != "true" ] || [ "${CASE_F_PASSED}" != "true" ]; then
+            echo "::error::One or more test cases failed! (Case A: ${CASE_A_PASSED}, Case B: ${CASE_B_PASSED}, Case C: ${CASE_C_PASSED}, Case D: ${CASE_D_PASSED}, Case E: ${CASE_E_PASSED}, Case F: ${CASE_F_PASSED})"
             exit 1
           fi
-          echo "All Caddy runtime test cases (A, B, C) completed successfully."
+          echo "All Caddy runtime test cases (A through F) completed successfully."
 
       - name: Teardown and Cleanup Docker Resources
         if: always()

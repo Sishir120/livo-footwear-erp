@@ -353,41 +353,25 @@ def validate_case_c_inspection_json(
     expected_prior_requests: int = 1,
 ) -> dict:
     """
-    Validates synthetic backend inspection response following streaming / chunked test Case C.
-    Enforces unambiguous outcome classification across three distinct cases:
+    Validates synthetic backend inspection response following chunked test Case C.
+    Enforces strict Contract B edge rejection: requests using chunked transfer encoding
+    must be rejected at the edge before any backend request is opened.
 
-    Outcome C1 (Early rejection before upstream initiation):
-    - Client status: HTTP 413 (or clean rejection before forwarding).
+    Outcome C1 (Strict early edge rejection):
+    - Client status: HTTP 411 Length Required (or 413).
     - Exactly expected_prior_requests recorded in backend (Case C was rejected before upstream).
     - Case A record remains unchanged (POST, exact bytes, completed=True, truncated=False).
-    - Reported explicitly as "Outcome C1: Early rejection before upstream initiation".
-
-    Outcome C2 (Streaming termination with HTTP 413):
-    - Client status: HTTP 413.
-    - Exactly expected_prior_requests + 1 requests recorded in backend.
-    - Case A record (index 0) remains unchanged.
-    - Case C record (index expected_prior_requests) must have:
-      - path matching case_c_path exactly
-      - body_bytes_read <= max_bytes
-      - completed is False
-      - truncated is True
-    - Reported explicitly as "Outcome C2: Streaming termination (HTTP 413; upstream stream truncated <= 10MB / 10,000,000 bytes)".
-
-    Outcome C3 (Connection failure / reset mid-upload):
-    - Client status: '000' (or non-zero curl exit code / connection reset).
-    - Exactly expected_prior_requests + 1 requests recorded in backend.
-    - Case A record remains unchanged.
-    - Case C record has body_bytes_read <= max_bytes, completed=False, truncated=True.
-    - Reported explicitly as "Outcome C3: Connection failure / stream severed mid-upload".
+    - Reported explicitly as "Outcome C1: Early edge rejection (0 Case C requests reached backend)".
 
     Fails closed if:
     - JSON is empty, malformed, non-dict, or contains duplicate keys.
     - count < expected_prior_requests (prior requests missing).
-    - count > expected_prior_requests + 1 (spurious unexpected requests).
+    - count > expected_prior_requests (chunked request reached the backend - Contract B failure).
+    - len(requests) != expected_prior_requests (mismatched request list).
+    - Any request in requests matches case_c_path or has transfer_encoding == "chunked".
     - Case A payload or completion status was altered.
-    - Client status is unexpected (e.g. 200, 500, 502).
-    - required_outcome is set and doesn't match the observed outcome.
-    - Case C record fails any streaming attribute (excess bytes, completed=True, truncated=False, path mismatch).
+    - Client status is unexpected (not 411 or 413).
+    - required_outcome is set and doesn't match C1.
     """
     if not isinstance(raw_text, str) or not raw_text.strip():
         raise ValueError("Empty or whitespace-only response received from backend inspection")
@@ -410,6 +394,32 @@ def validate_case_c_inspection_json(
     if count < expected_prior_requests or len(requests) < expected_prior_requests:
         raise ValueError(f"Invalid inspection state: expected at least {expected_prior_requests} prior request(s), got count={count}, len(requests)={len(requests)})")
 
+    # Invariant: no request in requests may match case_c_path or have transfer_encoding == 'chunked'
+    for idx_r, r in enumerate(requests):
+        if isinstance(r, dict):
+            if r.get("path") == case_c_path:
+                raise ValueError(
+                    f"Case C security-gate failure: request matching {case_c_path!r} found at index {idx_r}! "
+                    f"Contract B requires strict whole-request rejection at the edge."
+                )
+            if r.get("transfer_encoding") == "chunked":
+                raise ValueError(
+                    f"Case C security-gate failure: request with chunked transfer-encoding found at index {idx_r}! "
+                    f"Contract B requires strict whole-request rejection at the edge."
+                )
+
+    # Strict Contract B enforcement: chunked request must NOT increment backend count
+    if count > expected_prior_requests or len(requests) > expected_prior_requests:
+        req_c = requests[expected_prior_requests] if len(requests) > expected_prior_requests else None
+        bytes_read = req_c.get("body_bytes_read", "unknown") if isinstance(req_c, dict) else "unknown"
+        path_c = req_c.get("path", "unknown") if isinstance(req_c, dict) else "unknown"
+        raise ValueError(
+            f"Case C security-gate failure: backend received request after chunked transfer! "
+            f"Expected exactly {expected_prior_requests} prior request(s) (zero Case C exposure), but backend recorded "
+            f"count={count}, len(requests)={len(requests)} (endpoint: {path_c!r}, bytes exposed: {bytes_read}). "
+            f"Contract B requires strict whole-request rejection at the edge."
+        )
+
     # Invariant: Case A (request index 0) must remain completely intact and unchanged
     req_a = requests[0]
     if not isinstance(req_a, dict):
@@ -425,105 +435,31 @@ def validate_case_c_inspection_json(
     if req_a.get("truncated") is not False:
         raise ValueError(f"Case A truncated status modified: expected False, got {req_a.get('truncated')}")
 
-    if count > expected_prior_requests + 1 or len(requests) > expected_prior_requests + 1:
-        req_summaries = []
-        for i, r in enumerate(requests):
-            if isinstance(r, dict):
-                req_summaries.append(
-                    f"#{i+1} {r.get('method')} {r.get('path')} (read {r.get('body_bytes_read')} bytes, completed={r.get('completed')})"
-                )
-        raise ValueError(
-            f"Unexpected request count after Case C: expected {expected_prior_requests} or {expected_prior_requests + 1}, got count={count}, len(requests)={len(requests)}. Requests: [{'; '.join(req_summaries)}]"
-        )
-
     # Validate client status if provided
     if client_status is not None:
         client_status_str = str(client_status).strip()
-        if client_status_str not in ("413", "000", ""):
-            raise ValueError(f"Unexpected client status for Case C: expected '413' or '000', got '{client_status_str}'")
+        if client_status_str not in ("400", "411", "413"):
+            raise ValueError(f"Unexpected client status for Case C: expected '400', '411', or '413', got '{client_status_str}'")
 
-    # Classify outcome
-    if count == expected_prior_requests and len(requests) == expected_prior_requests:
-        observed_outcome = "C1"
-        outcome_desc = f"Outcome C1: Early rejection before upstream initiation (0 Case C requests reached backend; backend count remained {expected_prior_requests})"
-        if required_outcome:
-            req_norm = required_outcome.strip().lower()
-            if req_norm not in ("c1", "outcome_1", "early_rejection", "any"):
-                raise ValueError(
-                    f"Outcome mismatch: required '{required_outcome}', but observed Outcome C1 (request rejected before upstream initiation; backend count remained {expected_prior_requests})"
-                )
-        return {
-            "outcome": observed_outcome,
-            "description": outcome_desc,
-            "count": expected_prior_requests,
-            "client_status": client_status,
-            "curl_exit": curl_exit,
-            "case_a_record": req_a,
-            "case_c_record": None,
-            "bytes_received": 0,
-            "data": data,
-        }
-
-    # Otherwise count == expected_prior_requests + 1 -> Streaming truncation observed at backend
-    req_c = requests[expected_prior_requests]
-    if not isinstance(req_c, dict):
-        raise ValueError("Case C request record must be an object")
-
-    actual_path = req_c.get("path")
-    if actual_path != case_c_path:
-        raise ValueError(f"Case C path mismatch: expected {case_c_path!r}, got {actual_path!r}")
-
-    bytes_read = req_c.get("body_bytes_read", 0)
-    if isinstance(bytes_read, bool) or not isinstance(bytes_read, int) or bytes_read < 0:
-        raise ValueError(f"Invalid body_bytes_read in Case C: {bytes_read!r}")
-
-    if bytes_read > max_bytes:
-        raise ValueError(f"Backend received excess bytes in Case C: {bytes_read} > {max_bytes}")
-
-    if req_c.get("completed") is not False:
-        raise ValueError("Chunked request exceeding streaming limit must have completed=False")
-
-    if req_c.get("truncated") is not True:
-        raise ValueError("Chunked request exceeding streaming limit must have truncated=True")
-
-    # Determine whether client received HTTP 413 (C2) or connection reset / 000 (C3)
-    if client_status is not None and str(client_status).strip() in ("000", ""):
-        observed_outcome = "C3"
-        outcome_desc = f"Outcome C3: Connection failure / stream severed mid-upload (client status 000, curl exit {curl_exit}; upstream stream truncated at {bytes_read} bytes <= {max_bytes})"
-    elif client_status is not None and str(client_status).strip() == "413":
-        observed_outcome = "C2"
-        outcome_desc = f"Outcome C2: Streaming termination (HTTP 413 received by client; upstream stream truncated at {bytes_read} bytes <= {max_bytes})"
-    else:
-        # Default without explicit client_status: C2 (streaming termination verified at backend)
-        observed_outcome = "C2"
-        outcome_desc = f"Outcome C2: Streaming termination (upstream stream initiated and truncated at {bytes_read} bytes <= {max_bytes})"
+    observed_outcome = "C1"
+    outcome_desc = f"Outcome C1: Early edge rejection (0 Case C requests reached backend; backend count remained {expected_prior_requests})"
 
     if required_outcome:
         req_norm = required_outcome.strip().lower()
-        valid_match = False
-        if req_norm == "any":
-            valid_match = True
-        elif req_norm in ("c2", "outcome_2", "stream_truncated") and observed_outcome in ("C2", "C3"):
-            valid_match = True
-        elif req_norm in ("c3", "connection_failure", "connection_reset") and observed_outcome == "C3":
-            valid_match = True
-        elif req_norm == observed_outcome.lower():
-            valid_match = True
-
-        if not valid_match:
+        if req_norm not in ("c1", "outcome_1", "early_rejection", "any"):
             raise ValueError(
-                f"Outcome mismatch: required '{required_outcome}', but observed Outcome {observed_outcome} ({outcome_desc})"
+                f"Outcome mismatch: required '{required_outcome}', but observed Outcome C1 ({outcome_desc})"
             )
 
     return {
         "outcome": observed_outcome,
         "description": outcome_desc,
-        "count": expected_prior_requests + 1,
+        "count": expected_prior_requests,
         "client_status": client_status,
         "curl_exit": curl_exit,
         "case_a_record": req_a,
-        "case_c_record": req_c,
-        "bytes_received": bytes_read,
+        "case_c_record": None,
+        "bytes_received": 0,
         "data": data,
     }
 
@@ -627,11 +563,8 @@ if __name__ == "__main__":
             outcome = result["outcome"]
             desc = result["description"]
             print(f"[synthetic_backend_validator] CLASSIFIED OUTCOME: {outcome} ({desc})")
-            if outcome in ("C2", "C3", "outcome_2"):
-                c_rec = result["case_c_record"]
-                print(f"[synthetic_backend_validator] {outcome} Evidence: Case C endpoint '{c_rec.get('path')}' received {c_rec.get('body_bytes_read')}/{max_bytes} bytes (completed={c_rec.get('completed')}, truncated={c_rec.get('truncated')}, client_status='{result.get('client_status')}', curl_exit={result.get('curl_exit')})")
-            elif outcome in ("C1", "outcome_1"):
-                print(f"[synthetic_backend_validator] {outcome} Evidence: 0 requests reached upstream backend (total backend count remained 1, Case A preserved, client_status='{result.get('client_status')}', curl_exit={result.get('curl_exit')})")
+            if outcome in ("C1", "outcome_1"):
+                print(f"[synthetic_backend_validator] {outcome} Evidence: 0 requests reached upstream backend (total backend count remained {expected_prior_requests}, Case A preserved, client_status='{result.get('client_status')}', curl_exit={result.get('curl_exit')})")
             sys.exit(0)
         except Exception as err:
             sys.stderr.write(f"::error::Case C validation failed: {err}\n")
