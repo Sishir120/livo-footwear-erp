@@ -602,9 +602,11 @@ def test_caddyfile_early_rejection_configuration():
     """
     CATEGORY A: STATIC CONFIGURATION TEXTUAL ASSERTION.
     Verifies that the repository Caddyfile text contains the expected directive syntax:
+    - Caddyfile contains @chunked named matcher matching header Transfer-Encoding *chunked*.
+    - handle @chunked block is present with respond 411 (Contract B edge rejection).
     - Caddyfile contains @oversized_cl named matcher matching Content-Length > 10000000.
     - handle @oversized_cl block is present with respond 413.
-    - handle @oversized_cl appears before handle /api/* to short-circuit before proxying under Caddy's stable route grouping.
+    - handle @chunked and handle @oversized_cl appear before handle /api/* to short-circuit before proxying under Caddy's stable route grouping.
     - request_body max_size 10MB streaming limit is preserved as defense-in-depth.
     NOTE: Static textual assertions cannot prove runtime execution order or CEL evaluation.
     Actual runtime execution is established exclusively by containerized Caddy runtime tests in CI.
@@ -615,6 +617,11 @@ def test_caddyfile_early_rejection_configuration():
     assert caddyfile_path.exists(), "Caddyfile must exist at repo root"
     content = caddyfile_path.read_text(encoding="utf-8")
 
+    assert "@chunked" in content, "Caddyfile must define @chunked matcher"
+    assert "header Transfer-Encoding *chunked*" in content, "Caddyfile must match chunked Transfer-Encoding"
+    assert "handle @chunked" in content, "Caddyfile must configure handle @chunked block"
+    assert "respond 411" in content, "handle @chunked must contain respond 411"
+
     assert "@oversized_cl" in content, "Caddyfile must define @oversized_cl matcher"
     assert "> 10000000" in content, "Caddyfile expression must compare against 10000000 (10MB decimal limit)"
     assert "handle @oversized_cl" in content, "Caddyfile must configure handle @oversized_cl block"
@@ -624,12 +631,16 @@ def test_caddyfile_early_rejection_configuration():
 
     # Directive order verification
     req_body_pos = content.find("request_body")
-    matcher_pos = content.find("@oversized_cl")
+    chunked_matcher_pos = content.find("@chunked")
+    handle_chunked_pos = content.find("handle @chunked")
+    cl_matcher_pos = content.find("@oversized_cl")
     handle_oversized_pos = content.find("handle @oversized_cl")
     handle_api_pos = content.find("handle /api/*")
 
-    assert req_body_pos < matcher_pos, "request_body must be configured before early rejection matcher"
-    assert matcher_pos < handle_oversized_pos, "@oversized_cl must be defined before handle @oversized_cl"
+    assert req_body_pos < chunked_matcher_pos, "request_body must be configured before chunked matcher"
+    assert chunked_matcher_pos < handle_chunked_pos, "@chunked must be defined before handle @chunked"
+    assert handle_chunked_pos < cl_matcher_pos, "handle @chunked must appear before @oversized_cl"
+    assert cl_matcher_pos < handle_oversized_pos, "@oversized_cl must be defined before handle @oversized_cl"
     assert handle_oversized_pos < handle_api_pos, "handle @oversized_cl must appear before handle /api/* reverse_proxy"
 
 
@@ -685,10 +696,11 @@ def test_caddy_route_group_mutual_exclusivity_simulation():
     """
     CATEGORY B: ROUTE SIMULATION TEST.
     Simulates Caddy's HTTP server route grouping behavior across:
-    - Route 0 (group0): handle @oversized_cl -> respond 413
-    - Route 1 (group0): handle /api/* -> reverse_proxy backend:8000
-    Verifies that when @oversized_cl matches (Case B or gap case), Route 0 short-circuits group0 and
-    Route 1 (reverse_proxy) is NEVER reached.
+    - Route 0 (group0): handle @chunked -> respond 411 (Contract B edge rejection)
+    - Route 1 (group0): handle @oversized_cl -> respond 413 (Contract A edge rejection)
+    - Route 2 (group0): handle /api/* -> reverse_proxy backend:8000
+    Verifies that when @chunked or @oversized_cl matches, early edge rejection occurs and
+    Route 2 (reverse_proxy) is NEVER reached.
     """
     class SimulatedCaddyServer:
         def __init__(self, limit_bytes: int = 10000000):
@@ -696,13 +708,18 @@ def test_caddy_route_group_mutual_exclusivity_simulation():
             self.backend_requests = []
 
         def handle_request(self, method: str, path: str, headers: dict) -> tuple[int, str]:
-            # Route 0 (handle @oversized_cl)
+            # Route 0 (handle @chunked) - Contract B edge rejection
+            te = headers.get("Transfer-Encoding", "")
+            if "chunked" in te.lower():
+                return 411, "Length Required"
+
+            # Route 1 (handle @oversized_cl) - Contract A edge rejection
             cl = headers.get("Content-Length")
             if cl is not None and cl != "" and int(cl) > self.limit_bytes:
                 # Early rejection: respond 413, mutually excludes subsequent routes in group0
                 return 413, "Request Entity Too Large"
 
-            # Route 1 (handle /api/*)
+            # Route 2 (handle /api/*)
             if path.startswith("/api/"):
                 self.backend_requests.append({"method": method, "path": path, "headers": headers})
                 return 200, "OK from backend"
@@ -733,11 +750,10 @@ def test_caddy_route_group_mutual_exclusivity_simulation():
     assert status_b == 413
     assert len(server.backend_requests) == 2, "Case B must NOT forward any request to backend!"
 
-    # Case C: 11 MiB chunked (no Content-Length) -> passes early check, reaches backend
+    # Case C: 11 MiB chunked (no Content-Length) -> early rejected at edge with 411, 0 requests added to backend!
     status_c, _ = server.handle_request("POST", "/api/test_streaming_oversized", {"Transfer-Encoding": "chunked"})
-    assert status_c == 200
-    assert len(server.backend_requests) == 3
-    assert server.backend_requests[2]["path"] == "/api/test_streaming_oversized"
+    assert status_c == 411
+    assert len(server.backend_requests) == 2, "Case C must NOT forward any request to backend under Contract B!"
 
 
 def test_synthetic_backend_partial_read_and_metadata():
@@ -1265,12 +1281,14 @@ def test_synthetic_backend_one_canonical_record_per_request():
 def test_synthetic_backend_case_c_outcome_classification():
     """
     CATEGORY A: PURE UNIT TEST.
-    Verifies Phase 2 unambiguous outcome classification in validate_case_c_inspection_json:
-    - Outcome 1 (Caddy rejected before upstream initiation; count == 1)
-    - Outcome 2 (Caddy started upstream request and truncated stream; count == 2)
-    - Explicit outcome mismatch enforcement via required_outcome
-    - Invariant checks for Case A payload and Case C endpoint/limit/truncation attributes
-    - Fails closed on spurious requests (count > 2) or missing Case A (count < 1)
+    Verifies strict Contract B edge rejection validation in validate_case_c_inspection_json:
+    - Outcome C1 (Caddy rejected before upstream initiation; count == 1, 0 bytes exposed) passes.
+    - Outcome C1 with client_status="411" and client_status="413" passes.
+    - Strict enforcement: former Case C CI evidence (count == 2, 10,000,000 bytes read) FAILS closed.
+    - Strict enforcement: any payload with count > expected_prior_requests FAILS.
+    - Strict enforcement: any payload containing a request for case_c_path or chunked transfer FAILS.
+    - Explicit outcome mismatch enforcement via required_outcome.
+    - Invariant checks for Case A payload integrity.
     """
     import json
 
@@ -1288,7 +1306,7 @@ def test_synthetic_backend_case_c_outcome_classification():
         ]
     })
 
-    outcome_2_payload = json.dumps({
+    former_case_c_payload = json.dumps({
         "count": 2,
         "requests": [
             {
@@ -1303,6 +1321,7 @@ def test_synthetic_backend_case_c_outcome_classification():
                 "request_id": 2,
                 "method": "POST",
                 "path": "/api/test_streaming_oversized",
+                "transfer_encoding": "chunked",
                 "body_bytes_read": 10000000,
                 "completed": False,
                 "truncated": True
@@ -1310,11 +1329,12 @@ def test_synthetic_backend_case_c_outcome_classification():
         ]
     })
 
-    # 1. Outcome C1 correctly classified without explicit client status
-    res1 = caddy_synthetic_backend.validate_case_c_inspection_json(outcome_1_payload)
+    # 1. Outcome C1 correctly classified with client_status="411" (Contract B edge rejection)
+    res1 = caddy_synthetic_backend.validate_case_c_inspection_json(outcome_1_payload, client_status="411")
     assert res1["outcome"] in ("C1", "outcome_1")
     assert res1["count"] == 1
-    assert "rejection before upstream initiation" in res1["description"]
+    assert res1["bytes_received"] == 0
+    assert "Early edge rejection" in res1["description"]
 
     # 1b. Outcome C1 with client_status="413"
     res1_c1 = caddy_synthetic_backend.validate_case_c_inspection_json(outcome_1_payload, client_status="413")
@@ -1322,146 +1342,92 @@ def test_synthetic_backend_case_c_outcome_classification():
 
     # 2. Outcome C1 passes with required_outcome="C1" or "outcome_1"
     res1_req = caddy_synthetic_backend.validate_case_c_inspection_json(
-        outcome_1_payload, required_outcome="C1"
+        outcome_1_payload, required_outcome="C1", client_status="411"
     )
     assert res1_req["outcome"] in ("C1", "outcome_1")
 
     # 3. Outcome C1 fails when required_outcome="C2"
     with pytest.raises(ValueError, match="Outcome mismatch.*required 'C2'"):
         caddy_synthetic_backend.validate_case_c_inspection_json(
-            outcome_1_payload, required_outcome="C2"
+            outcome_1_payload, required_outcome="C2", client_status="411"
         )
 
-    # 4. Outcome C2 correctly classified (client received HTTP 413)
-    res2 = caddy_synthetic_backend.validate_case_c_inspection_json(outcome_2_payload, client_status="413")
-    assert res2["outcome"] == "C2"
-    assert res2["count"] == 2
-    assert "Streaming termination" in res2["description"]
-    assert res2["bytes_received"] == 10000000
-
-    # 4b. Outcome C3 correctly classified (client stream severed / status 000 / curl exit 55)
-    res3 = caddy_synthetic_backend.validate_case_c_inspection_json(
-        outcome_2_payload, client_status="000", curl_exit=55
-    )
-    assert res3["outcome"] == "C3"
-    assert res3["count"] == 2
-    assert "Connection failure" in res3["description"] or "stream severed" in res3["description"]
-    assert res3["bytes_received"] == 10000000
-
-    # 5. Outcome C2 passes with required_outcome="C2"
-    res2_req = caddy_synthetic_backend.validate_case_c_inspection_json(
-        outcome_2_payload, required_outcome="C2", client_status="413"
-    )
-    assert res2_req["outcome"] == "C2"
-
-    # 5b. Outcome C3 passes with required_outcome="C3"
-    res3_req = caddy_synthetic_backend.validate_case_c_inspection_json(
-        outcome_2_payload, required_outcome="C3", client_status="000", curl_exit=55
-    )
-    assert res3_req["outcome"] == "C3"
-
-    # 6. Outcome C2 fails when required_outcome="C1"
-    with pytest.raises(ValueError, match="Outcome mismatch.*required 'C1'"):
+    # 4. NEGATIVE TEST: Former Case C CI evidence (count=2, 10,000,000 bytes exposed) MUST FAIL!
+    with pytest.raises(ValueError, match="Case C security-gate failure"):
         caddy_synthetic_backend.validate_case_c_inspection_json(
-            outcome_2_payload, required_outcome="C1", client_status="413"
+            former_case_c_payload, client_status="411"
         )
 
-    # 6b. Fails on unexpected client status (e.g. 200 OK for oversized upload)
+    # 4b. Former Case C CI evidence fails even with client_status="413"
+    with pytest.raises(ValueError, match="Case C security-gate failure"):
+        caddy_synthetic_backend.validate_case_c_inspection_json(
+            former_case_c_payload, client_status="413"
+        )
+
+    # 5. Fails on unexpected client status (e.g. 200 OK for oversized chunked upload)
     with pytest.raises(ValueError, match="Unexpected client status for Case C"):
         caddy_synthetic_backend.validate_case_c_inspection_json(
-            outcome_2_payload, client_status="200"
+            outcome_1_payload, client_status="200"
         )
 
-    # 7. Outcome C2 fails on path mismatch
-    bad_path_payload = json.dumps({
-        "count": 2,
+    # 6. Fails if chunked endpoint exists even with count=1
+    chunked_present_payload = json.dumps({
+        "count": 1,
         "requests": [
-            {"method": "POST", "body_bytes_read": 1048576, "completed": True, "truncated": False},
-            {"method": "POST", "path": "/api/wrong_path", "body_bytes_read": 10000000, "completed": False, "truncated": True}
+            {
+                "method": "POST",
+                "path": "/api/test_streaming_oversized",
+                "transfer_encoding": "chunked",
+                "body_bytes_read": 10000000,
+                "completed": False,
+                "truncated": True
+            }
         ]
     })
-    with pytest.raises(ValueError, match="Case C path mismatch"):
+    with pytest.raises(ValueError, match="Case C security-gate failure"):
         caddy_synthetic_backend.validate_case_c_inspection_json(
-            bad_path_payload, case_c_path="/api/test_streaming_oversized"
+            chunked_present_payload, client_status="411"
         )
 
-    # 8. Outcome C2 fails if body_bytes_read > max_bytes
-    excess_bytes_payload = json.dumps({
-        "count": 2,
-        "requests": [
-            {"method": "POST", "body_bytes_read": 1048576, "completed": True, "truncated": False},
-            {"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10000001, "completed": False, "truncated": True}
-        ]
-    })
-    with pytest.raises(ValueError, match="Backend received excess bytes in Case C"):
-        caddy_synthetic_backend.validate_case_c_inspection_json(
-            excess_bytes_payload, max_bytes=10000000
-        )
-
-    # 9. Outcome C2 fails if completed is True
-    completed_true_payload = json.dumps({
-        "count": 2,
-        "requests": [
-            {"method": "POST", "body_bytes_read": 1048576, "completed": True, "truncated": False},
-            {"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10000000, "completed": True, "truncated": True}
-        ]
-    })
-    with pytest.raises(ValueError, match="completed=False"):
-        caddy_synthetic_backend.validate_case_c_inspection_json(completed_true_payload)
-
-    # 10. Outcome C2 fails if truncated is False
-    truncated_false_payload = json.dumps({
-        "count": 2,
-        "requests": [
-            {"method": "POST", "body_bytes_read": 1048576, "completed": True, "truncated": False},
-            {"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10000000, "completed": False, "truncated": False}
-        ]
-    })
-    with pytest.raises(ValueError, match="truncated=True"):
-        caddy_synthetic_backend.validate_case_c_inspection_json(truncated_false_payload)
-
-    # 11. Fails if Case A payload modified
+    # 7. Fails if Case A payload modified
     modified_case_a_payload = json.dumps({
-        "count": 2,
+        "count": 1,
         "requests": [
-            {"method": "POST", "body_bytes_read": 500, "completed": True, "truncated": False},
-            {"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10000000, "completed": False, "truncated": True}
+            {"method": "POST", "body_bytes_read": 500, "completed": True, "truncated": False}
         ]
     })
     with pytest.raises(ValueError, match="Case A payload modified"):
         caddy_synthetic_backend.validate_case_c_inspection_json(
-            modified_case_a_payload, expected_case_a_bytes=1048576
+            modified_case_a_payload, expected_case_a_bytes=1048576, client_status="411"
         )
 
-    # 12. Fails if spurious requests appear (count > 2)
+    # 8. Fails if spurious requests appear (count > 1 when prior count is 1)
     spurious_payload = json.dumps({
-        "count": 3,
+        "count": 2,
         "requests": [
             {"method": "POST", "path": "/api/a", "body_bytes_read": 1048576, "completed": True, "truncated": False},
-            {"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10000000, "completed": False, "truncated": True},
             {"method": "POST", "path": "/api/spurious", "body_bytes_read": 100, "completed": True, "truncated": False}
         ]
     })
-    with pytest.raises(ValueError, match="Unexpected request count after Case C: expected 1 or 2, got count=3"):
-        caddy_synthetic_backend.validate_case_c_inspection_json(spurious_payload)
+    with pytest.raises(ValueError, match="Case C security-gate failure"):
+        caddy_synthetic_backend.validate_case_c_inspection_json(spurious_payload, client_status="411")
 
 
 def test_synthetic_backend_cli_validation_streaming():
     """
     CATEGORY A: PURE UNIT TEST.
     Verifies that caddy_synthetic_backend.py --validate-case-c CLI behaves correctly:
-    - Exits 0 and reports Outcome C2 on valid Case C stream truncation with HTTP 413.
-    - Exits 0 and reports Outcome C3 on valid Case C stream truncation with socket reset (000).
-    - Exits 0 and reports Outcome C1 on valid Case C early rejection.
+    - Exits 0 and reports Outcome C1 on valid Case C early rejection (client status 411, count == 1).
+    - Exits 1 on former Case C CI evidence (count == 2, 10,000,000 bytes exposed to backend).
     - Exits 1 on outcome requirement mismatch.
-    - Exits 1 on excess bytes.
     - Exits 1 on duplicate keys.
+    - Exits 0 on prior count matching expected (e.g. prior count = 2, count == 2).
     """
     import subprocess
     repo_root = Path(__file__).resolve().parent.parent.parent
     backend_script = repo_root / "scripts" / "caddy_synthetic_backend.py"
 
-    outcome_2_payload = (
+    former_case_c_payload = (
         '{"count": 2, "requests": ['
         '{"method": "POST", "body_bytes_read": 1048576, "completed": true, "truncated": false},'
         '{"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10000000, "completed": false, "truncated": true}'
@@ -1474,29 +1440,9 @@ def test_synthetic_backend_cli_validation_streaming():
         ']}'
     )
 
-    # 1. Outcome C2 passes CLI with --client-status 413
-    proc_o2 = subprocess.run(
-        [sys.executable, str(backend_script), "--validate-case-c", "--client-status", "413", "--max-bytes", "10000000"],
-        input=outcome_2_payload,
-        text=True,
-        capture_output=True
-    )
-    assert proc_o2.returncode == 0
-    assert "CLASSIFIED OUTCOME: C2" in proc_o2.stdout
-
-    # 1b. Outcome C3 passes CLI with --client-status 000 --curl-exit 55
-    proc_o3 = subprocess.run(
-        [sys.executable, str(backend_script), "--validate-case-c", "--client-status", "000", "--curl-exit", "55", "--max-bytes", "10000000"],
-        input=outcome_2_payload,
-        text=True,
-        capture_output=True
-    )
-    assert proc_o3.returncode == 0
-    assert "CLASSIFIED OUTCOME: C3" in proc_o3.stdout
-
-    # 2. Outcome C1 passes CLI
+    # 1. Outcome C1 passes CLI with --client-status 411
     proc_o1 = subprocess.run(
-        [sys.executable, str(backend_script), "--validate-case-c", "--client-status", "413", "--max-bytes", "10000000"],
+        [sys.executable, str(backend_script), "--validate-case-c", "--client-status", "411", "--max-bytes", "10000000"],
         input=outcome_1_payload,
         text=True,
         capture_output=True
@@ -1504,9 +1450,20 @@ def test_synthetic_backend_cli_validation_streaming():
     assert proc_o1.returncode == 0
     assert "CLASSIFIED OUTCOME: C1" in proc_o1.stdout
 
+    # 2. NEGATIVE TEST: Former Case C CI evidence MUST FAIL CLI (security violation under Contract B)
+    proc_former_c = subprocess.run(
+        [sys.executable, str(backend_script), "--validate-case-c", "--client-status", "413", "--max-bytes", "10000000"],
+        input=former_case_c_payload,
+        text=True,
+        capture_output=True
+    )
+    assert proc_former_c.returncode == 1
+    assert "Case C validation failed" in proc_former_c.stderr
+    assert "security-gate failure" in proc_former_c.stderr or "chunked transfer" in proc_former_c.stderr
+
     # 3. Requirement mismatch: requiring C2 when C1 received exits 1
     proc_mismatch = subprocess.run(
-        [sys.executable, str(backend_script), "--validate-case-c", "--require-outcome", "C2"],
+        [sys.executable, str(backend_script), "--validate-case-c", "--client-status", "411", "--require-outcome", "C2"],
         input=outcome_1_payload,
         text=True,
         capture_output=True
@@ -1514,23 +1471,7 @@ def test_synthetic_backend_cli_validation_streaming():
     assert proc_mismatch.returncode == 1
     assert "Case C validation failed" in proc_mismatch.stderr
 
-    # 4. Excess bytes fails closed
-    excess_payload = (
-        '{"count": 2, "requests": ['
-        '{"method": "POST", "body_bytes_read": 1048576, "completed": true, "truncated": false},'
-        '{"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 11000000, "completed": false, "truncated": true}'
-        ']}'
-    )
-    proc_excess = subprocess.run(
-        [sys.executable, str(backend_script), "--validate-case-c", "--max-bytes", "10000000"],
-        input=excess_payload,
-        text=True,
-        capture_output=True
-    )
-    assert proc_excess.returncode == 1
-    assert "Case C validation failed" in proc_excess.stderr
-
-    # 5. Duplicate key fails closed
+    # 4. Duplicate key fails closed
     dup_payload = '{"count": 2, "count": 2, "requests": []}'
     proc_dup = subprocess.run(
         [sys.executable, str(backend_script), "--validate-case-c"],
@@ -1541,19 +1482,35 @@ def test_synthetic_backend_cli_validation_streaming():
     assert proc_dup.returncode == 1
     assert "Duplicate key 'count' detected" in proc_dup.stderr
 
-    # 6. Expected prior requests CLI argument (e.g. prior count = 2)
+    # 5. Expected prior requests CLI argument (e.g. prior count = 2, count == 2 -> passes)
     prior_2_payload = (
-        '{"count": 3, "requests": ['
+        '{"count": 2, "requests": ['
         '{"method": "POST", "body_bytes_read": 1048576, "completed": true, "truncated": false},'
-        '{"method": "POST", "path": "/api/prior_spurious", "body_bytes_read": 10000000, "completed": false, "truncated": true},'
-        '{"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10000000, "completed": false, "truncated": true}'
+        '{"method": "POST", "path": "/api/prior_spurious", "body_bytes_read": 10000, "completed": true, "truncated": false}'
         ']}'
     )
     proc_p2 = subprocess.run(
-        [sys.executable, str(backend_script), "--validate-case-c", "--client-status", "413", "--expected-prior-requests", "2"],
+        [sys.executable, str(backend_script), "--validate-case-c", "--client-status", "411", "--expected-prior-requests", "2"],
         input=prior_2_payload,
         text=True,
         capture_output=True
     )
     assert proc_p2.returncode == 0
-    assert "CLASSIFIED OUTCOME: C2" in proc_p2.stdout
+    assert "CLASSIFIED OUTCOME: C1" in proc_p2.stdout
+
+    # 6. Expected prior requests mismatch (prior count = 2, but count == 3 due to chunked request) -> FAILS
+    prior_3_fail_payload = (
+        '{"count": 3, "requests": ['
+        '{"method": "POST", "body_bytes_read": 1048576, "completed": true, "truncated": false},'
+        '{"method": "POST", "path": "/api/prior_spurious", "body_bytes_read": 10000, "completed": true, "truncated": false},'
+        '{"method": "POST", "path": "/api/test_streaming_oversized", "body_bytes_read": 10000000, "completed": false, "truncated": true}'
+        ']}'
+    )
+    proc_p3 = subprocess.run(
+        [sys.executable, str(backend_script), "--validate-case-c", "--client-status", "411", "--expected-prior-requests", "2"],
+        input=prior_3_fail_payload,
+        text=True,
+        capture_output=True
+    )
+    assert proc_p3.returncode == 1
+    assert "Case C validation failed" in proc_p3.stderr
